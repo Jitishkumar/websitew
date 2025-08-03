@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Platform, Text } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -29,6 +29,11 @@ import PostsScreen from '../screens/PostsScreen';
 import ShortsScreen from '../screens/ShortsScreen';
 import HomePage from '../screens/HomePage';
 import CallPage from '../screens/CallPage';
+import DonateScreen from '../screens/DonateScreen';
+import WealthiestDonorsScreen from '../screens/WealthiestDonorsScreen';
+import VerifyAccountScreen from '../screens/VerifyAccountScreen';
+import { supabase } from '../config/supabase';
+
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
@@ -146,8 +151,17 @@ const TabNavigator = () => {
 };
 
 export const AppNavigator = () => {
+  const [initialRoute, setInitialRoute] = useState(null);
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setInitialRoute(session ? 'MainApp' : 'Login');
+    };
+    checkSession();
+  }, []);
+  if (!initialRoute) return null;
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName={initialRoute}>
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="Signup" component={SignupScreen} />
       <Stack.Screen name="PostViewer" component={PostViewerScreen} options={{ headerShown: false }} />
@@ -168,6 +182,9 @@ export const AppNavigator = () => {
       <Stack.Screen name="Shorts" component={ShortsScreen} options={{ headerShown: false }} />
       <Stack.Screen name="HomePage" component={HomePage} />
       <Stack.Screen name="CallPage" component={CallPage} />
+      <Stack.Screen name="Donate" component={DonateScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="WealthiestDonors" component={WealthiestDonorsScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="VerifyAccount" component={VerifyAccountScreen} options={{ headerShown: false }} />
     </Stack.Navigator>
   );
 };

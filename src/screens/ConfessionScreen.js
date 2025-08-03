@@ -22,6 +22,7 @@ import { decode } from 'base64-arraybuffer';
 import { supabase } from '../config/supabase';
 import * as Location from 'expo-location';
 import * as FileSystem from 'expo-file-system';
+import { uploadToCloudinary, deleteFromCloudinary } from '../config/cloudinary';
 
 const ConfessionScreen = () => {
   const navigation = useNavigation();
@@ -473,7 +474,7 @@ const ConfessionScreen = () => {
   }
 };
   
-  // Updated postConfession function with improved media upload handling
+  // Updated postConfession function with Cloudinary media upload handling
   const postConfession = async () => {
   if (!newConfession.trim() && media.length === 0) return;
   
@@ -488,57 +489,20 @@ const ConfessionScreen = () => {
     for (const item of media) {
       if (item.uri) {
         try {
-          const filePath = `confessions/${item.name}`;
+          // Upload to Cloudinary instead of Supabase
+          const uploadResult = await uploadToCloudinary(item.uri, 'image');
           
-          // Handle file reading based on platform
-          if (Platform.OS === 'web') {
-            // For web platform
-            const response = await fetch(item.uri);
-            const blob = await response.blob();
-            
-            const { error: uploadError } = await supabase.storage
-              .from('media')
-              .upload(filePath, blob, {
-                contentType: item.type,
-                cacheControl: '3600',
-                upsert: true
-              });
-              
-            if (uploadError) throw uploadError;
-          } else {
-            // For native platforms (iOS/Android)
-            // First check if the file exists
-            const fileInfo = await FileSystem.getInfoAsync(item.uri);
-            if (!fileInfo.exists) {
-              throw new Error('File does not exist');
-            }
-            
-            // For iOS/Android, we need to read the file and convert it to a blob
-            const base64 = await FileSystem.readAsStringAsync(item.uri, {
-              encoding: FileSystem.EncodingType.Base64,
-            });
-            
-            // Upload using the base64 data
-            const { error: uploadError } = await supabase.storage
-              .from('media')
-              .upload(filePath, decode(base64), {
-                contentType: item.type,
-                cacheControl: '3600',
-                upsert: true
-              });
-              
-            if (uploadError) throw uploadError;
+          if (!uploadResult || !uploadResult.url) {
+            throw new Error('Failed to upload media');
           }
           
-          // Get the public URL
-          const { data } = supabase.storage
-            .from('media')
-            .getPublicUrl(filePath);
-            
           mediaUrls.push({
-            url: data.publicUrl,
-            type: 'image'
+            url: uploadResult.url,
+            type: 'image',
+            publicId: uploadResult.publicId // Store publicId for potential deletion later
           });
+          
+          console.log('Media uploaded to Cloudinary:', uploadResult.url);
         } catch (mediaError) {
           console.error('Media upload error:', mediaError);
           throw new Error('Failed to upload media: ' + (mediaError.message || 'Unknown error'));
@@ -589,6 +553,32 @@ const ConfessionScreen = () => {
 
   const deleteConfession = async (confessionId) => {
     try {
+      // First, get the confession to access its media data
+      const { data: confessionData, error: fetchError } = await supabase
+        .from('confessions')
+        .select('media')
+        .eq('id', confessionId)
+        .single();
+      
+      if (fetchError) throw fetchError;
+      
+      // Delete media from Cloudinary if it exists
+      if (confessionData?.media && Array.isArray(confessionData.media)) {
+        for (const mediaItem of confessionData.media) {
+          if (mediaItem.publicId) {
+            try {
+              // Import is at the top of the file
+              await deleteFromCloudinary(mediaItem.publicId, 'image');
+              console.log('Deleted media from Cloudinary:', mediaItem.publicId);
+            } catch (mediaError) {
+              console.error('Error deleting media from Cloudinary:', mediaError);
+              // Continue with deletion even if media deletion fails
+            }
+          }
+        }
+      }
+      
+      // Delete the confession from the database
       const { error } = await supabase
         .from('confessions')
         .delete()

@@ -29,12 +29,12 @@
     },
     "extra": {
       "eas": {
-        "projectId": "be408ee4-41ce-49e6-92b8-b2714d6951fd"
+        "projectId": "f0744c51-1646-4ca3-91f1-acaf2753f082"
       }
     },
     "plugins": [
       "expo-build-properties"
-
-    ]
+    ],
+    "owner": "time.da"
   }
 }

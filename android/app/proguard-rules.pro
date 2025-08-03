@@ -11,12 +11,4 @@
 -keep class com.swmansion.reanimated.** { *; }
 -keep class com.facebook.react.turbomodule.** { *; }
 
-
 # Add any project specific keep options here:
-
-# Zego SDK rules
--keep class **.zego.** { *; }
-
-# Flutter Callkit Incoming
--keep class com.hiennv.flutter_callkit_incoming.SharedPreferencesUtils* {*;}
--keep class com.fasterxml.jackson.** {*;}

@@ -163,6 +163,13 @@ const UserProfileScreen = () => {
         .eq('user_id', userId)
         .maybeSingle();
         
+      // Check if user is verified
+      const { data: verifiedData } = await supabase
+        .from('verified_accounts')
+        .select('verified')
+        .eq('id', userId)
+        .maybeSingle();
+        
       const isPrivate = settingsData?.private_account ?? false;
       setHasPrivateAccount(isPrivate);
       
@@ -239,7 +246,8 @@ const UserProfileScreen = () => {
         const profile = {
           ...data,
           avatar_url: avatarUrl,
-          cover_url: coverUrl
+          cover_url: coverUrl,
+          isVerified: verifiedData?.verified || false
         };
         
         setUserProfile(profile);
@@ -827,7 +835,12 @@ const UserProfileScreen = () => {
               }}
             />
             <Text style={styles.name}>{userProfile?.full_name || 'No name set'}</Text>
-            <Text style={styles.username}>@{userProfile?.username || 'username'}</Text>
+            <View style={styles.usernameContainer}>
+              <Text style={styles.username}>@{userProfile?.username || 'username'}</Text>
+              {userProfile?.isVerified && (
+                <Ionicons name="checkmark-circle" size={20} color="#ff0000" style={styles.verifiedBadge} />
+              )}
+            </View>
             <View style={styles.rankBadge}>
               <Ionicons name="trophy-outline" size={16} color="#FFD700" />
               <Text style={styles.rankNumber}>
@@ -1151,6 +1164,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#faf7f8',
     marginTop: 5,
+  },
+  usernameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 5,
+  },
+  verifiedBadge: {
+    marginLeft: 5,
   },
   rankBadge: {
     flexDirection: 'row',

@@ -1,37 +1,46 @@
 import RazorpayCheckout from 'react-native-razorpay';
+import { Alert } from 'react-native';
 import { supabase } from '../config/supabase';
+import { RAZORPAY_KEY_ID } from '@env';
 
-// Simple helper to trigger a one-time donation (default ₹50)
-// amountRupees – integer, whole rupee value
-export const donate = async (amountRupees = 50) => {
+export const donate = async (amount) => {
   try {
-    const amountPaise = amountRupees * 100; // Razorpay expects the smallest currency unit
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
 
-    // Create order via Supabase Edge Function (you must implement this on the backend)
-    const { data: orderRes, error } = await supabase.functions.invoke('create-razorpay-order', {
-      body: { amount: amountPaise }
-    });
-    if (error) throw error;
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('email, phone')
+      .eq('id', user.id)
+      .single();
 
     const options = {
-      key: process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID, // expose your key via app config
-      name: 'Donate to Founder',
-      description: 'Thank you for supporting the project!',
-      currency: 'INR',
-      amount: amountPaise.toString(),
-      order_id: orderRes.orderId, // <- returned from edge function
-      theme: { color: '#F37254' }
+      description: "Donation to Founder",
+      currency: "INR",
+      key: RAZORPAY_KEY_ID,
+      amount: Math.round(amount * 100), // Convert to paise and ensure it's an integer
+      name: 'Perfect FL',
+      prefill: {
+        email: profile?.email || user.email || "user@example.com",
+        contact: profile?.phone || "9999999999",
+        name: "User",
+      },
+      theme: {
+        color: "#ff00ff"
+      },
     };
 
-    // Open Razorpay modal
-    const paymentResult = await RazorpayCheckout.open(options);
-
-    // Verify payment signature on the server
-    await supabase.functions.invoke('verify-razorpay', { body: paymentResult });
-
-    return paymentResult;
-  } catch (err) {
-    console.error('Donation error', err);
-    throw err;
+    const paymentData = await RazorpayCheckout.open(options);
+    return paymentData;
+  } catch (error) {
+    // Check for payment cancellation in different possible error structures
+    if (error.code === 'PAYMENT_CANCELLED' || 
+        (error.error && error.error.reason === 'payment_cancelled') ||
+        (error.description && error.description.includes('cancelled'))) {
+      console.log('Payment was cancelled by user');
+      throw { code: 'PAYMENT_CANCELLED', message: 'Payment was cancelled' };
+    }
+    console.error('Donation error:', error);
+    throw error;
   }
 };

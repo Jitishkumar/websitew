@@ -141,19 +141,29 @@ const Sidebar = ({ isVisible, onClose }) => {
            {/* Donate to Founder */}
            <TouchableOpacity
              style={styles.menuItem}
-             onPress={() => donate(50).catch(err => console.log('Donation cancelled', err))}
+             onPress={() => {
+               onClose();
+               navigation.navigate('Donate');
+             }}
            >
              <Ionicons name="cash-outline" size={24} color="#ff00ff" />
              <Text style={styles.menuText}>Donate to Founder</Text>
            </TouchableOpacity>
 
+           {/* Wealthiest Donors */}
+           <TouchableOpacity
+             style={styles.menuItem}
+             onPress={() => {
+               onClose();
+               navigation.navigate('WealthiestDonors');
+             }}
+           >
+             <Ionicons name="trophy-outline" size={24} color="#ff00ff" />
+             <Text style={styles.menuText}>Wealthiest Donors</Text>
+           </TouchableOpacity>
+
            {/* Logout */}
            <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
-            <Ionicons name="person-add" size={24} color="#ff00ff" />
-            <Text style={styles.menuText}>Add Account</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
             <Ionicons name="log-out" size={24} color="#ff00ff" />
             <Text style={styles.menuText}>Logout</Text>
           </TouchableOpacity>

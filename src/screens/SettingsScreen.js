@@ -14,9 +14,11 @@ const SettingsScreen = () => {
   const [privateAccount, setPrivateAccount] = useState(false);
   const [autoplay, setAutoplay] = useState(true);
   const [dataLoaded, setDataLoaded] = useState(false);
+  const [isVerified, setIsVerified] = useState(false);
 
   useEffect(() => {
     loadUserSettings();
+    checkVerificationStatus();
   }, []);
 
   const loadUserSettings = async () => {
@@ -48,6 +50,32 @@ const SettingsScreen = () => {
       setDataLoaded(true);
     } catch (error) {
       console.error('Error loading settings:', error);
+    }
+  };
+
+  const checkVerificationStatus = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('verified_accounts')
+        .select('verified')
+        .eq('id', user.id)
+        .single();
+
+      if (error) {
+        // If the record doesn't exist, it means the user is not verified
+        if (error.code === 'PGRST116') {
+          setIsVerified(false);
+          return;
+        }
+        throw error;
+      }
+      
+      setIsVerified(data?.verified || false);
+    } catch (error) {
+      console.error('Error checking verification status:', error);
     }
   };
 
@@ -189,6 +217,39 @@ const SettingsScreen = () => {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Account</Text>
+          
+          {/* Verification Status */}
+          <TouchableOpacity 
+            style={styles.linkItem}
+            onPress={() => {
+              if (isVerified) {
+                Alert.alert('Verified Account', 'Your account is already verified with a red badge.');
+              } else {
+                navigation.navigate('VerifyAccount');
+              }
+            }}
+          >
+            <View style={styles.settingIconContainer}>
+              <Ionicons name="checkmark-circle" size={24} color={isVerified ? "#ff0000" : "#ff00ff"} />
+            </View>
+            <View style={styles.settingContent}>
+              <View style={styles.verificationTitleContainer}>
+                <Text style={styles.settingTitle}>Verify Account</Text>
+                {isVerified && (
+                  <View style={styles.verifiedBadge}>
+                    <Text style={styles.verifiedText}>Verified</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={styles.settingDescription}>
+                {isVerified 
+                  ? 'Your account is verified with a red badge' 
+                  : 'Get a red verification badge (₹70/month)'}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#ff00ff" />
+          </TouchableOpacity>
+          
           <TouchableOpacity style={styles.linkItem}>
             <View style={styles.settingIconContainer}>
               <Ionicons name="shield" size={24} color="#ff00ff" />
@@ -310,6 +371,22 @@ const styles = StyleSheet.create({
   },
   settingContent: {
     flex: 1,
+  },
+  verificationTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  verifiedBadge: {
+    backgroundColor: '#ff0000',
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginLeft: 8,
+  },
+  verifiedText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
   settingTitle: {
     color: '#fff',

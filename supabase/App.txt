@@ -1,0 +1,51 @@
+import { StatusBar } from 'expo-status-bar';
+import RazorpayCheckout from 'react-native-razorpay';
+import { StyleSheet, Text, View, Button, Alert } from 'react-native';
+import React from 'react';
+
+export default function App() {
+  const handelPayment = () => {
+    const options = {
+      description: "Test Payment",
+      currency: "INR",
+      key:"rzp_test_QmTaVxtarQZSZj",
+      amount: '100', // Amount should be in paise (smallest currency unit)
+      name: 'Your App Name',
+      prefill: {
+        email: "user@example.com",
+        contact: "9999999999",
+        name: "User",
+      },
+      theme: {
+        color: "#F3F3F3"
+      },
+    };
+
+    RazorpayCheckout.open(options)
+      .then((data) => {
+        // handle success
+        Alert.alert(`Success: ${data.razorpay_payment_id}`);
+      })
+      .catch((error) => {
+        // handle failure
+        Alert.alert(`Error: ${error.code} | ${error.description}`);
+      });
+  };
+
+  return (
+    <View style={styles.container}>
+      <Text>Pay ₹1.00</Text>
+      <Button title="Pay Now" onPress={handelPayment} />
+      <StatusBar style="auto" />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});
