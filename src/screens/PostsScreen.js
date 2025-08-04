@@ -201,7 +201,7 @@ const PostsScreen = ({ route }) => {
                   source={{ uri: selectedMedia.uri }}
                   style={styles.previewMedia}
                   resizeMode="cover"
-                  shouldPlay={false}
+                  play={false}
                 />
               ) : (
                 <Image
@@ -282,7 +282,7 @@ const PostsScreen = ({ route }) => {
           source={{ uri: item.media_url }}
           style={styles.postMedia}
           resizeMode="cover"
-          shouldPlay={false}
+          play={false}
         />
       ) : (
         <Image

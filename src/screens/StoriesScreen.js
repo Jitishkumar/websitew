@@ -12,7 +12,7 @@ import {
   Modal,
   Platform
 } from 'react-native';
-import { Video } from 'expo-video';
+import { Video } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { StoriesService } from '../services/StoriesService';
@@ -39,6 +39,8 @@ const StoriesScreen = () => {
   const videoRef = useRef(null);
   const progressInterval = useRef(null);
   const storyTimeout = useRef(null);
+  const touchTimer = useRef(null);
+  const isTouchHolding = useRef(false);
   
   // Load stories when component mounts
   useEffect(() => {
@@ -168,6 +170,42 @@ const StoriesScreen = () => {
     }
   };
   
+  // Add touch handlers for press-to-pause functionality
+  const handleTouchStart = () => {
+    // Clear any existing touch timer
+    if (touchTimer.current) {
+      clearTimeout(touchTimer.current);
+    }
+    
+    // Set a timer to detect long press (300ms)
+    touchTimer.current = setTimeout(() => {
+      if (!paused) {
+        isTouchHolding.current = true;
+        setPaused(true);
+        if (videoRef.current) {
+          videoRef.current.pauseAsync();
+        }
+      }
+    }, 300);
+  };
+
+  const handleTouchEnd = () => {
+    // Clear the touch timer
+    if (touchTimer.current) {
+      clearTimeout(touchTimer.current);
+      touchTimer.current = null;
+    }
+    
+    // If we were holding and paused the video, resume playback
+    if (isTouchHolding.current) {
+      isTouchHolding.current = false;
+      setPaused(false);
+      if (videoRef.current) {
+        videoRef.current.playAsync();
+      }
+    }
+  };
+  
   const handleDeleteStory = async () => {
     try {
       setMenuVisible(false);
@@ -245,6 +283,8 @@ const StoriesScreen = () => {
         activeOpacity={1} 
         style={styles.storyContainer}
         onPress={handlePress}
+        onPressIn={handleTouchStart}
+        onPressOut={handleTouchEnd}
       >
         {/* Progress Bar */}
         <View style={[styles.progressContainer, { paddingTop: insets.top }]}>
@@ -294,8 +334,8 @@ const StoriesScreen = () => {
               source={{ uri: currentStory.media_url }}
               style={styles.media}
               resizeMode="contain"
-              shouldPlay={!paused}
-              isLooping={false}
+              play={!paused && !isTouchHolding.current}
+              loop={false}
               onPlaybackStatusUpdate={(status) => {
                 if (status.didJustFinish) {
                   goToNextStory();

@@ -173,12 +173,11 @@ const TrendingScreen = () => {
                     source={{ uri: item.media_url }}
                     style={styles.videoThumbnail}
                     resizeMode="cover"
-                    shouldPlay={false}
-                    isMuted={true}
-                    isLooping={false}
-                    useNativeControls={false}
-                    posterSource={{ uri: item.media_url }}
-                    usePoster={true}
+                    play={false}
+                    muted={true}
+                    loop={false}
+                    controls={false}
+                    poster={item.media_url}
                   />
                   <LinearGradient
                     colors={['transparent', 'rgba(0,0,0,0.8)']}

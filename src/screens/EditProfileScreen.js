@@ -257,9 +257,9 @@ const EditProfileScreen = ({ navigation }) => {
                 source={{ uri: coverUrl }}
                 style={styles.coverPhoto}
                 resizeMode="cover"
-                shouldPlay
-                isLooping
-                isMuted={true}
+                play
+                loop
+                muted={true}
               />
             ) : (
               <Image source={{ uri: coverUrl }} style={styles.coverPhoto} />

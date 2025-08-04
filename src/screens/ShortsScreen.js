@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, FlatList, Dimensions, StyleSheet, TouchableOpacity, Text, ActivityIndicator } from 'react-native';
+import { View, FlatList, Dimensions, StyleSheet, TouchableOpacity, Text, ActivityIndicator, Alert, Share, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { Video } from 'expo-av';
@@ -7,6 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useVideo } from '../context/VideoContext';
 import { supabase } from '../config/supabase';
+import { PostsService } from '../services/PostsService';
 
 const { width, height } = Dimensions.get('window');
 
@@ -25,7 +26,12 @@ const ShortsScreen = ({ route }) => {
   const [posts, setPosts] = useState(routePosts || []);
   const [loading, setLoading] = useState(!routePosts);
   const [userProfile, setUserProfile] = useState(null);
+  const [showPauseIcon, setShowPauseIcon] = useState(false);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
   const controlsTimeout = useRef(null);
+  const touchTimer = useRef(null);
+  const isTouchHolding = useRef(false);
+  const pauseIconTimeout = useRef(null);
   const { setFullscreen } = useVideo();
   const isUserSpecificView = !!userId;
   
@@ -69,8 +75,9 @@ const ShortsScreen = ({ route }) => {
         .select(`
           *,
           profiles:user_id(*),
-          likes:post_likes(user_id),
-          comments:post_comments(count)
+          likes:post_likes(count),
+          comments:post_comments(count),
+          user_likes:post_likes(user_id)
         `)
         .eq('user_id', userId)
         .eq('type', 'video')
@@ -82,7 +89,7 @@ const ShortsScreen = ({ route }) => {
       const { data: { user } } = await supabase.auth.getUser();
       const shortsWithLikeStatus = data.map(post => ({
         ...post,
-        is_liked: post.likes.some(like => like.user_id === user.id)
+        is_liked: post.user_likes?.some(like => like.user_id === user.id) || false
       }));
       
       setPosts(shortsWithLikeStatus);
@@ -111,10 +118,82 @@ const ShortsScreen = ({ route }) => {
     return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
   };
 
-  // Handle video press (play/pause)
+  // Handle video press - toggle play/pause on single click
   const handleVideoPress = () => {
-    setIsPlaying(!isPlaying);
+    // Toggle play/pause state
+    const newPlayingState = !isPlaying;
+    setIsPlaying(newPlayingState);
+    
+    // Show controls briefly
     showVideoControls();
+    
+    // Play or pause the current video
+    const currentVideoRef = videoRefs.current[currentIndex];
+    if (currentVideoRef) {
+      if (newPlayingState) {
+        currentVideoRef.playAsync();
+      } else {
+        // Show pause icon with animation
+        setShowPauseIcon(true);
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true
+        }).start();
+        
+        // Hide pause icon after a short delay
+        if (pauseIconTimeout.current) {
+          clearTimeout(pauseIconTimeout.current);
+        }
+        pauseIconTimeout.current = setTimeout(() => {
+          Animated.timing(fadeAnim, {
+            toValue: 0,
+            duration: 200,
+            useNativeDriver: true
+          }).start(() => setShowPauseIcon(false));
+        }, 800);
+        
+        currentVideoRef.pauseAsync();
+      }
+    }
+  };
+  
+  // Add touch handlers for press-to-pause functionality
+  const handleTouchStart = () => {
+    // Clear any existing touch timer
+    if (touchTimer.current) {
+      clearTimeout(touchTimer.current);
+    }
+    
+    // Set a timer to detect long press (300ms)
+    touchTimer.current = setTimeout(() => {
+      if (isPlaying) {
+        isTouchHolding.current = true;
+        setIsPlaying(false);
+        const currentVideoRef = videoRefs.current[currentIndex];
+        if (currentVideoRef) {
+          currentVideoRef.pauseAsync();
+        }
+      }
+    }, 300);
+  };
+
+  const handleTouchEnd = () => {
+    // Clear the touch timer
+    if (touchTimer.current) {
+      clearTimeout(touchTimer.current);
+      touchTimer.current = null;
+    }
+    
+    // If we were holding and paused the video, resume playback
+    if (isTouchHolding.current) {
+      isTouchHolding.current = false;
+      setIsPlaying(true);
+      const currentVideoRef = videoRefs.current[currentIndex];
+      if (currentVideoRef) {
+        currentVideoRef.playAsync();
+      }
+    }
   };
 
   // Show controls when video is tapped
@@ -150,14 +229,12 @@ const ShortsScreen = ({ route }) => {
       setCurrentTime(status.positionMillis);
       setDuration(status.durationMillis);
       
-      // Auto-play next video when current one ends
-      if (status.didJustFinish && !status.isLooping) {
-        const nextIndex = currentIndex + 1;
-        if (nextIndex < posts.length) {
-          flatListRef.current.scrollToIndex({
-            index: nextIndex,
-            animated: true,
-          });
+      // When video finishes, replay the same video instead of moving to next
+      if (status.didJustFinish) {
+        // Replay the current video
+        const currentVideoRef = videoRefs.current[currentIndex];
+        if (currentVideoRef) {
+          currentVideoRef.replayAsync();
         }
       }
     }
@@ -194,10 +271,94 @@ const ShortsScreen = ({ route }) => {
     });
   };
 
+  // Handle like functionality
+  const handleLike = async (postId) => {
+    try {
+      const currentPost = posts.find(post => post.id === postId);
+      if (!currentPost) return;
+      
+      // Optimistically update UI
+      const updatedPosts = posts.map(post => {
+        if (post.id === postId) {
+          return {
+            ...post,
+            is_liked: !post.is_liked,
+            likes: post.likes ? [
+              { count: post.is_liked ? Math.max(0, post.likes[0]?.count - 1) : (post.likes[0]?.count || 0) + 1 }
+            ] : [{ count: 1 }]
+          };
+        }
+        return post;
+      });
+      setPosts(updatedPosts);
+      
+      // Call API to update like status
+      const { isLiked, likesCount } = await PostsService.toggleLike(postId);
+      
+      // Update state with actual response from server
+      const finalPosts = posts.map(post => {
+        if (post.id === postId) {
+          return {
+            ...post,
+            is_liked: isLiked,
+            likes: [{ count: likesCount }]
+          };
+        }
+        return post;
+      });
+      setPosts(finalPosts);
+    } catch (error) {
+      console.error('Error toggling like:', error);
+      Alert.alert('Error', 'Failed to update like');
+    }
+  };
+
+  // Handle comment functionality
+  const handleComment = (postId) => {
+    // Pause video before navigating
+    if (videoRefs.current[currentIndex]) {
+      videoRefs.current[currentIndex].pauseAsync();
+      setIsPlaying(false);
+    }
+    
+    navigation.navigate('ShortsComment', { postId });
+  };
+
+  // Handle share functionality
+  const handleShare = async (post) => {
+    try {
+      const result = await Share.share({
+        message: `Check out this video from ${post.profiles?.username || 'a user'}!\n\n${post.caption || ''}\n\nOpen the app to watch.`,
+        url: post.media_url, // This may not work on all platforms
+        title: 'Share this video'
+      });
+      
+      if (result.action === Share.sharedAction) {
+        if (result.activityType) {
+          // shared with activity type of result.activityType
+          console.log('Shared with activity type:', result.activityType);
+        } else {
+          // shared
+          console.log('Shared successfully');
+        }
+      } else if (result.action === Share.dismissedAction) {
+        // dismissed
+        console.log('Share dismissed');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Could not share this video');
+      console.error('Error sharing:', error);
+    }
+  };
+
   // Render each short video item
   const renderItem = ({ item, index }) => {
     // Only render video posts
     if (item.type !== 'video') return null;
+    
+    // Get like count
+    const likeCount = item.likes?.[0]?.count || 0;
+    const commentCount = item.comments?.[0]?.count || 0;
     
     return (
       <View style={styles.videoContainer}>
@@ -205,15 +366,21 @@ const ShortsScreen = ({ route }) => {
           activeOpacity={1} 
           style={styles.videoWrapper} 
           onPress={handleVideoPress}
+          onPressIn={handleTouchStart}
+          onPressOut={handleTouchEnd}
         >
           <Video
             ref={ref => { videoRefs.current[index] = ref }}
             source={{ uri: item.media_url }}
             style={styles.video}
             resizeMode="contain"
-            shouldPlay={isPlaying && index === currentIndex}
-            isLooping
+            play={isPlaying && index === currentIndex && !isTouchHolding.current}
+            shouldPlay={isPlaying && index === currentIndex && !isTouchHolding.current}
+            isLooping={true}
+            loop={true}
             onPlaybackStatusUpdate={onPlaybackStatusUpdate}
+            useNativeControls={false}
+            rate={1.0}
           />
           
           {/* User info overlay */}
@@ -224,6 +391,47 @@ const ShortsScreen = ({ route }) => {
             <View style={styles.userInfo}>
               <Text style={styles.username}>{item.profiles?.username || 'User'}</Text>
               <Text style={styles.caption}>{item.caption}</Text>
+            </View>
+            
+            {/* Social interaction buttons */}
+            <View style={styles.socialButtons}>
+              <TouchableOpacity 
+                style={styles.socialButton} 
+                onPress={() => handleLike(item.id)}
+              >
+                <LinearGradient 
+                  colors={item.is_liked ? ['#ff00ff', '#9900ff'] : ['rgba(0,0,0,0.5)', 'rgba(0,0,0,0.5)']}
+                  style={styles.socialButtonGradient}
+                >
+                  <Ionicons name={item.is_liked ? 'heart' : 'heart-outline'} size={26} color="#fff" />
+                </LinearGradient>
+                <Text style={styles.socialButtonText}>{likeCount}</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.socialButton}
+                onPress={() => handleComment(item.id)}
+              >
+                <LinearGradient 
+                  colors={['rgba(0,0,0,0.5)', 'rgba(0,0,0,0.5)']}
+                  style={styles.socialButtonGradient}
+                >
+                  <Ionicons name="chatbubble-outline" size={24} color="#fff" />
+                </LinearGradient>
+                <Text style={styles.socialButtonText}>{commentCount}</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.socialButton}
+                onPress={() => handleShare(item)}
+              >
+                <LinearGradient 
+                  colors={['rgba(0,0,0,0.5)', 'rgba(0,0,0,0.5)']}
+                  style={styles.socialButtonGradient}
+                >
+                  <Ionicons name="share-social-outline" size={24} color="#fff" />
+                </LinearGradient>
+              </TouchableOpacity>
             </View>
           </LinearGradient>
 
@@ -242,19 +450,6 @@ const ShortsScreen = ({ route }) => {
                   <Ionicons name="arrow-back" size={28} color="#fff" />
                 </TouchableOpacity>
               </View>
-              
-              {/* Center play/pause button */}
-              <TouchableOpacity 
-                style={styles.playPauseButton} 
-                onPress={() => setIsPlaying(!isPlaying)}
-              >
-                <LinearGradient
-                  colors={['#ff00ff', '#9900ff']}
-                  style={styles.playButtonGradient}
-                >
-                  <Ionicons name={isPlaying ? "pause" : "play"} size={40} color="#fff" />
-                </LinearGradient>
-              </TouchableOpacity>
               
               {/* Bottom controls */}
               <View style={styles.bottomControls}>
@@ -284,16 +479,11 @@ const ShortsScreen = ({ route }) => {
             </LinearGradient>
           )}
           
-          {/* Loading indicator */}
-          {index === currentIndex && !isPlaying && (
-            <View style={styles.playIconOverlay}>
-              <LinearGradient
-                colors={['#ff00ff', '#9900ff']}
-                style={styles.playButtonGradient}
-              >
-                <Ionicons name="play" size={40} color="#fff" />
-              </LinearGradient>
-            </View>
+          {/* Pause icon that appears briefly when video is paused */}
+          {showPauseIcon && index === currentIndex && (
+            <Animated.View style={[styles.pauseIconContainer, { opacity: fadeAnim }]}>
+              <Ionicons name="pause" size={50} color="#fff" />
+            </Animated.View>
           )}
         </TouchableOpacity>
       </View>
@@ -387,6 +577,28 @@ const styles = StyleSheet.create({
   },
   userInfo: {
     marginBottom: 20,
+  },
+  socialButtons: {
+    position: 'absolute',
+    right: 10,
+    bottom: 80,
+    alignItems: 'center',
+  },
+  socialButton: {
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  socialButtonGradient: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 5,
+  },
+  socialButtonText: {
+    color: '#fff',
+    fontSize: 12,
   },
   username: {
     color: '#fff',
@@ -491,6 +703,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.3)',
+  },
+  pauseIconContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    opacity: 0.7,
   },
 });
 

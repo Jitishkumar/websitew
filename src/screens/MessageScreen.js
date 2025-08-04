@@ -11,15 +11,20 @@ import {
   Platform,
   Image,
   ActivityIndicator,
-  Alert
+  Alert,
+  Modal,
+  Dimensions
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { supabase } from '../config/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMessages } from '../context/MessageContext';
+import * as ImagePicker from 'expo-image-picker';
+import { LinearGradient } from 'expo-linear-gradient';
+// BlurView is causing issues, so we'll use a regular View with backgroundColor instead
 
 const MessageScreen = () => {
   const insets = useSafeAreaInsets();
@@ -279,7 +284,6 @@ const MessageScreen = () => {
     }
   };
 
-  // Rest of your component methods remain the same...
   const sendMessage = async () => {
     if (!inputText.trim()) return;
     
@@ -405,6 +409,359 @@ const MessageScreen = () => {
     return "Chat";
   };
 
+  const [showCamera, setShowCamera] = useState(false);
+  const [cameraType, setCameraType] = useState('back'); // Using string literal instead of ImagePicker.CameraType.back
+  const [hasCameraPermission, setHasCameraPermission] = useState(null);
+  const [showMediaPicker, setShowMediaPicker] = useState(false);
+  const [flashMode, setFlashMode] = useState('off'); // Using string literal instead of ImagePicker.FlashMode.off
+  const cameraRef = useRef(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        // Request camera permissions using ImagePicker instead of Camera
+        const { status: cameraStatus } = await ImagePicker.requestCameraPermissionsAsync();
+        setHasCameraPermission(cameraStatus === 'granted');
+        
+        const { status: mediaStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (mediaStatus !== 'granted') {
+          Alert.alert('Permission required', 'Please allow access to your photo library to send images');
+        }
+      } catch (error) {
+        console.error('Error requesting camera permissions:', error);
+        setHasCameraPermission(false);
+        // Don't show camera option if there's an error with the camera module
+        setShowCamera(false);
+      }
+    })();
+  }, []);
+
+  const handleCameraCapture = async () => {
+    try {
+      // Use ImagePicker instead of Camera component
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images, // Using MediaTypeOptions since MediaType is undefined
+        allowsEditing: true,
+        quality: 0.7,
+        cameraType: cameraType, // Already using string literal ('front' or 'back')
+        flashMode: flashMode // Already using string literal ('on', 'off', 'auto', or 'torch')
+      });
+      
+      if (!result.canceled) {
+        setShowCamera(false);
+        // Handle photo upload and sending
+        // Add your photo sending logic here
+        
+        // For now, just show a success message
+        Alert.alert('Success', 'Photo captured successfully! (Photo sending functionality will be implemented later)');
+      } else {
+        setShowCamera(false);
+      }
+    } catch (error) {
+      console.error('Error taking picture:', error);
+      Alert.alert('Error', 'Failed to take picture');
+      setShowCamera(false);
+    }
+  };
+  
+  // This function is now redundant since we're using ImagePicker directly
+  // Keeping it for backward compatibility with existing code
+  const takePictureWithImagePicker = async () => {
+    // Just call handleCameraCapture since it now uses ImagePicker
+    await handleCameraCapture();
+  };
+
+  const handleMediaPick = async (type) => {
+    try {
+      const options = {
+        mediaTypes: type === 'photo' ? 
+          ImagePicker.MediaTypeOptions.Images : 
+          ImagePicker.MediaTypeOptions.Videos,
+        quality: 0.7,
+        allowsEditing: true
+      };
+
+      const result = await ImagePicker.launchImageLibraryAsync(options);
+      
+      if (!result.canceled) {
+        // Handle media upload and sending
+        // Add your media sending logic here
+      }
+    } catch (error) {
+      console.error('Error picking media:', error);
+      Alert.alert('Error', 'Failed to pick media');
+    }
+    setShowMediaPicker(false);
+  };
+
+  const MediaPickerModal = () => (
+    <Modal
+      animationType="slide"
+      transparent={true}
+      visible={showMediaPicker}
+      onRequestClose={() => setShowMediaPicker(false)}
+    >
+      <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.8)' }]}>
+        <View style={styles.mediaPickerContainer}>
+          <TouchableOpacity 
+            style={styles.mediaOption} 
+            onPress={() => handleMediaPick('photo')}
+          >
+            <MaterialCommunityIcons name="image" size={32} color="#ff00ff" />
+            <Text style={styles.mediaOptionText}>Photo</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.mediaOption} 
+            onPress={() => handleMediaPick('video')}
+          >
+            <MaterialCommunityIcons name="video" size={32} color="#ff00ff" />
+            <Text style={styles.mediaOptionText}>Video</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.mediaOption} 
+            onPress={() => {
+              setShowMediaPicker(false);
+              setCameraType('back'); // Using string literal instead of ImagePicker.CameraType.back
+              handleCameraCapture();
+            }}
+          >
+            <MaterialCommunityIcons name="camera" size={32} color="#ff00ff" />
+            <Text style={styles.mediaOptionText}>Rear Camera</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.mediaOption} 
+            onPress={() => {
+              setShowMediaPicker(false);
+              setCameraType('front'); // Using string literal instead of ImagePicker.CameraType.front
+              handleCameraCapture();
+            }}
+          >
+            <MaterialCommunityIcons name="camera-front" size={32} color="#ff00ff" />
+            <Text style={styles.mediaOptionText}>Selfie Camera</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.mediaOption, { backgroundColor: '#333' }]} 
+            onPress={() => setShowMediaPicker(false)}
+          >
+            <MaterialCommunityIcons name="close" size={32} color="#ff00ff" />
+            <Text style={styles.mediaOptionText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  // We no longer need the showCamera conditional rendering since we're using ImagePicker directly
+  // The handleCameraCapture function will be called directly from the MediaPickerModal
+
+  // Add styles for the new camera UI elements
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: '#000',
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingBottom: 16,
+      backgroundColor: '#1a1a1a',
+    },
+    backButton: {
+      padding: 8,
+    },
+    profileInfo: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flex: 1,
+      marginLeft: 8,
+    },
+    avatar: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      marginRight: 8,
+    },
+    headerTitle: {
+      color: '#fff',
+      fontSize: 18,
+      fontWeight: 'bold',
+    },
+    headerActions: {
+      flexDirection: 'row',
+    },
+    headerButton: {
+      marginLeft: 16,
+    },
+    messageList: {
+      flex: 1,
+      paddingHorizontal: 16,
+    },
+    messageListContent: {
+      paddingTop: 16,
+      paddingBottom: 8,
+    },
+    messageBubble: {
+      maxWidth: '80%',
+      padding: 12,
+      borderRadius: 18,
+      marginBottom: 8,
+    },
+    myMessage: {
+      alignSelf: 'flex-end',
+      backgroundColor: '#ff00ff',
+      borderBottomRightRadius: 4,
+    },
+    theirMessage: {
+      alignSelf: 'flex-start',
+      backgroundColor: '#333',
+      borderBottomLeftRadius: 4,
+    },
+    messageText: {
+      color: '#fff',
+      fontSize: 16,
+    },
+    messageFooter: {
+      flexDirection: 'row',
+      justifyContent: 'flex-end',
+      alignItems: 'center',
+      marginTop: 4,
+    },
+    timestamp: {
+      color: 'rgba(255, 255, 255, 0.6)',
+      fontSize: 12,
+      marginRight: 4,
+    },
+    readStatus: {
+      marginLeft: 4,
+    },
+    inputContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      backgroundColor: '#1a1a1a',
+    },
+    inputWrapper: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flex: 1,
+      backgroundColor: 'transparent',
+    },
+    input: {
+      flex: 1,
+      backgroundColor: '#333',
+      borderRadius: 20,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      color: '#fff',
+      fontSize: 16,
+      marginRight: 8,
+    },
+    sendButton: {
+      backgroundColor: '#ff00ff',
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    mediaButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: 8,
+    },
+    modalOverlay: {
+      flex: 1,
+      justifyContent: 'flex-end',
+    },
+    mediaPickerContainer: {
+      backgroundColor: '#222',
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      padding: 20,
+    },
+    mediaOption: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: '#333',
+    },
+    mediaOptionText: {
+      color: '#fff',
+      fontSize: 16,
+      marginLeft: 16,
+    },
+    cameraContainer: {
+      flex: 1,
+      backgroundColor: '#000',
+    },
+    camera: {
+      flex: 1,
+    },
+    cameraHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      padding: 20,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+    },
+    cameraControls: {
+      flex: 1,
+      backgroundColor: 'transparent',
+      justifyContent: 'flex-end',
+      padding: 20,
+    },
+    cameraControlsRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 20,
+    },
+    cameraButton: {
+      alignSelf: 'center',
+      alignItems: 'center',
+      backgroundColor: 'transparent',
+    },
+    captureButton: {
+      alignSelf: 'center',
+      alignItems: 'center',
+      backgroundColor: 'transparent',
+    },
+    captureOuter: {
+      borderWidth: 2,
+      borderColor: '#fff',
+      borderRadius: 35,
+      height: 70,
+      width: 70,
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    captureInner: {
+      borderWidth: 2,
+      borderColor: '#fff',
+      borderRadius: 30,
+      height: 60,
+      width: 60,
+      backgroundColor: 'rgba(255, 255, 255, 0.5)',
+    },
+    cameraTypeText: {
+      color: '#fff',
+      fontSize: 14,
+      textAlign: 'center',
+      marginBottom: 10,
+    },
+  });
+  
   return (
     <KeyboardAvoidingView 
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -414,7 +771,10 @@ const MessageScreen = () => {
       <View style={styles.container}>
         <StatusBar style="light" />
         
-        <View style={[styles.header, { paddingTop: insets.top }]}>
+        <LinearGradient
+          colors={['#1a1a1a', '#000']}
+          style={[styles.header, { paddingTop: insets.top }]}
+        >
           <TouchableOpacity 
             style={styles.backButton} 
             onPress={() => navigation.goBack()}
@@ -438,7 +798,7 @@ const MessageScreen = () => {
               <Ionicons name="videocam-outline" size={22} color="#fff" />
             </TouchableOpacity>
           </View>
-        </View>
+        </LinearGradient>
 
         <FlatList
           ref={flatListRef}
@@ -467,11 +827,15 @@ const MessageScreen = () => {
           }
         />
 
-        <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+        <View style={[styles.inputContainer, { backgroundColor: 'rgba(0,0,0,0.8)' }]}>
           <View style={styles.inputWrapper}>
-            <TouchableOpacity style={styles.mediaButton}>
-              <Ionicons name="camera-outline" size={24} color="#ff00ff" />
+            <TouchableOpacity 
+              style={styles.mediaButton}
+              onPress={() => setShowMediaPicker(true)}
+            >
+              <MaterialCommunityIcons name="plus-circle" size={24} color="#ff00ff" />
             </TouchableOpacity>
+            
             <TextInput
               style={styles.input}
               value={inputText}
@@ -480,187 +844,26 @@ const MessageScreen = () => {
               placeholderTextColor="#8e8e8e"
               multiline
             />
+            
             {!inputText.trim() ? (
               <TouchableOpacity style={styles.mediaButton}>
-                <Ionicons name="mic-outline" size={24} color="#8e8e8e" />
+                <MaterialCommunityIcons name="microphone" size={24} color="#ff00ff" />
               </TouchableOpacity>
             ) : (
               <TouchableOpacity 
                 style={[styles.sendButton, styles.sendButtonActive]}
                 onPress={sendMessage}
               >
-                <Ionicons name="send" size={18} color="white" />
+                <MaterialCommunityIcons name="send" size={20} color="white" />
               </TouchableOpacity>
             )}
           </View>
         </View>
+
+        <MediaPickerModal />
       </View>
     </KeyboardAvoidingView>
   );
 };
-
-// Your existing styles remain the same...
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#000',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#222',
-  },
-  backButton: {
-    padding: 5,
-  },
-  profileInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    marginLeft: 10,
-  },
-  avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    marginRight: 10,
-    borderWidth: 0.5,
-    borderColor: '#333',
-  },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  headerButton: {
-    padding: 8,
-    marginLeft: 8,
-  },
-  messageList: {
-    flex: 1,
-    paddingHorizontal: 16,
-  },
-  messageListContent: {
-    paddingTop: 20,
-    paddingBottom: 10,
-  },
-  messageBubble: {
-    padding: 12,
-    borderRadius: 20,
-    maxWidth: '70%',
-    marginVertical: 4,
-    elevation: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 1,
-  },
-  myMessage: {
-    backgroundColor: '#0066ff',
-    alignSelf: 'flex-end',
-    borderBottomRightRadius: 4,
-  },
-  theirMessage: {
-    backgroundColor: '#ff00ff',
-    alignSelf: 'flex-start',
-    borderTopLeftRadius: 4,
-  },
-  messageText: {
-    color: 'white',
-    fontSize: 15,
-  },
-  messageFooter: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  timestamp: {
-    color: 'rgba(255, 255, 255, 0.5)',
-    fontSize: 11,
-    marginRight: 4,
-  },
-  readStatus: {
-    marginLeft: 2,
-  },
-  inputContainer: {
-    paddingHorizontal: 10,
-    paddingVertical: 12,
-    backgroundColor: '#000',
-    borderTopWidth: 0.5,
-    borderTopColor: '#222',
-  },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#262626',
-    borderRadius: 24,
-    paddingHorizontal: 12,
-  },
-  input: {
-    flex: 1,
-    color: 'white',
-    paddingVertical: 10,
-    paddingHorizontal: 5,
-    maxHeight: 100,
-    fontSize: 15,
-  },
-  sendButton: {
-    padding: 8,
-    borderRadius: 20,
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sendButtonActive: {
-    backgroundColor: '#0095f6',
-  },
-  sendButtonDisabled: {
-    backgroundColor: 'rgba(51, 51, 51, 0.5)',
-  },
-  mediaButton: {
-    padding: 8,
-    borderRadius: 20,
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 50,
-  },
-  emptyText: {
-    color: 'rgba(255, 255, 255, 0.7)',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  emptySubtext: {
-    color: 'rgba(255, 255, 255, 0.5)',
-    fontSize: 14,
-    marginTop: 8,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 50,
-  },
-  loadingText: {
-    color: 'rgba(255, 255, 255, 0.7)',
-    fontSize: 16,
-    marginTop: 10,
-  }
-});
 
 export default MessageScreen;

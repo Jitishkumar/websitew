@@ -13,7 +13,8 @@ import {
   PanResponder,
   ScrollView,
   Linking,
-  TextInput
+  TextInput,
+  Animated
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Video } from 'expo-av';
@@ -61,8 +62,11 @@ const PostItem = ({ post, onOptionsPress }) => {
   const [currentTime, setCurrentTime] = useState(0);
   const [seeking, setSeeking] = useState(false);
   const [showControls, setShowControls] = useState(false);
+  const [showPauseIcon, setShowPauseIcon] = useState(false);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
   const videoRef = useRef(null);
   const controlsTimeout = useRef(null);
+  const pauseIconTimeout = useRef(null);
   
   // Get video context
   const { activeVideoId, setActiveVideo, clearActiveVideo, isFullscreenMode, setFullscreen: setContextFullscreen } = useVideo();
@@ -103,9 +107,35 @@ const PostItem = ({ post, onOptionsPress }) => {
       if (newPlayingState) {
         // If we're starting to play this video, set it as the active video
         setActiveVideo(post.id);
+        if (videoRef.current) {
+          videoRef.current.playAsync();
+        }
       } else if (activeVideoId === post.id) {
         // If we're pausing the active video, clear the active video
         clearActiveVideo();
+        if (videoRef.current) {
+          videoRef.current.pauseAsync();
+        }
+        
+        // Show pause icon with animation
+        setShowPauseIcon(true);
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true
+        }).start();
+        
+        // Hide pause icon after a short delay
+        if (pauseIconTimeout.current) {
+          clearTimeout(pauseIconTimeout.current);
+        }
+        pauseIconTimeout.current = setTimeout(() => {
+          Animated.timing(fadeAnim, {
+            toValue: 0,
+            duration: 200,
+            useNativeDriver: true
+          }).start(() => setShowPauseIcon(false));
+        }, 800);
       }
     }
     setLastTap(now);
@@ -501,8 +531,12 @@ const PostItem = ({ post, onOptionsPress }) => {
                     source={{ uri: post.media_url }}
                     style={styles.media}
                     resizeMode="cover"
+                    play={playing && activeVideoId === post.id && !isTouchHolding.current}
                     shouldPlay={playing && activeVideoId === post.id && !isTouchHolding.current}
-                    isLooping
+                    isLooping={true}
+                    loop={true}
+                    useNativeControls={false}
+                    rate={1.0}
                     onLoadStart={() => setLoading(true)}
                     onLoad={() => {
                       setLoading(false);
@@ -522,6 +556,13 @@ const PostItem = ({ post, onOptionsPress }) => {
                           setCurrentTime(status.positionMillis);
                         }
                         setDuration(status.durationMillis);
+                        
+                        // When video finishes, replay it instead of stopping
+                        if (status.didJustFinish) {
+                          if (videoRef.current) {
+                            videoRef.current.replayAsync();
+                          }
+                        }
                       }
                     }}
                     onError={() => {
@@ -529,6 +570,12 @@ const PostItem = ({ post, onOptionsPress }) => {
                       setVideoError(true);
                     }}
                   />
+                  
+                  {showPauseIcon && (
+                    <Animated.View style={[styles.videoOverlay, { opacity: fadeAnim }]}>
+                      <Ionicons name="pause" size={60} color="#ffffff" />
+                    </Animated.View>
+                  )}
 
                   {showControls && (
                     <LinearGradient
@@ -701,8 +748,8 @@ const PostItem = ({ post, onOptionsPress }) => {
             source={{ uri: post.media_url }}
             style={styles.fullscreenVideo}
             resizeMode="contain"
-            shouldPlay={playing && fullscreen} // Only play if in fullscreen mode
-            isLooping
+            play={playing && fullscreen} // Only play if in fullscreen mode
+            loop
             onPlaybackStatusUpdate={onPlaybackStatusUpdate}
             onLoad={(status) => {
               setLoading(false);
@@ -956,7 +1003,7 @@ const styles = StyleSheet.create({
   controlsRow: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', marginTop: 10 },
   controlButton: { padding: 8 },
   playPauseButton: { width: 40, height: 40, borderRadius: 20, overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
-  videoOverlay: { ...StyleSheet.absoluteFill, justifyContent: 'center', alignItems: 'center' },
+  videoOverlay: { ...StyleSheet.absoluteFill, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.3)' },
   playButton: { width: 60, height: 60, borderRadius: 30, overflow: 'hidden' },
   playButtonGradient: { flex: 1, justifyContent: 'center', alignItems: 'center', borderRadius: 30 },
   errorContainer: { ...StyleSheet.absoluteFill, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)' },

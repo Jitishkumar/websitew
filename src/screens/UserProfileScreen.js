@@ -693,12 +693,11 @@ const UserProfileScreen = () => {
               source={{ uri: item.media_url || 'https://via.placeholder.com/300' }}
               style={styles.gridImage}
               resizeMode="cover"
-              shouldPlay={false}
-              isMuted={true}
-              isLooping={false}
-              useNativeControls={false}
-              posterSource={{ uri: item.media_url }}
-              usePoster={true}
+              play={false}
+              muted={true}
+              loop={false}
+              controls={false}
+              poster={item.media_url}
             />
             <TouchableOpacity 
               style={styles.videoIndicator}

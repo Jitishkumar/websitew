@@ -172,6 +172,8 @@ const HomeScreen = () => {
       >
         <Text style={styles.logo}>Flexx</Text>
         <View style={styles.headerIcons}>
+
+        
           <TouchableOpacity 
             style={styles.iconButton}
             onPress={() => navigation.navigate('Trending')}
@@ -386,8 +388,11 @@ const HomeScreen = () => {
                       source={{ uri: selectedMedia.uri }}
                       style={styles.previewMedia}
                       resizeMode="cover"
+                      play={false}
                       shouldPlay={false}
-                      useNativeControls
+                      isLooping={false}
+                      useNativeControls={true}
+                      rate={1.0}
                     />
                   ) : (
                     <Image
@@ -437,8 +442,12 @@ const HomeScreen = () => {
                     source={{ uri: selectedStory.media_url }}
                     style={styles.storyMedia}
                     resizeMode="contain"
-                    shouldPlay
-                    isLooping
+                    play
+                    shouldPlay={true}
+                    isLooping={true}
+                    loop={true}
+                    useNativeControls={false}
+                    rate={1.0}
                   />
                 ) : (
                   <Image

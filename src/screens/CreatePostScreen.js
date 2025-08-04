@@ -198,8 +198,8 @@ const CreatePostScreen = () => {
                 source={{ uri: selectedMedia.uri }}
                 style={styles.previewMedia}
                 resizeMode="contain"
-                shouldPlay={false}
-                useNativeControls
+                play={false}
+                controls
               />
             ) : (
               <Image

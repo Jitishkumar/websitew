@@ -244,16 +244,10 @@ const ProfileScreen = () => {
       >
         {item.type === 'video' ? (
           <View style={styles.gridVideoContainer}>
-            <Video
+            <Image
               source={{ uri: item.media_url || 'https://via.placeholder.com/300' }}
               style={styles.gridImage}
               resizeMode="cover"
-              shouldPlay={false}
-              isMuted={true}
-              isLooping={false}
-              useNativeControls={false}
-              posterSource={{ uri: item.media_url }}
-              usePoster={true}
             />
             <View style={styles.videoIndicator}>
               <Ionicons name="play-circle" size={24} color="#fff" />
@@ -333,12 +327,7 @@ const ProfileScreen = () => {
         />
         
         <Text style={styles.name}>{userProfile?.full_name || 'No name set'}</Text>
-        <View style={styles.usernameContainer}>
-          <Text style={styles.username}>@{userProfile?.username || 'username'}</Text>
-          {userProfile?.isVerified && (
-            <Ionicons name="checkmark-circle" size={20} color="#ff0000" style={styles.verifiedBadge} />
-          )}
-        </View>
+        <Text style={styles.username}>@{userProfile?.username || 'username'}</Text>
         <LinearGradient
           colors={['#ff00ff', '#00ff00']}
           start={{ x: 0, y: 0 }}
@@ -597,19 +586,6 @@ const ProfileScreen = () => {
       if (oldError) {
         console.error('Error fetching old profile data:', oldError);
       }
-      
-      // Check if user is verified
-      const { data: verifiedData, error: verifiedError } = await supabase
-        .from('verified_accounts')
-        .select('verified')
-        .eq('id', user.id)
-        .maybeSingle();
-        
-      if (verifiedError) {
-        console.error('Error checking verification status:', verifiedError);
-      }
-      
-      console.log('Verification status:', verifiedData?.verified);
 
       const { data: newData, error } = await supabase
         .from('profiles')
@@ -695,8 +671,7 @@ const ProfileScreen = () => {
       setUserProfile({
         ...newData,
         avatar_url: avatarUrl,
-        cover_url: coverUrl,
-        isVerified: verifiedData?.verified || false
+        cover_url: coverUrl
       });
     } catch (error) {
       console.error('Error loading user profile:', error);
@@ -876,7 +851,7 @@ const ProfileScreen = () => {
                     style={styles.connectionItem}
                     onPress={() => {
                       onClose();
-                      navigation.navigate('UserProfileScreen', { userId: item.id });
+                      navigation.navigate('UserProfile', { userId: item.id });
                     }}
                   >
                     <Image 
@@ -1024,14 +999,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#faf7f8',
     marginTop: 5,
-  },
-  usernameContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 5,
-  },
-  verifiedBadge: {
-    marginLeft: 5,
   },
   bioContainer: {
     marginTop: 10,
