@@ -290,25 +290,33 @@ const PostItem = ({ post, onOptionsPress }) => {
   
   // Auto-play video when it becomes visible in the viewport
   useEffect(() => {
-    if (post.type === 'video' && videoRef.current) {
-      // Only auto-play if this post is the active video and not in fullscreen mode
-      if (activeVideoId === post.id && !isFullscreenMode && !isTouchHolding.current) {
-        setPlaying(true);
-        videoRef.current.playAsync();
-      } else if (activeVideoId !== post.id && playing) {
-        // If another video is active but this one is playing, pause it
-        setPlaying(false);
-        videoRef.current.pauseAsync();
+    let isMounted = true;
+    const handleVideoStateChange = async () => {
+      if (videoRef.current) {
+        if (activeVideoId === post.id && playing) {
+          try {
+            await videoRef.current.playAsync();
+          } catch (error) {
+            console.error('Error playing video:', error);
+          }
+        } else {
+          try {
+            await videoRef.current.pauseAsync();
+          } catch (error) {
+            console.error('Error pausing video:', error);
+          }
+          if (isMounted) setPlaying(false);
+        }
       }
-    }
-    
-    // Cleanup function to handle unmounting
+    };
+    handleVideoStateChange();
     return () => {
+      isMounted = false;
       if (videoRef.current) {
         videoRef.current.pauseAsync();
       }
     };
-  }, [post.id, activeVideoId, isFullscreenMode]);
+  }, [post.id, activeVideoId, isFullscreenMode, playing]);
   
   // Effect to handle fullscreen mode changes
   useEffect(() => {
@@ -531,20 +539,24 @@ const PostItem = ({ post, onOptionsPress }) => {
                     source={{ uri: post.media_url }}
                     style={styles.media}
                     resizeMode="cover"
-                    play={playing && activeVideoId === post.id && !isTouchHolding.current}
                     shouldPlay={playing && activeVideoId === post.id && !isTouchHolding.current}
                     isLooping={true}
-                    loop={true}
                     useNativeControls={false}
                     rate={1.0}
                     onLoadStart={() => setLoading(true)}
-                    onLoad={() => {
+                    onLoad={async () => {
                       setLoading(false);
                       // Only auto-play if this is the active video and not being held
                       if (activeVideoId === post.id && !isTouchHolding.current) {
-                        setPlaying(true);
+                        // First ensure any previous video is fully stopped
                         if (videoRef.current) {
-                          videoRef.current.playAsync();
+                          // Pause first to ensure clean state
+                          await videoRef.current.pauseAsync();
+                          // Small delay to ensure audio channels are cleared
+                          setTimeout(async () => {
+                            setPlaying(true);
+                            await videoRef.current.playAsync();
+                          }, 50);
                         }
                       }
                     }}

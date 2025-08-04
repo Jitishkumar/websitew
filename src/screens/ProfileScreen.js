@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, Alert, Modal, ActivityIndicator, FlatList, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -204,13 +204,50 @@ const ProfileScreen = () => {
 
   const memoizedPosts = useMemo(() => posts, [posts]);
   const memoizedShorts = useMemo(() => shorts, [shorts]);
+  const videoRefs = useRef({});
+  
+  // Effect to ensure videos are properly unloaded when component unmounts
+  useEffect(() => {
+    return () => {
+      // Unload all videos when component unmounts
+      Object.values(videoRefs.current).forEach(videoRef => {
+        if (videoRef && videoRef.unloadAsync) {
+          videoRef.unloadAsync().catch(err => console.log('Error unloading video:', err));
+        }
+      });
+    };
+  }, []);
 
-  const handlePostPress = (index) => {
+  const handlePostPress = async (index) => {
     console.log('Post pressed at index:', index);
-    navigation.navigate('PostViewer', {
-      posts: activeTab === 'Post' ? memoizedPosts : memoizedShorts,
-      initialIndex: index,
-    });
+    const currentPosts = activeTab === 'Post' ? memoizedPosts : memoizedShorts;
+    const post = currentPosts[index];
+  
+    // Ensure any active videos are stopped before navigating
+    if (post && post.type === 'video') {
+      const videoRef = videoRefs.current[post.id];
+  
+      // First pause and mute the video to prevent audio issues
+      if (videoRef) {
+        try {
+          if (videoRef.pauseAsync) await videoRef.pauseAsync();
+          if (videoRef.setIsMutedAsync) await videoRef.setIsMutedAsync(true);
+        } catch (e) { console.log('Error pausing/muting video:', e); }
+      }
+      // Now navigate to the post viewer after a short delay
+      setTimeout(() => {
+        navigation.navigate('PostViewer', {
+          posts: currentPosts,
+          initialIndex: index,
+        });
+      }, 100);
+    } else {
+      // For non-video posts, navigate immediately
+      navigation.navigate('PostViewer', {
+        posts: currentPosts,
+        initialIndex: index,
+      });
+    }
   };
 
   const renderGridItem = ({ item, index }) => {
@@ -244,10 +281,23 @@ const ProfileScreen = () => {
       >
         {item.type === 'video' ? (
           <View style={styles.gridVideoContainer}>
-            <Image
+            <Video
+              ref={ref => {
+                if (ref) {
+                  videoRefs.current[item.id] = ref;
+                }
+              }}
               source={{ uri: item.media_url || 'https://via.placeholder.com/300' }}
               style={styles.gridImage}
               resizeMode="cover"
+              shouldPlay={false}
+              isMuted={true}
+              isLooping={false}
+              controls={false}
+              posterSource={{ uri: item.media_url }}
+              usePoster={true}
+              useNativeControls={false}
+              onError={(error) => console.log('Video loading error:', error)}
             />
             <View style={styles.videoIndicator}>
               <Ionicons name="play-circle" size={24} color="#fff" />

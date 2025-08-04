@@ -305,10 +305,10 @@ const UserProfileScreen = () => {
   // Implement these functions properly
     const checkFollowStatus = async () => {
       try {
-        const { data: session } = await supabase.auth.getSession();
-        if (!session?.session?.user) return;
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData?.session?.user) return;
         
-        const currentUserId = session.session.user.id;
+        const currentUserId = sessionData.session.user.id;
         
         // Don't check follow status if viewing own profile
         if (currentUserId === userId) {
@@ -466,14 +466,14 @@ const UserProfileScreen = () => {
     // Fix the handleFollow function to handle private accounts
     const handleFollow = async () => {
       try {
-        const { data: session } = await supabase.auth.getSession();
-        if (!session?.session?.user) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData?.session?.user) {
           // Redirect to login if not logged in
           navigation.navigate('Login');
           return;
         }
         
-        const currentUserId = session.session.user.id;
+        const currentUserId = sessionData.session.user.id;
         
         // Don't allow following yourself
         if (currentUserId === userId) return;
@@ -559,10 +559,10 @@ const UserProfileScreen = () => {
     // Add function to check follow request status
     const checkFollowRequestStatus = async () => {
       try {
-        const { data: session } = await supabase.auth.getSession();
-        if (!session?.session?.user) return;
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData?.session?.user) return;
         
-        const currentUserId = session.session.user.id;
+        const currentUserId = sessionData.session.user.id;
         
         const { data, error } = await supabase
           .from('follow_requests')

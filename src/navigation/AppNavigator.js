@@ -155,8 +155,8 @@ export const AppNavigator = () => {
   const [initialRoute, setInitialRoute] = useState(null);
   useEffect(() => {
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setInitialRoute(session ? 'MainApp' : 'Login');
+      const { data } = await supabase.auth.getSession();
+      setInitialRoute(data.session ? 'MainApp' : 'Login');
     };
     checkSession();
   }, []);

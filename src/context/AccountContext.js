@@ -217,9 +217,9 @@ export const AccountProvider = ({ children }) => {
         const remainingUpdates = [];
         for (const update of updatesToRetry) {
           try {
-            const { data: session } = await supabase.auth.getSession();
-            if (session) {
-              await updateAccountWithSession(session);
+            const { data } = await supabase.auth.getSession();
+            if (data && data.session) {
+              await updateAccountWithSession(data.session);
             }
           } catch (error) {
             if (update.retryCount < 5) { // Max 5 retries
