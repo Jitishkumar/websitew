@@ -293,8 +293,9 @@ const PostItem = ({ post, onOptionsPress }) => {
     let isMounted = true;
     const handleVideoStateChange = async () => {
       if (videoRef.current) {
-        if (activeVideoId === post.id && playing) {
+        if (activeVideoId === post.id) {
           try {
+            setPlaying(true);
             await videoRef.current.playAsync();
           } catch (error) {
             console.error('Error playing video:', error);
@@ -316,7 +317,7 @@ const PostItem = ({ post, onOptionsPress }) => {
         videoRef.current.pauseAsync();
       }
     };
-  }, [post.id, activeVideoId, isFullscreenMode, playing]);
+  }, [post.id, activeVideoId, isFullscreenMode]);
   
   // Effect to handle fullscreen mode changes
   useEffect(() => {
