@@ -34,8 +34,12 @@ const CommentScreen = ({ visible, onClose, postId }) => {
   const [modalHeight, setModalHeight] = useState(height * 0.8);
 
   const handleClose = () => {
-    if (onClose) {
+    // Check if onClose is a function before calling it
+    if (typeof onClose === 'function') {
       onClose();
+    } else {
+      // If onClose is not a function, use navigation to go back
+      navigation.goBack();
     }
   };
   
@@ -49,7 +53,13 @@ const CommentScreen = ({ visible, onClose, postId }) => {
       },
       onPanResponderRelease: (_, gesture) => {
         if (gesture.dy > height * 0.2) { // If dragged down more than 20% of screen height
-          onClose();
+          // Check if onClose is a function before calling it
+          if (typeof onClose === 'function') {
+            onClose();
+          } else {
+            // If onClose is not a function, use navigation to go back
+            navigation.goBack();
+          }
         } else {
           Animated.spring(pan.y, {
             toValue: 0,
@@ -356,7 +366,15 @@ const CommentScreen = ({ visible, onClose, postId }) => {
       visible={visible}
       animationType="slide"
       transparent={true}
-      onRequestClose={onClose}
+      onRequestClose={() => {
+        // Check if onClose is a function before calling it
+        if (typeof onClose === 'function') {
+          onClose();
+        } else {
+          // If onClose is not a function, use navigation to go back
+          navigation.goBack();
+        }
+      }}
     >
       <Animated.View
         style={[
@@ -380,7 +398,7 @@ const CommentScreen = ({ visible, onClose, postId }) => {
               <View style={styles.dragIndicator} />
             </View>
             <Text style={styles.headerTitle}>Comments</Text>
-            <TouchableOpacity onPress={onClose}>
+            <TouchableOpacity onPress={handleClose}>
               <Ionicons name="close" size={24} color="#fff" />
             </TouchableOpacity>
           </LinearGradient>

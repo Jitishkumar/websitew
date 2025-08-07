@@ -15,6 +15,7 @@ import {
   Modal,
   Dimensions
 } from 'react-native';
+import { Video } from 'expo-av';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
@@ -42,6 +43,12 @@ const MessageScreen = () => {
   // Use refs to prevent multiple calls
   const isMarkingAsRead = useRef(false);
   const hasMarkedOnFocus = useRef(false);
+  
+  // Media preview states
+  const [showImagePreview, setShowImagePreview] = useState(false);
+  const [showVideoPreview, setShowVideoPreview] = useState(false);
+  const [previewMediaUrl, setPreviewMediaUrl] = useState(null);
+  const videoRef = useRef(null);
   
   // Get current user and set up conversation
   useEffect(() => {
@@ -187,7 +194,10 @@ const MessageScreen = () => {
         sender: newMessage.sender_id === userId ? 'me' : 'them',
         timestamp: new Date(newMessage.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
         sender_id: newMessage.sender_id,
-        read: newMessage.read || false
+        read: newMessage.read || false,
+        media_url: newMessage.media_url || null,
+        media_type: newMessage.media_type || null,
+        cloudinary_public_id: newMessage.cloudinary_public_id || null
       };
       
       // Add message to state (avoid duplicates)
@@ -271,7 +281,10 @@ const MessageScreen = () => {
           sender: msg.sender_id === currentUserId ? 'me' : 'them',
           timestamp: new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
           sender_id: msg.sender_id,
-          read: msg.read || false
+          read: msg.read || false,
+          media_url: msg.media_url || null,
+          media_type: msg.media_type || null,
+          cloudinary_public_id: msg.cloudinary_public_id || null
         }));
         
         setMessages(formattedMessages);
@@ -342,6 +355,18 @@ const MessageScreen = () => {
         return;
       }
 
+      // First, get the message to access its media data
+      const { data: messageData, error: fetchError } = await supabase
+        .from('messages')
+        .select('media_url, media_type, cloudinary_public_id')
+        .eq('id', messageId)
+        .single();
+
+      if (fetchError) {
+        console.error('Error fetching message data:', fetchError);
+      }
+
+      // Delete the message from Supabase
       const { error } = await supabase
         .from('messages')
         .delete()
@@ -353,10 +378,29 @@ const MessageScreen = () => {
         return;
       }
 
+      // Delete media from Cloudinary if it exists
+      if (messageData?.cloudinary_public_id) {
+        try {
+          // Import the Cloudinary delete function
+          const { deleteFromCloudinary } = await import('../config/cloudinary');
+          
+          await deleteFromCloudinary(
+            messageData.cloudinary_public_id, 
+            messageData.media_type || 'image'
+          );
+          console.log('Deleted media from Cloudinary:', messageData.cloudinary_public_id);
+        } catch (mediaError) {
+          console.error('Error deleting media from Cloudinary:', mediaError);
+          // Continue with message deletion even if media deletion fails
+        }
+      }
+
+      // Update local state
       setMessages(prevMessages => 
         prevMessages.filter(msg => msg.id !== messageId)
       );
 
+      // Update AsyncStorage
       const updatedMessages = messages.filter(msg => msg.id !== messageId);
       await AsyncStorage.setItem(`conversation_${conversationId}`, JSON.stringify(updatedMessages));
     } catch (error) {
@@ -385,7 +429,47 @@ const MessageScreen = () => {
         styles.messageBubble,
         item.sender === 'me' ? styles.myMessage : styles.theirMessage
       ]}>
-        <Text style={styles.messageText}>{item.text}</Text>
+        {/* Display text message if present */}
+        {item.text ? (
+          <Text style={styles.messageText}>{item.text}</Text>
+        ) : null}
+        
+        {/* Display media content if present */}
+        {item.media_url ? (
+          item.media_type === 'video' ? (
+            // Video message
+            <TouchableOpacity 
+              style={styles.mediaContainer}
+              onPress={() => {
+                // Open video in fullscreen preview
+                setPreviewMediaUrl(item.media_url);
+                setShowVideoPreview(true);
+              }}
+            >
+              <View style={styles.videoPlaceholder}>
+                <Ionicons name="play-circle" size={40} color="#fff" />
+                <Text style={styles.videoText}>Play Video</Text>
+              </View>
+            </TouchableOpacity>
+          ) : (
+            // Image message
+            <TouchableOpacity 
+              style={styles.mediaContainer}
+              onPress={() => {
+                // Open image in fullscreen preview
+                setPreviewMediaUrl(item.media_url);
+                setShowImagePreview(true);
+              }}
+            >
+              <Image 
+                source={{ uri: item.media_url }} 
+                style={styles.messageImage}
+                resizeMode="cover"
+              />
+            </TouchableOpacity>
+          )
+        ) : null}
+        
         <View style={styles.messageFooter}>
           <Text style={styles.timestamp}>{item.timestamp}</Text>
           {item.sender === 'me' && (
@@ -414,7 +498,6 @@ const MessageScreen = () => {
   const [hasCameraPermission, setHasCameraPermission] = useState(null);
   const [showMediaPicker, setShowMediaPicker] = useState(false);
   const [flashMode, setFlashMode] = useState('off'); // Using string literal instead of ImagePicker.FlashMode.off
-  const cameraRef = useRef(null);
 
   useEffect(() => {
     (async () => {
@@ -449,11 +532,70 @@ const MessageScreen = () => {
       
       if (!result.canceled) {
         setShowCamera(false);
-        // Handle photo upload and sending
-        // Add your photo sending logic here
         
-        // For now, just show a success message
-        Alert.alert('Success', 'Photo captured successfully! (Photo sending functionality will be implemented later)');
+        // Show loading indicator
+        Alert.alert('Uploading', 'Uploading photo, please wait...');
+        
+        try {
+          // Import the Cloudinary upload function
+          const { uploadToCloudinary } = await import('../config/cloudinary');
+          
+          // Upload to Cloudinary
+          const uploadResult = await uploadToCloudinary(result.assets[0].uri, 'image');
+          
+          if (!uploadResult || !uploadResult.url) {
+            throw new Error('Failed to upload photo');
+          }
+          
+          // Create a temporary message object
+          const newMessage = { 
+            id: Date.now().toString(), 
+            text: '',
+            media_url: uploadResult.url,
+            media_type: 'image',
+            sender: 'me',
+            sender_id: userId,
+            timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+          };
+          
+          // Add message to local state
+          const updatedMessages = [...messages, newMessage];
+          setMessages(updatedMessages);
+          
+          // Save to AsyncStorage
+          await AsyncStorage.setItem(`conversation_${conversationId}`, JSON.stringify(updatedMessages));
+          
+          // Save to Supabase
+          const { data, error } = await supabase
+            .from('messages')
+            .insert({
+              conversation_id: conversationId,
+              sender_id: userId,
+              receiver_id: recipientId,
+              content: '',
+              media_url: uploadResult.url,
+              media_type: 'image',
+              cloudinary_public_id: uploadResult.publicId,
+              created_at: new Date().toISOString()
+            })
+            .select()
+            .single();
+            
+          if (error) {
+            console.error('Error sending photo message:', error);
+            setMessages(prevMessages => prevMessages.filter(msg => msg.id !== newMessage.id));
+            Alert.alert('Error', 'Failed to send photo message');
+          } else {
+            setMessages(prevMessages => 
+              prevMessages.map(msg => 
+                msg.id === newMessage.id ? { ...msg, id: data.id } : msg
+              )
+            );
+          }
+        } catch (uploadError) {
+          console.error('Error uploading photo:', uploadError);
+          Alert.alert('Error', 'Failed to upload photo: ' + uploadError.message);
+        }
       } else {
         setShowCamera(false);
       }
@@ -484,8 +626,70 @@ const MessageScreen = () => {
       const result = await ImagePicker.launchImageLibraryAsync(options);
       
       if (!result.canceled) {
-        // Handle media upload and sending
-        // Add your media sending logic here
+        // Show loading indicator
+        Alert.alert('Uploading', 'Uploading media, please wait...');
+        
+        try {
+          // Import the Cloudinary upload function
+          const { uploadToCloudinary } = await import('../config/cloudinary');
+          
+          // Upload to Cloudinary
+          const mediaType = type === 'photo' ? 'image' : 'video';
+          const uploadResult = await uploadToCloudinary(result.assets[0].uri, mediaType);
+          
+          if (!uploadResult || !uploadResult.url) {
+            throw new Error('Failed to upload media');
+          }
+          
+          // Create a temporary message object
+          const newMessage = { 
+            id: Date.now().toString(), 
+            text: '',
+            media_url: uploadResult.url,
+            media_type: mediaType,
+            sender: 'me',
+            sender_id: userId,
+            timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+          };
+          
+          // Add message to local state
+          const updatedMessages = [...messages, newMessage];
+          setMessages(updatedMessages);
+          
+          // Save to AsyncStorage
+          await AsyncStorage.setItem(`conversation_${conversationId}`, JSON.stringify(updatedMessages));
+          
+          // Save to Supabase
+          const { data, error } = await supabase
+            .from('messages')
+            .insert({
+              conversation_id: conversationId,
+              sender_id: userId,
+              receiver_id: recipientId,
+              content: '',
+              media_url: uploadResult.url,
+              media_type: mediaType,
+              cloudinary_public_id: uploadResult.publicId,
+              created_at: new Date().toISOString()
+            })
+            .select()
+            .single();
+            
+          if (error) {
+            console.error('Error sending media message:', error);
+            setMessages(prevMessages => prevMessages.filter(msg => msg.id !== newMessage.id));
+            Alert.alert('Error', 'Failed to send media message');
+          } else {
+            setMessages(prevMessages => 
+              prevMessages.map(msg => 
+                msg.id === newMessage.id ? { ...msg, id: data.id } : msg
+              )
+            );
+          }
+        } catch (uploadError) {
+          console.error('Error uploading media:', uploadError);
+          Alert.alert('Error', 'Failed to upload media: ' + uploadError.message);
+        }
       }
     } catch (error) {
       console.error('Error picking media:', error);
@@ -597,6 +801,31 @@ const MessageScreen = () => {
     },
     headerButton: {
       marginLeft: 16,
+    },
+    // Media message styles
+    mediaContainer: {
+      marginVertical: 4,
+      borderRadius: 12,
+      overflow: 'hidden',
+      backgroundColor: '#222',
+    },
+    messageImage: {
+      width: 200,
+      height: 200,
+      borderRadius: 12,
+    },
+    videoPlaceholder: {
+      width: 200,
+      height: 150,
+      backgroundColor: '#333',
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderRadius: 12,
+    },
+    videoText: {
+      color: '#fff',
+      marginTop: 8,
+      fontSize: 14,
     },
     messageList: {
       flex: 1,
@@ -760,6 +989,66 @@ const MessageScreen = () => {
       textAlign: 'center',
       marginBottom: 10,
     },
+    // Preview modal styles
+    previewContainer: {
+      flex: 1,
+      backgroundColor: '#000',
+    },
+    previewGradient: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    previewCloseButton: {
+      position: 'absolute',
+      top: 40,
+      left: 20,
+      zIndex: 10,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      borderRadius: 20,
+      padding: 5,
+    },
+    previewImage: {
+      width: Dimensions.get('window').width,
+      height: Dimensions.get('window').height * 0.8,
+    },
+    previewVideo: {
+      width: Dimensions.get('window').width,
+      height: Dimensions.get('window').height * 0.8,
+    },
+    // Empty state styles
+    emptyContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+    },
+    emptyText: {
+      color: '#999',
+      fontSize: 18,
+      textAlign: 'center',
+      marginBottom: 8,
+    },
+    emptySubtext: {
+      color: '#666',
+      fontSize: 14,
+      textAlign: 'center',
+    },
+    // Loading state styles
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+    },
+    loadingText: {
+      color: '#999',
+      fontSize: 14,
+      marginTop: 10,
+    },
+    sendButtonActive: {
+      backgroundColor: '#ff00ff',
+    },
   });
   
   return (
@@ -861,6 +1150,76 @@ const MessageScreen = () => {
         </View>
 
         <MediaPickerModal />
+        
+        {/* Image Preview Modal */}
+        <Modal
+          visible={showImagePreview}
+          transparent={false}
+          animationType="fade"
+          onRequestClose={() => setShowImagePreview(false)}
+        >
+          <View style={styles.previewContainer}>
+            <LinearGradient
+              colors={['#1a1a1a', '#000']}
+              style={styles.previewGradient}
+            >
+              <TouchableOpacity 
+                style={styles.previewCloseButton}
+                onPress={() => setShowImagePreview(false)}
+              >
+                <Ionicons name="close" size={28} color="#fff" />
+              </TouchableOpacity>
+              
+              <Image
+                source={{ uri: previewMediaUrl }}
+                style={styles.previewImage}
+                resizeMode="contain"
+              />
+            </LinearGradient>
+          </View>
+        </Modal>
+        
+        {/* Video Preview Modal */}
+        <Modal
+          visible={showVideoPreview}
+          transparent={false}
+          animationType="fade"
+          onRequestClose={() => {
+            if (videoRef.current) {
+              videoRef.current.pauseAsync();
+            }
+            setShowVideoPreview(false);
+          }}
+        >
+          <View style={styles.previewContainer}>
+            <LinearGradient
+              colors={['#1a1a1a', '#000']}
+              style={styles.previewGradient}
+            >
+              <TouchableOpacity 
+                style={styles.previewCloseButton}
+                onPress={() => {
+                  if (videoRef.current) {
+                    videoRef.current.pauseAsync();
+                  }
+                  setShowVideoPreview(false);
+                }}
+              >
+                <Ionicons name="close" size={28} color="#fff" />
+              </TouchableOpacity>
+              
+              <Video
+                ref={videoRef}
+                source={{ uri: previewMediaUrl }}
+                style={styles.previewVideo}
+                resizeMode="contain"
+                shouldPlay={true}
+                isLooping={true}
+                useNativeControls={true}
+              />
+            </LinearGradient>
+          </View>
+        </Modal>
       </View>
     </KeyboardAvoidingView>
   );

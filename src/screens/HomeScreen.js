@@ -33,6 +33,9 @@ const HomeScreen = () => {
     loadStories();
     loadPosts();
 
+    // Add a test post for debugging
+    addTestPost();
+
     const unsubscribe = navigation.addListener('focus', () => {
       const params = navigation.getState().routes.find(route => route.name === 'Home')?.params;
       if (params?.refresh) {
@@ -48,34 +51,89 @@ const HomeScreen = () => {
     return unsubscribe;
   }, [navigation]);
   
+  // Function to add a test post for debugging
+  const addTestPost = () => {
+    const testPost = {
+      id: 'test-post-' + Date.now(),
+      user_id: 'test-user',
+      type: 'image',
+      media_url: 'https://res.cloudinary.com/demo/image/upload/v1312461204/sample.jpg',
+      caption: 'This is a test post to verify rendering',
+      created_at: new Date().toISOString(),
+      profiles: {
+        id: 'test-user',
+        username: 'testuser',
+        avatar_url: 'https://res.cloudinary.com/demo/image/upload/v1312461204/sample.jpg'
+      },
+      likes: [{ count: 5 }],
+      comments: [{ count: 2 }],
+      is_liked: false
+    };
+    
+    setPosts(prevPosts => [testPost, ...prevPosts]);
+  };
+  
   // Set up video context for auto-playing videos
   const { setActiveVideo, clearActiveVideo } = useVideo();
   const visibleVideoRef = useRef(null);
   
-  // Add a function to handle viewable items changed
-  const onViewableItemsChanged = ({ viewableItems }) => {
+  // Add a function to handle viewable items changed with debounce to prevent rapid changes
+  const lastViewabilityUpdate = useRef(Date.now());
+  const debounceTimeMs = 500; // Minimum time between viewability updates
+  
+  const onViewableItemsChanged = ({ viewableItems, changed }) => {
+    // Debounce viewability changes to prevent rapid updates
+    const now = Date.now();
+    if (now - lastViewabilityUpdate.current < debounceTimeMs) {
+      return; // Skip this update if it's too soon after the last one
+    }
+    lastViewabilityUpdate.current = now;
+    
     if (viewableItems && viewableItems.length > 0) {
-      // Find the first video post that's visible
-      const videoPost = viewableItems.find(item => 
-        item.item.type === 'video' || item.item.mediaType === 'video'
+      // Track all visible video posts
+      const visibleVideoPosts = viewableItems.filter(item => 
+        item.item && (item.item.type === 'video' || item.item.mediaType === 'video')
       );
       
-      if (videoPost) {
-        // If we found a visible video post, set it as the active video
-        setActiveVideo(videoPost.item.id);
-        visibleVideoRef.current = videoPost.item.id;
-      } else {
-        // If no video posts are visible, clear the active video
+      // Find the first video post that's visible with at least 50% visibility
+      const primaryVideoPost = visibleVideoPosts.find(item => item.percentVisible >= 50);
+      
+      if (primaryVideoPost) {
+        // Only update if this is a different video than the current active one
+        if (visibleVideoRef.current !== primaryVideoPost.item.id) {
+          setActiveVideo(primaryVideoPost.item.id);
+          visibleVideoRef.current = primaryVideoPost.item.id;
+        }
+      } else if (visibleVideoPosts.length > 0) {
+        // If no video has 50% visibility but there are visible videos,
+        // use the one with the highest visibility
+        const mostVisibleVideo = visibleVideoPosts.reduce((prev, current) => 
+          (prev.percentVisible > current.percentVisible) ? prev : current
+        );
+        
+        // Only update if this is a different video than the current active one
+        if (visibleVideoRef.current !== mostVisibleVideo.item.id) {
+          setActiveVideo(mostVisibleVideo.item.id);
+          visibleVideoRef.current = mostVisibleVideo.item.id;
+        }
+      } else if (visibleVideoRef.current) {
+        // If no video posts are visible and we have an active video, clear it
         clearActiveVideo();
         visibleVideoRef.current = null;
       }
+    } else if (visibleVideoRef.current) {
+      // If no items are viewable at all and we have an active video, clear it
+      clearActiveVideo();
+      visibleVideoRef.current = null;
     }
   };
   
+  
   // Create a ref for the viewability configuration
   const viewabilityConfig = useRef({
-    itemVisiblePercentThreshold: 50,
-    minimumViewTime: 300,
+    itemVisiblePercentThreshold: 40, // Consider an item visible when 40% is visible
+    minimumViewTime: 500, // Wait 500ms before considering an item as viewable
+    waitForInteraction: false // Don't require user interaction before considering items viewable
   });
   
   // Create a ref for the viewability changed callback
@@ -86,11 +144,38 @@ const HomeScreen = () => {
   const loadPosts = async () => {
     try {
       const data = await PostsService.getAllPosts();
-      setPosts(data);
+      
+      // Debug: Log the first post to see its structure
+      if (data && data.length > 0) {
+        console.log('First post structure:', JSON.stringify(data[0], null, 2));
+      } else {
+        console.log('No posts returned from Supabase');
+      }
+      
+      // Filter out any null or invalid posts
+      const validPosts = data.filter(post => post && post.id);
+      
+      if (validPosts.length !== data.length) {
+        console.warn(`Filtered out ${data.length - validPosts.length} invalid posts`);
+      }
+      
+      // Ensure all posts have the required fields
+      const normalizedPosts = validPosts.map(post => ({
+        ...post,
+        type: post.type || 'text',
+        media_url: post.media_url || '',
+        caption: post.caption || '',
+        profiles: post.profiles || { username: 'Unknown', avatar_url: '' },
+        likes: post.likes || [{ count: 0 }],
+        comments: post.comments || [{ count: 0 }],
+        is_liked: post.is_liked || false
+      }));
+      
+      setPosts(normalizedPosts);
       setRefreshing(false);
       
       // Store video posts separately for the ShortsScreen
-      const videoPosts = data.filter(post => post.type === 'video' || post.mediaType === 'video');
+      const videoPosts = normalizedPosts.filter(post => post.type === 'video');
       // Make this data available to the navigation context
       navigation.setParams({
         videoPosts: videoPosts
@@ -321,17 +406,25 @@ const HomeScreen = () => {
         ) : (
           <FlatList
             data={posts}
-            keyExtractor={(item) => item.id.toString()}
-            renderItem={({ item }) => (
-              <PostItem
-                post={item}
-                onOptionsPress={(action) => {
-                  if (action.type === 'delete') {
-                    setPosts(posts.filter(post => post.id !== action.postId));
-                  }
-                }}
-              />
-            )}
+            keyExtractor={(item) => item?.id?.toString() || Math.random().toString()}
+            renderItem={({ item }) => {
+              // Skip rendering if item is null or invalid
+              if (!item || !item.id) {
+                console.warn('Skipping invalid post item in FlatList');
+                return null;
+              }
+              
+              return (
+                <PostItem
+                  post={item}
+                  onOptionsPress={(action) => {
+                    if (action.type === 'delete') {
+                      setPosts(posts.filter(post => post.id !== action.postId));
+                    }
+                  }}
+                />
+              );
+            }}
             ListHeaderComponent={renderHeader}
             ListEmptyComponent={() => (
               <View style={styles.emptyContainer}>

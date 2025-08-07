@@ -245,7 +245,7 @@ const MessagesScreen = () => {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>username</Text>
+        <Text style={styles.headerTitle}>Flexx</Text>
         <TouchableOpacity onPress={() => {}} style={styles.newMessageButton}>
           <Ionicons name="create-outline" size={24} color="#fff" />
         </TouchableOpacity>
@@ -318,9 +318,7 @@ const MessagesScreen = () => {
                   )}
                 </View>
               </View>
-              <TouchableOpacity style={styles.cameraButton}>
-                <Ionicons name="camera-outline" size={24} color="#8e8e8e" />
-              </TouchableOpacity>
+             
             </TouchableOpacity>
           ))
         ) : (
