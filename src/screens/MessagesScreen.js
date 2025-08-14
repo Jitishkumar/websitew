@@ -240,26 +240,26 @@ const MessagesScreen = () => {
     : conversations;
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
+    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: '#330033' }]}>
+      <View style={[styles.header, { borderBottomColor: '#440044' }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#fff" />
+          <Ionicons name="arrow-back" size={24} color="white" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Flexx</Text>
+        <Text style={[styles.headerTitle, { color: 'white' }]}>Flexx</Text>
         <TouchableOpacity onPress={() => {}} style={styles.newMessageButton}>
-          <Ionicons name="create-outline" size={24} color="#fff" />
+          <Ionicons name="create-outline" size={24} color="white" />
         </TouchableOpacity>
       </View>
 
-      <View style={styles.searchContainer}>
+      <View style={[styles.searchContainer, { backgroundColor: '#440044' }]}>
         <TextInput
-          style={styles.searchInput}
+          style={[styles.searchInput, { color: 'white' }]}
           placeholder="Search"
-          placeholderTextColor="#8e8e8e"
+          placeholderTextColor="#999999"
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
-        <Ionicons name="search" size={18} color="#8e8e8e" style={styles.searchIcon} />
+        <Ionicons name="search" size={18} color="#999999" style={styles.searchIcon} />
       </View>
 
       <ScrollView 
@@ -268,14 +268,14 @@ const MessagesScreen = () => {
       >
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#0095f6" />
-            <Text style={styles.loadingText}>Loading conversations...</Text>
+            <ActivityIndicator size="large" color="#ff00ff" />
+            <Text style={[styles.loadingText, { color: '#999999' }]}>Loading conversations...</Text>
           </View>
         ) : filteredConversations.length > 0 ? (
           filteredConversations.map((conversation) => (
             <TouchableOpacity 
               key={conversation.id} 
-              style={styles.messageItem}
+              style={[styles.messageItem, { borderBottomColor: '#550055' }]}
               onPress={() => {
                 // Mark conversation as read before navigating
                 handleMarkAsRead(conversation);
@@ -291,29 +291,29 @@ const MessagesScreen = () => {
               <View style={styles.avatarContainer}>
                 <Image 
                   source={{ uri: conversation.avatar || 'https://via.placeholder.com/50' }} 
-                  style={styles.avatar} 
+                  style={[styles.avatar, { borderColor: '#440044' }]} 
                 />
               </View>
               <View style={styles.messageContent}>
                 <View style={styles.messageHeader}>
-                  <Text style={[styles.name, conversation.unread > 0 && styles.unreadName]}>{conversation.name}</Text>
+                  <Text style={[styles.name, { color: 'white' }, conversation.unread > 0 && [styles.unreadName, { color: 'white' }]]}>{conversation.name}</Text>
                   <View style={styles.timeContainer}>
-                    <Text style={styles.time}>{formatRelativeTime(conversation.timestamp)}</Text>
+                    <Text style={[styles.time, { color: '#999999' }]}>{formatRelativeTime(conversation.timestamp)}</Text>
                     {conversation.unread > 0 && (
-                      <View style={styles.cameraDot} />
+                      <View style={[styles.cameraDot, { backgroundColor: '#ff00ff' }]} />
                     )}
                   </View>
                 </View>
                 <View style={styles.messageFooter}>
                   <Text 
-                    style={[styles.messageText, conversation.unread > 0 && styles.unreadMessageText]} 
+                    style={[styles.messageText, { color: '#999999' }, conversation.unread > 0 && [styles.unreadMessageText, { color: 'white' }]]} 
                     numberOfLines={1}
                   >
                     {conversation.lastMessage}
                   </Text>
                   {conversation.unread > 0 && (
-                    <View style={styles.unreadBadge}>
-                      <Text style={styles.unreadText}>●</Text>
+                    <View style={[styles.unreadBadge, { backgroundColor: '#ff00ff' }]}>
+                      <Text style={[styles.unreadText, { color: 'white' }]}>●</Text>
                     </View>
                   )}
                 </View>
@@ -323,15 +323,15 @@ const MessagesScreen = () => {
           ))
         ) : (
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No conversations yet</Text>
-            <Text style={styles.emptySubtext}>Start chatting with someone!</Text>
+            <Text style={[styles.emptyText, { color: '#999999' }]}>No conversations yet</Text>
+            <Text style={[styles.emptySubtext, { color: '#999999' }]}>Start chatting with someone!</Text>
           </View>
         )}
       </ScrollView>
       
       {showNewMessageButton && (
-        <TouchableOpacity style={styles.newMessageFloatingButton} onPress={() => {}/* Handle new message */}>
-          <Ionicons name="create" size={24} color="#fff" />
+        <TouchableOpacity style={[styles.newMessageFloatingButton, { backgroundColor: '#ff00ff' }]} onPress={() => {}/* Handle new message */}>
+          <Ionicons name="create" size={24} color="white" />
         </TouchableOpacity>
       )}
     </View>
@@ -341,7 +341,7 @@ const MessagesScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    // Dynamic background color from ThemeContext
   },
   header: {
     flexDirection: 'row',
@@ -350,7 +350,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingVertical: 12,
     borderBottomWidth: 0.5,
-    borderBottomColor: '#222',
+    // Dynamic border color from ThemeContext
   },
   backButton: {
     padding: 5,
@@ -358,7 +358,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#fff',
+    // Dynamic text color from ThemeContext
     flex: 1,
     textAlign: 'center',
   },
@@ -368,7 +368,7 @@ const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#262626',
+    // Dynamic background color from ThemeContext
     borderRadius: 10,
     marginHorizontal: 15,
     marginVertical: 10,
@@ -381,7 +381,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     height: 36,
-    color: '#fff',
+    // Dynamic text color from ThemeContext
     fontSize: 14,
     paddingHorizontal: 5,
   },
@@ -393,7 +393,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingVertical: 12,
     borderBottomWidth: 0.5,
-    borderBottomColor: '#222',
+    // Dynamic border color from ThemeContext
     alignItems: 'center',
   },
   avatarContainer: {
@@ -404,18 +404,18 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: 28,
     borderWidth: 0.5,
-    borderColor: '#333',
+    // Dynamic border color from ThemeContext
   },
   onlineIndicator: {
     width: 14,
     height: 14,
     borderRadius: 7,
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#4CAF50', // Keep this color as it represents online status
     position: 'absolute',
     bottom: 0,
     right: 0,
     borderWidth: 2,
-    borderColor: '#000',
+    // Dynamic border color from ThemeContext
   },
   messageContent: {
     flex: 1,
@@ -430,11 +430,11 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#fff',
+    // Dynamic text color from ThemeContext
   },
   unreadName: {
     fontWeight: 'bold',
-    color: '#ffffff',
+    // Dynamic text color from ThemeContext
   },
   timeContainer: {
     flexDirection: 'row',
@@ -442,14 +442,14 @@ const styles = StyleSheet.create({
   },
   time: {
     fontSize: 12,
-    color: '#8e8e8e',
+    // Dynamic text color from ThemeContext
     marginRight: 4,
   },
   cameraDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#0095f6',
+    // Dynamic background color from ThemeContext
   },
   messageFooter: {
     flexDirection: 'row',
@@ -458,15 +458,15 @@ const styles = StyleSheet.create({
   },
   messageText: {
     fontSize: 14,
-    color: '#8e8e8e',
+    // Dynamic text color from ThemeContext
     flex: 1,
   },
   unreadMessageText: {
-    color: '#fff',
+    // Dynamic text color from ThemeContext
     fontWeight: 'bold',
   },
   unreadBadge: {
-    backgroundColor: '#0095f6',
+    // Dynamic background color from ThemeContext
     borderRadius: 10,
     minWidth: 20,
     height: 20,
@@ -476,7 +476,7 @@ const styles = StyleSheet.create({
     marginLeft: 5,
   },
   unreadText: {
-    color: '#fff',
+    // Dynamic text color from ThemeContext
     fontSize: 12,
     fontWeight: 'bold',
   },
@@ -492,17 +492,17 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
-    color: '#8e8e8e',
+    // Dynamic text color from ThemeContext
     textAlign: 'center',
     marginBottom: 20,
   },
   emptySubtext: {
-    color: 'rgba(255, 255, 255, 0.5)',
+    // Dynamic text color from ThemeContext
     fontSize: 14,
     marginTop: 8,
   },
   newMessageFloatingButton: {
-    backgroundColor: '#0095f6',
+    // Dynamic background color from ThemeContext
     width: 56,
     height: 56,
     borderRadius: 28,
@@ -524,7 +524,7 @@ const styles = StyleSheet.create({
     paddingVertical: 50,
   },
   loadingText: {
-    color: 'rgba(255, 255, 255, 0.7)',
+    // Dynamic text color from ThemeContext
     fontSize: 16,
     marginTop: 10,
   },

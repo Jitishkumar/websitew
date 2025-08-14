@@ -34,6 +34,7 @@ import DonateScreen from '../screens/DonateScreen';
 import WealthiestDonorsScreen from '../screens/WealthiestDonorsScreen';
 import VerifyAccountScreen from '../screens/VerifyAccountScreen';
 import { supabase } from '../config/supabase';
+import PhotoTextViewerScreen from '../screens/PhotoTextViewerScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -182,6 +183,7 @@ export const AppNavigator = () => {
       <Stack.Screen name="Posts" component={PostsScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Shorts" component={ShortsScreen} options={{ headerShown: false }} />
       <Stack.Screen name="ShortsComment" component={ShortsCommentScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="PhotoTextViewer" component={PhotoTextViewerScreen} options={{ headerShown: false }} />
       <Stack.Screen name="HomePage" component={HomePage} />
       <Stack.Screen name="CallPage" component={CallPage} />
       <Stack.Screen name="Donate" component={DonateScreen} options={{ headerShown: false }} />

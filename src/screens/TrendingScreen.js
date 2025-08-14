@@ -92,11 +92,11 @@ const TrendingScreen = () => {
     <View style={styles.container}>
       {/* Header */}
       <LinearGradient
-        colors={['#0a0a2a', '#1a1a3a']}
+        colors={['#330033', '#440044']}
         style={[styles.header, { paddingTop: insets.top > 0 ? insets.top : 50 }]}
       >
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#00ffff" />
+          <Ionicons name="arrow-back" size={24} color="#ff66ff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Search</Text>
         <View style={styles.searchContainer}>
@@ -112,13 +112,13 @@ const TrendingScreen = () => {
         {/* Trending Section */}
         <View style={styles.trendingSection}>
           <View style={styles.trendingHeader}>
-            <Ionicons name="trending-up" size={24} color="#0084ff" style={styles.trendingIcon} />
+            <Ionicons name="trending-up" size={24} color="#ff66ff" style={styles.trendingIcon} />
             <Text style={styles.trendingTitle}>Trending</Text>
             <View style={styles.betaTag}>
               <Text style={styles.betaText}>BETA</Text>
             </View>
             <TouchableOpacity style={styles.closeButton}>
-              <Ionicons name="close" size={24} color="#fff" />
+              <Ionicons name="close" size={24} color="white" />
             </TouchableOpacity>
           </View>
           <Text style={styles.trendingSubtitle}>What people are posting about.</Text>
@@ -139,7 +139,7 @@ const TrendingScreen = () => {
         <View style={styles.trendingVideosSection}>
           <View style={styles.trendingHeader}>
             <LinearGradient
-              colors={['#ff00ff', '#9900ff']}
+              colors={['#ff00ff', '#cc00cc']}
               style={styles.iconBackground}
             >
               <Ionicons name="trending-up" size={24} color="#fff" style={styles.trendingIcon} />
@@ -153,7 +153,7 @@ const TrendingScreen = () => {
 
           {/* Video Grid */}
           {loading ? (
-            <ActivityIndicator size="large" color="#00ffff" style={styles.loader} />
+            <ActivityIndicator size="large" color="#ff66ff" style={styles.loader} />
           ) : trendingVideos.length > 0 ? (
             <FlatList
               data={trendingVideos.slice(0, 4)} // Only display 4 videos in the grid
@@ -201,7 +201,7 @@ const TrendingScreen = () => {
         <View style={styles.recommendedSection}>
           <View style={styles.recommendedHeader}>
             <LinearGradient
-              colors={['#00ffff', '#0099ff']}
+              colors={['#ff66ff', '#cc00cc']}
               style={styles.iconBackground}
             >
               <Ionicons name="bookmark-outline" size={24} color="#fff" />
@@ -217,7 +217,7 @@ const TrendingScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000033',
+    backgroundColor: '#330033',
   },
   header: {
     paddingBottom: 15,
@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   headerTitle: {
-    color: '#fff',
+    color: 'white',
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 10,
@@ -243,7 +243,7 @@ const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#440044',
     borderRadius: 20,
     paddingHorizontal: 15,
     paddingVertical: 10,
@@ -252,7 +252,7 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   searchPlaceholder: {
-    color: '#666',
+    color: '#999999',
     fontSize: 16,
   },
   content: {
@@ -270,19 +270,19 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   trendingTitle: {
-    color: '#fff',
+    color: 'white',
     fontSize: 22,
     fontWeight: 'bold',
   },
   betaTag: {
-    backgroundColor: '#0084ff',
+    backgroundColor: '#ff66ff',
     borderRadius: 4,
     paddingHorizontal: 8,
     paddingVertical: 2,
     marginLeft: 10,
   },
   betaText: {
-    color: '#fff',
+    color: 'white',
     fontSize: 12,
     fontWeight: 'bold',
   },
@@ -290,7 +290,7 @@ const styles = StyleSheet.create({
     marginLeft: 'auto',
   },
   trendingSubtitle: {
-    color: '#aaa',
+    color: '#999999',
     fontSize: 16,
     marginBottom: 15,
   },
@@ -298,14 +298,14 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   topicPill: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#440044',
     borderRadius: 20,
     paddingHorizontal: 15,
     paddingVertical: 10,
     marginRight: 10,
   },
   topicText: {
-    color: '#fff',
+    color: 'white',
     fontSize: 14,
   },
   trendingVideosSection: {
@@ -318,7 +318,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     position: 'relative',
     height: 220,
-    backgroundColor: '#1a1a3a',
+    backgroundColor: '#440044',
     elevation: 5,
     shadowColor: '#ff00ff',
     shadowOffset: { width: 0, height: 2 },
@@ -329,7 +329,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     borderRadius: 15,
-    backgroundColor: '#1a1a3a',
+    backgroundColor: '#550055',
   },
   videoOverlay: {
     position: 'absolute',
@@ -341,7 +341,7 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 15,
   },
   username: {
-    color: '#fff',
+    color: 'white',
     fontSize: 14,
     fontWeight: 'bold',
     marginBottom: 5,
@@ -352,16 +352,16 @@ const styles = StyleSheet.create({
   likesContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: '#330033CC',
     borderRadius: 15,
     paddingHorizontal: 8,
     paddingVertical: 4,
     alignSelf: 'flex-start',
     borderWidth: 1,
-    borderColor: 'rgba(255, 0, 255, 0.3)',
+    borderColor: '#ff00ff60',
   },
   likesCount: {
-    color: '#fff',
+    color: 'white',
     fontSize: 12,
     marginLeft: 5,
     fontWeight: 'bold',
@@ -374,7 +374,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   recommendedTitle: {
-    color: '#fff',
+    color: 'white',
     fontSize: 22,
     fontWeight: 'bold',
     marginLeft: 10,
@@ -384,11 +384,11 @@ const styles = StyleSheet.create({
     height: 220,
   },
   noVideosText: {
-    color: '#aaa',
+    color: '#999999',
     fontSize: 16,
     textAlign: 'center',
     marginVertical: 40,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    backgroundColor: '#33003380',
     padding: 20,
     borderRadius: 10,
     overflow: 'hidden',

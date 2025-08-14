@@ -315,12 +315,7 @@ const ShortsScreen = ({ route }) => {
 
   // Handle comment functionality
   const handleComment = (postId) => {
-    // Pause video before navigating
-    if (videoRefs.current[currentIndex]) {
-      videoRefs.current[currentIndex].pauseAsync();
-      setIsPlaying(false);
-    }
-    
+    // Don't pause video when navigating to comments
     navigation.navigate('ShortsComment', { postId });
   };
 

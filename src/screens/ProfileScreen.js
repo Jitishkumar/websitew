@@ -207,45 +207,63 @@ const ProfileScreen = () => {
   const videoRefs = useRef({});
   
   // Effect to ensure videos are properly unloaded when component unmounts
+  // Cleanup videos when screen loses focus or unmounts
   useEffect(() => {
-    return () => {
-      // Unload all videos when component unmounts
+    const unloadAllVideos = () => {
       Object.values(videoRefs.current).forEach(videoRef => {
         if (videoRef && videoRef.unloadAsync) {
           videoRef.unloadAsync().catch(err => console.log('Error unloading video:', err));
         }
       });
+      // Clear the refs after unloading
+      videoRefs.current = {};
     };
-  }, []);
+
+    // Subscribe to focus events
+    const unsubscribe = navigation.addListener('blur', unloadAllVideos);
+
+    // Cleanup on unmount
+    return () => {
+      unloadAllVideos();
+      unsubscribe();
+    };
+  }, [navigation]);
+
 
   const handlePostPress = async (index) => {
     console.log('Post pressed at index:', index);
     const currentPosts = activeTab === 'Post' ? memoizedPosts : memoizedShorts;
     const post = currentPosts[index];
+
+    // Unload all videos before navigation
+    const unloadAllVideos = async () => {
+      const promises = Object.entries(videoRefs.current).map(async ([id, ref]) => {
+        if (ref && ref.unloadAsync) {
+          try {
+            await ref.unloadAsync();
+            delete videoRefs.current[id];
+          } catch (e) { console.log('Error unloading video:', e); }
+        }
+      });
+      await Promise.all(promises);
+    };
+
+    await unloadAllVideos();
   
-    // Ensure any active videos are stopped before navigating
+    // If it's a video post, navigate to ShortsScreen
     if (post && post.type === 'video') {
-      const videoRef = videoRefs.current[post.id];
-  
-      // First pause and mute the video to prevent audio issues
-      if (videoRef) {
-        try {
-          if (videoRef.pauseAsync) await videoRef.pauseAsync();
-          if (videoRef.setIsMutedAsync) await videoRef.setIsMutedAsync(true);
-        } catch (e) { console.log('Error pausing/muting video:', e); }
-      }
-      // Now navigate to the post viewer after a short delay
+      // Navigate to ShortsScreen for video posts
       setTimeout(() => {
-        navigation.navigate('PostViewer', {
-          posts: currentPosts,
-          initialIndex: index,
+        navigation.navigate('Shorts', {
+          posts: currentPosts.filter(p => p.type === 'video'),
+          initialIndex: currentPosts.filter(p => p.type === 'video').findIndex(p => p.id === post.id),
         });
       }, 100);
     } else {
-      // For non-video posts, navigate immediately
-      navigation.navigate('PostViewer', {
-        posts: currentPosts,
-        initialIndex: index,
+      // For non-video posts (photos and text), navigate to PhotoTextViewer
+      navigation.navigate('PhotoTextViewer', {
+        posts: currentPosts.filter(p => p.type !== 'video'),
+        initialIndex: currentPosts.filter(p => p.type !== 'video').findIndex(p => p.id === post.id),
       });
     }
   };
@@ -377,7 +395,12 @@ const ProfileScreen = () => {
         />
         
         <Text style={styles.name}>{userProfile?.full_name || 'No name set'}</Text>
-        <Text style={styles.username}>@{userProfile?.username || 'username'}</Text>
+        <View style={styles.usernameContainer}>
+          <Text style={styles.username}>@{userProfile?.username || 'username'}</Text>
+          {userProfile?.isVerified && (
+            <Ionicons name="checkmark-circle" size={20} color="#ff0000" style={styles.verifiedBadge} />
+          )}
+        </View>
         <LinearGradient
           colors={['#ff00ff', '#00ff00']}
           start={{ x: 0, y: 0 }}
@@ -718,10 +741,18 @@ const ProfileScreen = () => {
         console.log('Constructed Cover URL:', coverUrl);
       }
 
+      // Check if user is verified
+      const { data: verifiedData } = await supabase
+        .from('verified_accounts')
+        .select('verified')
+        .eq('id', user.id)
+        .maybeSingle();
+
       setUserProfile({
         ...newData,
         avatar_url: avatarUrl,
-        cover_url: coverUrl
+        cover_url: coverUrl,
+        isVerified: verifiedData?.verified || false
       });
     } catch (error) {
       console.error('Error loading user profile:', error);
@@ -990,6 +1021,15 @@ const styles = StyleSheet.create({
     position: 'relative',
     width: '100%',
     height: '100%',
+  },
+  usernameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 5,
+  },
+  verifiedBadge: {
+    marginLeft: 5,
   },
   videoIndicatorOverlay: {
     position: 'absolute',

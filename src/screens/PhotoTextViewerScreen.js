@@ -4,7 +4,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import PostItem from '../components/PostItem';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useVideo } from '../context/VideoContext';
 
 const { width: windowWidth } = Dimensions.get('window');
 
@@ -13,14 +12,13 @@ const viewabilityConfig = {
   minimumViewTime: 300,
 };
 
-const PostViewerScreen = ({ route }) => {
+const PhotoTextViewerScreen = ({ route }) => {
   const { posts, initialIndex } = route.params;
   const navigation = useNavigation();
   const flatListRef = useRef(null);
   const hasScrolledToIndex = useRef(false);
   const [viewableItems, setViewableItems] = useState([]);
   const insets = useSafeAreaInsets();
-  const { setActiveVideo, clearActiveVideo } = useVideo();
 
   // Scroll to the initial index when the screen loads
   useEffect(() => {
@@ -46,53 +44,11 @@ const PostViewerScreen = ({ route }) => {
     );
   }, []);
   
-  // Handle viewable items changed to manage video playback
+  // Handle viewable items changed
   const onViewableItemsChanged = useCallback(({ viewableItems }) => {
-    // First clear any active videos to stop any currently playing videos
-    clearActiveVideo();
-    
-    // Small delay to ensure previous videos are fully stopped
-    setTimeout(() => {
-      if (viewableItems.length > 0) {
-        // The first viewable item is the one we want to play
-        const viewablePost = viewableItems[0].item;
-        
-        // If it's a video post, set it as the active video in the context
-        if (viewablePost.type === 'video' || viewablePost.mediaType === 'video') {
-          setActiveVideo(viewablePost.id);
-        }
-      }
-    }, 300); // Increased delay to prevent audio overlap
-  }, [setActiveVideo, clearActiveVideo]);
+    setViewableItems(viewableItems);
+  }, []);
   
-  // Handle navigation events to ensure videos are properly cleaned up
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('beforeRemove', () => {
-      // Clear active video when navigating away
-      clearActiveVideo();
-    });
-    
-    return unsubscribe;
-  }, [navigation, clearActiveVideo]);
-  
-  // Clean up videos when screen loses focus or unmounts
-  useFocusEffect(
-    React.useCallback(() => {
-      return () => {
-        // Clear active video when leaving this screen
-        clearActiveVideo();
-      };
-    }, [clearActiveVideo])
-  );
-  
-  // Additional cleanup when component unmounts
-  useEffect(() => {
-    return () => {
-      // Make sure to clear active video when component unmounts
-      clearActiveVideo();
-    };
-  }, [clearActiveVideo]);
-
   const onScrollToIndexFailed = (info) => {
     console.log('Scroll to index failed:', info);
     const wait = new Promise(resolve => setTimeout(resolve, 1000));
@@ -153,4 +109,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default PostViewerScreen;
+export default PhotoTextViewerScreen;

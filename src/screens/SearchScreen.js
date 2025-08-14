@@ -39,7 +39,21 @@ const SearchScreen = () => {
 
       if (error) throw error;
       
-      setSearchResults(data || []);
+      // Fetch verification status for each user
+      const usersWithVerification = await Promise.all(data.map(async (user) => {
+        const { data: verifiedData } = await supabase
+          .from('verified_accounts')
+          .select('verified')
+          .eq('id', user.id)
+          .maybeSingle();
+          
+        return {
+          ...user,
+          isVerified: verifiedData?.verified || false
+        };
+      }));
+      
+      setSearchResults(usersWithVerification || []);
     } catch (error) {
       console.error('Error searching users:', error);
     } finally {
@@ -133,7 +147,12 @@ const SearchScreen = () => {
         style={styles.userAvatar}
       />
       <View style={styles.userInfo}>
-        <Text style={styles.username}>{item.username}</Text>
+        <View style={styles.usernameContainer}>
+          <Text style={styles.username}>{item.username}</Text>
+          {item.isVerified && (
+            <Ionicons name="checkmark-circle" size={16} color="#ff0000" style={styles.verifiedBadge} />
+          )}
+        </View>
         <Text style={styles.fullName}>{item.full_name || ''}</Text>
       </View>
     </TouchableOpacity>
@@ -142,7 +161,7 @@ const SearchScreen = () => {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={['#0a0a2a', '#1a1a3a']}
+        colors={['#330033', '#550055']}
         start={{x: 0, y: 0}}
         end={{x: 1, y: 1}}
         style={[styles.header, { paddingTop: insets.top > 0 ? insets.top : 50 }]}
@@ -192,14 +211,14 @@ const SearchScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#050520',
+    backgroundColor: '#330033',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 0, 255, 0.2)',
+    borderBottomColor: '#ff00ff40',
   },
   headerTitle: {
     fontSize: 20,
@@ -215,7 +234,7 @@ const styles = StyleSheet.create({
     margin: 16,
     paddingHorizontal: 15,
     borderWidth: 1,
-    borderColor: 'rgba(255, 0, 255, 0.3)',
+    borderColor: '#ff00ff60',
   },
   searchIcon: {
     marginRight: 10,
@@ -231,8 +250,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 15,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 0, 255, 0.1)',
-    backgroundColor: 'rgba(26, 26, 58, 0.3)',
+    borderBottomColor: '#ff00ff20',
+    backgroundColor: '#55005580',
     marginHorizontal: 10,
     marginVertical: 5,
     borderRadius: 10,
@@ -245,6 +264,13 @@ const styles = StyleSheet.create({
   },
   userInfo: {
     flex: 1,
+  },
+  usernameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  verifiedBadge: {
+    marginLeft: 5,
   },
   username: {
     color: 'white',

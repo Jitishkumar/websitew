@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>AR Engine</title>
+    <!-- Import the Jeeliz FaceFilter library -->
+    <script src="./dist/jeelizFaceFilter.js"></script>
+    <!-- Import Three.js and a GLTF loader -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+
+    <style>
+        body, html {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: transparent;
+        }
+        #arCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="arCanvas"></canvas>
+
+    <script>
+        let THREE_scene, THREE_camera, THREE_renderer, THREE_glasses, THREE_composer, THREE_beautifyPass;
+        let currentFilter = 'NONE';
+
+        const BeautifyShader = {
+            uniforms: {
+                'tDiffuse': { value: null },
+                'intensity': { value: 0.5 }, // Smoothing intensity
+                'tone': { value: 0.15 } // Whitening/fairness intensity
+            },
+            vertexShader: `
+                varying vec2 vUv;
+                void main() {
+                    vUv = uv;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform sampler2D tDiffuse;
+                uniform float intensity;
+                uniform float tone;
+                varying vec2 vUv;
+
+                void main() {
+                    // Simple skin smoothing (bilateral blur approximation)
+                    vec4 sum = vec4(0.0);
+                    vec4 center = texture2D(tDiffuse, vUv);
+                    float weight = 1.0;
+
+                    for (int i = -2; i <= 2; i++) {
+                        for (int j = -2; j <= 2; j++) {
+                            vec2 offset = vec2(float(i), float(j)) * 0.002;
+                            vec4 sample = texture2D(tDiffuse, vUv + offset);
+                            float dist = distance(sample.rgb, center.rgb);
+                            float w = exp(-dist * 20.0); // Edge detection
+                            sum += sample * w;
+                            weight += w;
+                        }
+                    }
+
+                    vec4 smoothedColor = sum / weight;
+
+                    // Apply tone adjustment (brighten and slightly desaturate to appear 'fairer')
+                    vec3 tonedColor = smoothedColor.rgb + vec3(tone);
+
+                    // Blend original and smoothed color
+                    gl_FragColor = mix(center, vec4(tonedColor, center.a), intensity);
+                }
+            `
+        };
+
+        function init_three_scene(spec) {
+            // Create a Three.js scene
+            THREE_scene = new THREE.Scene();
+            
+            // Create a camera and position it
+            THREE_camera = new THREE.PerspectiveCamera(spec.fov, spec.canvasElement.width / spec.canvasElement.height, 0.1, 100);
+
+            // Create a renderer
+            THREE_renderer = new THREE.WebGLRenderer({
+                canvas: spec.canvasElement,
+                alpha: true, // transparent background
+                antialias: true
+            });
+
+            // Add lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            THREE_scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+            directionalLight.position.set(0, 1, 1);
+            THREE_scene.add(directionalLight);
+
+            // Create a container for our glasses model
+            THREE_glasses = new THREE.Object3D();
+            THREE_scene.add(THREE_glasses);
+
+            // Init post-processing
+            THREE_composer = new THREE.EffectComposer(THREE_renderer);
+            const renderPass = new THREE.RenderPass(THREE_scene, THREE_camera);
+            THREE_composer.addPass(renderPass);
+
+            // Add our custom beautify shader pass
+            THREE_beautifyPass = new THREE.ShaderPass(BeautifyShader);
+            THREE_beautifyPass.enabled = false; // Disabled by default
+            THREE_composer.addPass(THREE_beautifyPass);
+
+            // Load the 3D model
+            const loader = new THREE.GLTFLoader();
+            loader.load(
+                // Path to our model
+                './models/glasses.glb',
+                function (gltf) {
+                    const model = gltf.scene;
+                    model.scale.set(0.05, 0.05, 0.05); // Adjust scale as needed
+                    model.position.set(0, 0.05, 0); // Adjust position as needed
+                    THREE_glasses.add(model);
+                },
+                undefined, // onProgress callback
+                function (error) {
+                    console.error('An error happened while loading the model:', error);
+                }
+            );
+        }
+
+        function main(){
+            JEELIZFACEFILTER.init({
+                canvasId: 'arCanvas',
+                NNCPath: './dist/',
+                callbackReady: function(errCode, spec){
+                    if (errCode){
+                        console.error('ERROR: Jeeliz failed to initialize. Code:', errCode);
+                        return;
+                    }
+                    console.log('AR Engine is ready.');
+                    init_three_scene(spec);
+                },
+
+                callbackTrack: function(detectState){
+                    // Toggle filters
+                    THREE_glasses.visible = (currentFilter === 'GLASSES' && detectState.detected > 0.6);
+                    THREE_beautifyPass.enabled = (currentFilter === 'BEAUTIFY');
+
+                    if (detectState.detected > 0.6) { // If a face is detected
+                        // Get the 3D position and orientation of the face and apply it to the glasses container
+                        const matrix = new THREE.Matrix4().fromArray(detectState.camera);
+                        THREE_glasses.position.setFromMatrixPosition(matrix);
+                        THREE_glasses.quaternion.setFromRotationMatrix(matrix);
+                    }
+
+                    // Render the scene through the composer
+                    THREE_composer.render();
+                }
+            });
+        }
+
+        window.onload = main;
+
+        // Listen for messages from React Native
+        window.addEventListener('message', function(event) {
+            const message = event.data;
+            console.log('Message from RN:', message);
+
+            if (message === 'CAPTURE') {
+                // Capture the canvas content
+                const dataURL = JEELIZFACEFILTER.get_screenshot('image/png', 1.0);
+                // Send the base64 image data back to React Native
+                window.ReactNativeWebView.postMessage(dataURL);
+            } else {
+                // Handle filter selection
+                currentFilter = message;
+            }
+        });
+    </script>
+</body>
+</html>
