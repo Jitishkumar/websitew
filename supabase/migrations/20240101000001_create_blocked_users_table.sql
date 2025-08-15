@@ -1,3 +1,5 @@
+
+
 -- Create blocked_users table if it doesn't exist
 CREATE TABLE IF NOT EXISTS public.blocked_users (
   id UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
@@ -37,13 +39,18 @@ CREATE POLICY "Users can unblock users they've blocked"
   USING (blocker_id = auth.uid());
 
 -- Create function to check if a user is blocked
-CREATE OR REPLACE FUNCTION public.is_user_blocked(blocker_id UUID, blocked_id UUID)
+DROP FUNCTION IF EXISTS public.is_user_blocked(blocker_id UUID, blocked_id UUID);
+DROP FUNCTION IF EXISTS public.is_user_blocked(user_id1 UUID, user_id2 UUID);
+DROP FUNCTION IF EXISTS public.is_blocked(UUID, UUID) CASCADE;
+
+-- Create function to check if there is a block between two users
+CREATE OR REPLACE FUNCTION is_blocked(user_id_1 UUID, user_id_2 UUID)
 RETURNS BOOLEAN AS $$
 BEGIN
   RETURN EXISTS (
-    SELECT 1 
-    FROM public.blocked_users 
-    WHERE blocker_id = $1 AND blocked_id = $2
+    SELECT 1
+    FROM blocked_users
+    WHERE (blocker_id = user_id_1 AND blocked_id = user_id_2) OR (blocker_id = user_id_2 AND blocked_id = user_id_1)
   );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

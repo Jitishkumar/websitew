@@ -26,3 +26,13 @@ execute FUNCTION assign_user_rank ();
 create trigger prevent_verified_username_change BEFORE
 update on profiles for EACH row
 execute FUNCTION prevent_username_change_if_verified ();
+
+
+
+
+
+-- Add RLS policy to hide blocked profiles
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view profiles of non-blocked users" ON public.profiles
+FOR SELECT USING (auth.uid() = id OR NOT is_blocked(auth.uid(), id));

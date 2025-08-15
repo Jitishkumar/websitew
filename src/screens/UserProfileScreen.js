@@ -139,38 +139,22 @@ const UserProfileScreen = () => {
       // Get current user for recording visit
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       
-      // Check if either user has blocked the other
+      // Check if the users are blocked
       if (currentUser && currentUser.id !== userId) {
-        // Check if current user is blocked by profile owner
-        const { data: blockedByOwner, error: blockedError1 } = await supabase
-          .from('blocked_users')
-          .select('*')
-          .eq('blocker_id', userId)
-          .eq('blocked_id', currentUser.id)
-          .maybeSingle();
-          
-        // Check if current user has blocked profile owner
-        const { data: blockedByViewer, error: blockedError2 } = await supabase
-          .from('blocked_users')
-          .select('*')
-          .eq('blocker_id', currentUser.id)
-          .eq('blocked_id', userId)
-          .maybeSingle();
-          
-        if (blockedByOwner) {
+        const { data: isBlocked, error: isBlockedError } = await supabase.rpc('is_blocked', {
+          user_id_1: currentUser.id,
+          user_id_2: userId
+        });
+
+        if (isBlockedError) {
+          console.error('Error checking block status:', isBlockedError);
+        } else if (isBlocked) {
           setIsBlocked(true);
-          setBlockReason('This user has blocked you.');
+          setBlockReason('You are unable to view this profile.');
           setLoading(false);
           return;
         }
-        
-        if (blockedByViewer) {
-          setIsBlocked(true);
-          setBlockReason('You have blocked this user.');
-          setLoading(false);
-          return;
-        }
-        
+
         // Record profile visit if not blocked
         const { error: visitError } = await supabase
           .from('profile_visits')

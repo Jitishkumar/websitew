@@ -35,17 +35,15 @@ const MessageSettingsScreen = () => {
         setUserId(user.id);
         
         // Check if user is blocked
-        const { data: blockedData, error: blockedError } = await supabase
-          .from('blocked_users')
-          .select('*')
-          .eq('blocker_id', user.id)
-          .eq('blocked_id', recipientId)
-          .single();
-          
-        if (blockedError && blockedError.code !== 'PGRST116') { // PGRST116 is not found error
-          console.error('Error checking blocked status:', blockedError);
+        const { data: isBlockedData, error: isBlockedError } = await supabase.rpc('is_blocked', {
+          user_id_1: user.id,
+          user_id_2: recipientId
+        });
+
+        if (isBlockedError) {
+          console.error('Error checking block status:', isBlockedError);
         } else {
-          setIsBlocked(!!blockedData);
+          setIsBlocked(isBlockedData);
         }
         
         // Get user settings
@@ -219,7 +217,7 @@ const MessageSettingsScreen = () => {
                 onValueChange={handleOnlineVisibilityToggle}
                 trackColor={{ false: '#767577', true: '#81b0ff' }}
                 thumbColor={isOnlineVisible ? '#f5dd4b' : '#f4f3f4'}
-                disabled={saving}
+                disabled={saving || isBlocked}
               />
             </View>
             <View style={styles.settingItem}>
@@ -229,7 +227,7 @@ const MessageSettingsScreen = () => {
                 onValueChange={handleReadReceiptsToggle}
                 trackColor={{ false: '#767577', true: '#81b0ff' }}
                 thumbColor={showReadReceipts ? '#f5dd4b' : '#f4f3f4'}
-                disabled={saving}
+                disabled={saving || isBlocked}
               />
             </View>
           </>

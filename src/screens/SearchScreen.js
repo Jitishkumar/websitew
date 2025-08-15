@@ -38,9 +38,35 @@ const SearchScreen = () => {
         .limit(20);
 
       if (error) throw error;
-      
-      // Fetch verification status for each user
-      const usersWithVerification = await Promise.all(data.map(async (user) => {
+
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) {
+        setSearchResults([]);
+        setLoading(false);
+        return;
+      }
+
+      // Filter out the current user from the search results
+      const filteredData = data.filter(user => user.id !== currentUser.id);
+
+      // Check for blocked status and fetch verification status
+      const usersWithStatus = await Promise.all(filteredData.map(async (user) => {
+        // Check if the user is blocked
+        const { data: isBlocked, error: isBlockedError } = await supabase.rpc('is_blocked', {
+          user_id_1: currentUser.id,
+          user_id_2: user.id
+        });
+
+        if (isBlockedError) {
+          console.error('Error checking block status:', isBlockedError);
+          return null; // Exclude user on error
+        }
+
+        if (isBlocked) {
+          return null; // Exclude blocked user
+        }
+
+        // Fetch verification status
         const { data: verifiedData } = await supabase
           .from('verified_accounts')
           .select('verified')
@@ -53,7 +79,8 @@ const SearchScreen = () => {
         };
       }));
       
-      setSearchResults(usersWithVerification || []);
+      // Filter out any null values from the results
+      setSearchResults(usersWithStatus.filter(Boolean) || []);
     } catch (error) {
       console.error('Error searching users:', error);
     } finally {
