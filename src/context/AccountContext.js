@@ -294,6 +294,7 @@ export const AccountProvider = ({ children }) => {
       addAccount, 
       removeAccount, 
       currentSession,
+      setCurrentSession,
       switchToAccount 
     }}>
       {children}

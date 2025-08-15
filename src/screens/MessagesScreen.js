@@ -1,20 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, ScrollView, Image, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TextInput, ScrollView, Image, TouchableOpacity, ActivityIndicator, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../config/supabase';
 import { useNavigation } from '@react-navigation/native';
 import { useMessages } from '../context/MessageContext';
+import { LinearGradient } from 'expo-linear-gradient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const MessagesScreen = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const { fetchUnreadCount, markConversationAsRead } = useMessages();
   const [conversations, setConversations] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Changed to false since we'll load cache first
   const [currentUserId, setCurrentUserId] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewMessageButton, setShowNewMessageButton] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [onlineStatus, setOnlineStatus] = useState({});
+  
+  // Cache keys
+  const CONVERSATIONS_CACHE_KEY = 'conversations_cache';
+  const CONVERSATIONS_METADATA_KEY = 'conversations_metadata';
   
   // Function to mark a conversation as read
   const handleMarkAsRead = async (conversation) => {
@@ -27,13 +35,16 @@ const MessagesScreen = () => {
         await markConversationAsRead(conversation.id);
         
         // Update the local state to reflect read status (show 0 unread)
-        setConversations(prevConversations => 
-          prevConversations.map(conv => 
-            conv.id === conversation.id 
-              ? { ...conv, unread: 0 } 
-              : conv
-          )
+        const updatedConversations = conversations.map(conv => 
+          conv.id === conversation.id 
+            ? { ...conv, unread: 0 } 
+            : conv
         );
+        
+        setConversations(updatedConversations);
+        
+        // Update cache immediately
+        await saveCachedConversations(updatedConversations);
         
         console.log(`Marked conversation as read: ${conversation.id}`);
       }
@@ -42,12 +53,94 @@ const MessagesScreen = () => {
     }
   };
   
-  // Get current user and fetch conversations
+  // Cache management functions
+  const saveCachedConversations = async (conversationsData) => {
+    try {
+      const cacheData = {
+        conversations: conversationsData,
+        lastUpdated: new Date().toISOString(),
+        userId: currentUserId
+      };
+      
+      await AsyncStorage.setItem(CONVERSATIONS_CACHE_KEY, JSON.stringify(cacheData));
+      
+      // Also save metadata for quick access
+      const metadata = {
+        count: conversationsData.length,
+        lastUpdated: new Date().toISOString(),
+        userId: currentUserId
+      };
+      
+      await AsyncStorage.setItem(CONVERSATIONS_METADATA_KEY, JSON.stringify(metadata));
+      
+      console.log(`Cached ${conversationsData.length} conversations`);
+    } catch (error) {
+      console.error('Error saving conversations cache:', error);
+    }
+  };
+  
+  const loadCachedConversations = async (userId) => {
+    try {
+      const cachedData = await AsyncStorage.getItem(CONVERSATIONS_CACHE_KEY);
+      
+      if (cachedData) {
+        const parsed = JSON.parse(cachedData);
+        
+        // Check if cache is for the current user
+        if (parsed.userId === userId) {
+          console.log(`Loaded ${parsed.conversations.length} conversations from cache`);
+          return parsed.conversations;
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error loading conversations cache:', error);
+      return null;
+    }
+  };
+  
+  const clearOldCache = async (userId) => {
+    try {
+      // Clear cache if it's for a different user
+      const metadata = await AsyncStorage.getItem(CONVERSATIONS_METADATA_KEY);
+      if (metadata) {
+        const parsed = JSON.parse(metadata);
+        if (parsed.userId !== userId) {
+          await AsyncStorage.removeItem(CONVERSATIONS_CACHE_KEY);
+          await AsyncStorage.removeItem(CONVERSATIONS_METADATA_KEY);
+          console.log('Cleared old cache for different user');
+        }
+      }
+    } catch (error) {
+      console.error('Error clearing old cache:', error);
+    }
+  };
+  
+  const getCacheAge = async () => {
+    try {
+      const metadata = await AsyncStorage.getItem(CONVERSATIONS_METADATA_KEY);
+      if (metadata) {
+        const parsed = JSON.parse(metadata);
+        const cacheTime = new Date(parsed.lastUpdated);
+        const now = new Date();
+        const ageInMinutes = (now - cacheTime) / (1000 * 60);
+        return ageInMinutes;
+      }
+      return Infinity; // If no cache, return infinity (very old)
+    } catch (error) {
+      console.error('Error getting cache age:', error);
+      return Infinity;
+    }
+  };
+  
+  // Get current user and set up subscriptions
   useEffect(() => {
     let subscription = null;
     let readStatusSubscription = null;
+    let settingsSubscription = null;
     
-    const fetchUserAndConversations = async () => {
+    const fetchUserAndSetupConversations = async () => {
       try {
         // Get current user
         const { data: { user } } = await supabase.auth.getUser();
@@ -58,12 +151,31 @@ const MessagesScreen = () => {
         }
         
         setCurrentUserId(user.id);
-        fetchConversations(user.id);
+        
+        // Clear old cache for different users
+        await clearOldCache(user.id);
+        
+        // Load cached conversations first for immediate display
+        const cachedConversations = await loadCachedConversations(user.id);
+        if (cachedConversations && cachedConversations.length > 0) {
+          setConversations(cachedConversations);
+          console.log('Displaying cached conversations');
+        }
+        
+        // Check cache age to decide if we need to refresh
+        const cacheAge = await getCacheAge();
+        const shouldRefreshCache = cacheAge > 5; // Refresh if cache is older than 5 minutes
+        
+        // Always fetch fresh data, but don't show loading if we have recent cache
+        if (shouldRefreshCache || !cachedConversations) {
+          setRefreshing(true);
+        }
+        
+        await fetchConversations(user.id, !cachedConversations);
         
         // Set up real-time subscription for new messages
-        // Use a unique channel name to avoid conflicts
         subscription = supabase
-          .channel('messages_' + user.id)
+          .channel('messages_' + user.id + '_' + Date.now())
           .on('postgres_changes', {
             event: '*',
             schema: 'public',
@@ -72,13 +184,36 @@ const MessagesScreen = () => {
           }, (payload) => {
             console.log('New message received:', payload.eventType);
             // Refresh conversations when new message arrives
-            fetchConversations(user.id);
+            fetchConversations(user.id, false);
           })
           .subscribe();
           
+        // Listen for user settings changes
+        settingsSubscription = supabase
+          .channel('public:user_message_settings')
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'user_message_settings' },
+            (payload) => {
+              console.log('Settings change received!', payload);
+              const { new: newSettings } = payload;
+              if (newSettings) {
+                setOnlineStatus(prevStatus => ({
+                  ...prevStatus,
+                  [newSettings.user_id]: {
+                    ...prevStatus[newSettings.user_id],
+                    is_online: newSettings.show_online_status && (new Date() - new Date(newSettings.last_active)) < 300000,
+                    last_active: newSettings.last_active
+                  }
+                }));
+              }
+            }
+          )
+          .subscribe();
+
         // Listen for updates to read status with a different channel name
         readStatusSubscription = supabase
-          .channel('read_status_' + user.id)
+          .channel('read_status_' + user.id + '_' + Date.now())
           .on('postgres_changes', {
             event: 'UPDATE',
             schema: 'public',
@@ -86,21 +221,24 @@ const MessagesScreen = () => {
           }, (payload) => {
             console.log('Message update detected:', payload.new.id, 'Read:', payload.new.read);
             // Refresh conversations when messages are marked as read
-            fetchConversations(user.id);
+            fetchConversations(user.id, false);
           })
           .subscribe();
+          
       } catch (error) {
         console.error('Error fetching user:', error);
         setLoading(false);
+        setRefreshing(false);
       }
     };
     
-    fetchUserAndConversations();
+    fetchUserAndSetupConversations();
     
     // Clean up subscriptions when component unmounts
     return () => {
       if (subscription) supabase.removeChannel(subscription);
       if (readStatusSubscription) supabase.removeChannel(readStatusSubscription);
+      if (settingsSubscription) supabase.removeChannel(settingsSubscription);
     };
   }, []);
   
@@ -108,18 +246,23 @@ const MessagesScreen = () => {
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       if (currentUserId) {
-        console.log('Screen focused, refreshing conversations');
-        fetchConversations(currentUserId);
+        console.log('Screen focused, checking for conversation updates');
+        // Don't show loading, just refresh in background
+        fetchConversations(currentUserId, false);
       }
     });
     
     return unsubscribe;
   }, [navigation, currentUserId]);
   
-  // Fetch user conversations
-  const fetchConversations = async (userId) => {
+  // Enhanced fetch conversations function with better caching
+  const fetchConversations = async (userId, showLoadingIndicator = true) => {
     try {
-      setLoading(true);
+      if (showLoadingIndicator) {
+        setLoading(true);
+      } else {
+        setRefreshing(true);
+      }
       
       // Get all messages where current user is sender or receiver
       const { data: messagesData, error: messagesError } = await supabase
@@ -130,7 +273,18 @@ const MessagesScreen = () => {
       
       if (messagesError) {
         console.error('Error fetching messages:', messagesError);
+        
+        // If server request fails, try to use cached data as fallback
+        if (!conversations || conversations.length === 0) {
+          const cachedConversations = await loadCachedConversations(userId);
+          if (cachedConversations) {
+            setConversations(cachedConversations);
+            console.log('Using cached conversations as fallback');
+          }
+        }
+        
         setLoading(false);
+        setRefreshing(false);
         return;
       }
       
@@ -152,16 +306,17 @@ const MessagesScreen = () => {
           conversationsMap[conversationId] = {
             id: conversationId,
             otherUserId: otherUserId,
-            lastMessage: message.content,
+            lastMessage: message.content || (message.media_type ? `📷 ${message.media_type}` : 'Message'),
             timestamp: message.created_at,
             unread: isUnread ? 1 : 0,
             name: null,
-            avatar: null
+            avatar: null,
+            hasMedia: !!message.media_url
           };
         } else {
-          // For unread count: if ANY message is unread, show 1, otherwise 0
-          if (isUnread && conversationsMap[conversationId].unread === 0) {
-            conversationsMap[conversationId].unread = 1;
+          // Count all unread messages for this conversation
+          if (isUnread) {
+            conversationsMap[conversationId].unread += 1;
           }
           
           // Update last message if this one is newer
@@ -169,14 +324,40 @@ const MessagesScreen = () => {
           const messageTimestamp = new Date(message.created_at);
           
           if (messageTimestamp > currentTimestamp) {
-            conversationsMap[conversationId].lastMessage = message.content;
+            conversationsMap[conversationId].lastMessage = message.content || (message.media_type ? `📷 ${message.media_type}` : 'Message');
             conversationsMap[conversationId].timestamp = message.created_at;
+            conversationsMap[conversationId].hasMedia = !!message.media_url;
           }
         }
       }
       
-      // Fetch user profiles for all conversations
+      // Fetch user profiles and online status for all conversations
       const userIds = Object.values(conversationsMap).map(conv => conv.otherUserId);
+
+      if (userIds.length > 0) {
+        // Fetch online status for each user individually
+        const statusMap = {};
+        
+        for (const userId of userIds) {
+          try {
+            const { data, error } = await supabase.rpc('get_user_online_status', { p_user_id: userId });
+            
+            if (error) {
+              console.error(`Error fetching online status for user ${userId}:`, error);
+            } else if (data && data.length > 0) {
+              statusMap[userId] = {
+                user_id: userId,
+                is_online: data[0].is_online,
+                last_active: data[0].last_active_time
+              };
+            }
+          } catch (err) {
+            console.error(`Exception fetching online status for user ${userId}:`, err);
+          }
+        }
+        
+        setOnlineStatus(statusMap)
+      }
       
       if (userIds.length > 0) {
         const { data: profiles, error: profilesError } = await supabase
@@ -203,14 +384,38 @@ const MessagesScreen = () => {
       const conversationsArray = Object.values(conversationsMap)
         .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
       
-      setConversations(conversationsArray);
+      // Only update state if the data is different
+      const currentDataString = JSON.stringify(conversations);
+      const newDataString = JSON.stringify(conversationsArray);
+      
+      if (currentDataString !== newDataString) {
+        setConversations(conversationsArray);
+        
+        // Save to cache
+        await saveCachedConversations(conversationsArray);
+        
+        console.log(`Fetched and cached ${conversationsArray.length} conversations`);
+      } else {
+        console.log('Conversations data unchanged, skipping update');
+      }
       
       // Update the unread count in the MessageContext
       fetchUnreadCount();
+      
     } catch (error) {
       console.error('Error in fetchConversations:', error);
+      
+      // On error, try to load cached data if we don't have any
+      if (!conversations || conversations.length === 0) {
+        const cachedConversations = await loadCachedConversations(userId);
+        if (cachedConversations) {
+          setConversations(cachedConversations);
+          console.log('Loaded cached conversations after error');
+        }
+      }
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
   
@@ -236,102 +441,151 @@ const MessagesScreen = () => {
   // Filter conversations based on search query
   const filteredConversations = searchQuery
     ? conversations.filter(conv => 
-        conv.name.toLowerCase().includes(searchQuery.toLowerCase()))
+        (conv.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (conv.lastMessage || '').toLowerCase().includes(searchQuery.toLowerCase()))
     : conversations;
 
+  // Manual refresh function
+  const handleRefresh = async () => {
+    if (currentUserId) {
+      console.log('Manual refresh triggered');
+      setRefreshing(true);
+      await fetchConversations(currentUserId, false);
+    }
+  };
+
   return (
-    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: '#330033' }]}>
-      <View style={[styles.header, { borderBottomColor: '#440044' }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="white" />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: 'white' }]}>Flexx</Text>
-        <TouchableOpacity onPress={() => {}} style={styles.newMessageButton}>
-          <Ionicons name="create-outline" size={24} color="white" />
-        </TouchableOpacity>
-      </View>
-
-      <View style={[styles.searchContainer, { backgroundColor: '#440044' }]}>
-        <TextInput
-          style={[styles.searchInput, { color: 'white' }]}
-          placeholder="Search"
-          placeholderTextColor="#999999"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-        <Ionicons name="search" size={18} color="#999999" style={styles.searchIcon} />
-      </View>
-
-      <ScrollView 
-        style={styles.messagesList}
-        contentContainerStyle={{ paddingBottom: insets.bottom }}
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <LinearGradient
+        colors={['#1a0f2e', '#2a1f3e']}
+        style={styles.gradient}
       >
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#ff00ff" />
-            <Text style={[styles.loadingText, { color: '#999999' }]}>Loading conversations...</Text>
-          </View>
-        ) : filteredConversations.length > 0 ? (
-          filteredConversations.map((conversation) => (
-            <TouchableOpacity 
-              key={conversation.id} 
-              style={[styles.messageItem, { borderBottomColor: '#550055' }]}
-              onPress={() => {
-                // Mark conversation as read before navigating
-                handleMarkAsRead(conversation);
-                
-                // Navigate to the message screen
-                navigation.navigate('MessageScreen', { 
-                  recipientId: conversation.otherUserId,
-                  recipientName: conversation.name,
-                  recipientAvatar: conversation.avatar,
-                });
-              }}
-            >
-              <View style={styles.avatarContainer}>
-                <Image 
-                  source={{ uri: conversation.avatar || 'https://via.placeholder.com/50' }} 
-                  style={[styles.avatar, { borderColor: '#440044' }]} 
-                />
-              </View>
-              <View style={styles.messageContent}>
-                <View style={styles.messageHeader}>
-                  <Text style={[styles.name, { color: 'white' }, conversation.unread > 0 && [styles.unreadName, { color: 'white' }]]}>{conversation.name}</Text>
-                  <View style={styles.timeContainer}>
-                    <Text style={[styles.time, { color: '#999999' }]}>{formatRelativeTime(conversation.timestamp)}</Text>
-                    {conversation.unread > 0 && (
-                      <View style={[styles.cameraDot, { backgroundColor: '#ff00ff' }]} />
-                    )}
-                  </View>
-                </View>
-                <View style={styles.messageFooter}>
-                  <Text 
-                    style={[styles.messageText, { color: '#999999' }, conversation.unread > 0 && [styles.unreadMessageText, { color: 'white' }]]} 
-                    numberOfLines={1}
-                  >
-                    {conversation.lastMessage}
-                  </Text>
-                  {conversation.unread > 0 && (
-                    <View style={[styles.unreadBadge, { backgroundColor: '#ff00ff' }]}>
-                      <Text style={[styles.unreadText, { color: 'white' }]}>●</Text>
-                    </View>
+        <View style={styles.header}>
+          <TouchableOpacity 
+            onPress={() => navigation.goBack()} 
+            style={styles.backButton}
+          >
+            <Ionicons name="arrow-back" size={24} color="#fff" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Messages</Text>
+          <TouchableOpacity 
+            style={styles.refreshButton}
+            onPress={handleRefresh}
+            disabled={refreshing}
+          >
+            <Ionicons 
+              name={refreshing ? "refresh" : "refresh-outline"} 
+              size={24} 
+              color="#fff" 
+              style={refreshing ? { transform: [{ rotate: '180deg' }] } : {}}
+            />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.searchContainer}>
+          <Ionicons name="search" size={20} color="rgba(255,255,255,0.5)" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search conversations..."
+            placeholderTextColor="rgba(255,255,255,0.4)"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {refreshing && (
+            <ActivityIndicator size="small" color="#6c3fd8" style={styles.searchLoader} />
+          )}
+        </View>
+
+        <ScrollView 
+          style={styles.messagesList}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
+          showsVerticalScrollIndicator={false}
+        >
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#6c3fd8" />
+              <Text style={styles.loadingText}>Loading conversations...</Text>
+            </View>
+          ) : filteredConversations.length > 0 ? (
+            filteredConversations.map((conversation) => (
+              <TouchableOpacity 
+                key={conversation.id} 
+                style={styles.messageItem}
+                onPress={() => {
+                  handleMarkAsRead(conversation);
+                  navigation.navigate('MessageScreen', { 
+                    recipientId: conversation.otherUserId,
+                    recipientName: conversation.name,
+                    recipientAvatar: conversation.avatar,
+                  });
+                }}
+              >
+                <View style={styles.avatarContainer}>
+                  <Image 
+                    source={{ uri: conversation.avatar || 'https://via.placeholder.com/50' }} 
+                    style={styles.avatar}
+                  />
+                  {onlineStatus[conversation.otherUserId]?.is_online && (
+                    <View style={styles.onlineIndicator} />
                   )}
                 </View>
-              </View>
-             
-            </TouchableOpacity>
-          ))
-        ) : (
-          <View style={styles.emptyContainer}>
-            <Text style={[styles.emptyText, { color: '#999999' }]}>No conversations yet</Text>
-            <Text style={[styles.emptySubtext, { color: '#999999' }]}>Start chatting with someone!</Text>
-          </View>
-        )}
-      </ScrollView>
+                <View style={styles.messageContent}>
+                  <View style={styles.messageHeader}>
+                    <Text style={[styles.name, conversation.unread > 0 && styles.unreadName]}>
+                      {conversation.name || 'User'}
+                    </Text>
+                    <Text style={styles.time}>{formatRelativeTime(conversation.timestamp)}</Text>
+                  </View>
+                  <View style={styles.lastMessageContainer}>
+                    {conversation.hasMedia && (
+                      <Ionicons name="image" size={16} color="rgba(255,255,255,0.5)" style={styles.mediaIcon} />
+                    )}
+                    <Text 
+                      style={[styles.messageText, conversation.unread > 0 && styles.unreadMessageText]} 
+                      numberOfLines={1}
+                    >
+                      {conversation.lastMessage || 'No message'}
+                    </Text>
+                  </View>
+                </View>
+                {conversation.unread > 0 && (
+                  <View style={styles.unreadBadge}>
+                    <Text style={styles.unreadText}>
+                      {conversation.unread > 99 ? '99+' : conversation.unread}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            ))
+          ) : (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="chatbubbles-outline" size={48} color="rgba(255,255,255,0.2)" />
+              <Text style={styles.emptyText}>No conversations yet</Text>
+              <Text style={styles.emptySubtext}>Start connecting with people!</Text>
+              {!loading && !refreshing && (
+                <TouchableOpacity style={styles.retryButton} onPress={handleRefresh}>
+                  <Text style={styles.retryButtonText}>Refresh</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+        </ScrollView>
+      </LinearGradient>
       
       {showNewMessageButton && (
-        <TouchableOpacity style={[styles.newMessageFloatingButton, { backgroundColor: '#ff00ff' }]} onPress={() => {}/* Handle new message */}>
-          <Ionicons name="create" size={24} color="white" />
+        <TouchableOpacity 
+          style={styles.newMessageFloatingButton}
+          onPress={() => {
+            // You can implement navigation to a new message screen here
+            console.log('New message button pressed');
+          }}
+        >
+          <LinearGradient
+            colors={['#8a5cf5', '#6c3fd8']}
+            style={styles.gradientButton}
+          >
+            <Ionicons name="create" size={24} color="#fff" />
+          </LinearGradient>
         </TouchableOpacity>
       )}
     </View>
@@ -341,81 +595,92 @@ const MessagesScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    // Dynamic background color from ThemeContext
+    backgroundColor: '#1a0f2e',
+  },
+  gradient: {
+    flex: 1,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-    borderBottomWidth: 0.5,
-    // Dynamic border color from ThemeContext
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(26,15,46,0.98)',
   },
   backButton: {
     padding: 5,
   },
   headerTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    // Dynamic text color from ThemeContext
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#fff',
     flex: 1,
     textAlign: 'center',
+    letterSpacing: 1,
   },
-  newMessageButton: {
+  refreshButton: {
     padding: 5,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    // Dynamic background color from ThemeContext
-    borderRadius: 10,
-    marginHorizontal: 15,
-    marginVertical: 10,
-    paddingHorizontal: 10,
-    height: 36,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 15,
+    marginHorizontal: 20,
+    marginVertical: 15,
+    paddingHorizontal: 15,
+    height: 45,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   searchIcon: {
-    marginRight: 8,
+    marginRight: 10,
   },
   searchInput: {
     flex: 1,
-    height: 36,
-    // Dynamic text color from ThemeContext
-    fontSize: 14,
-    paddingHorizontal: 5,
+    height: 45,
+    color: '#fff',
+    fontSize: 16,
+  },
+  searchLoader: {
+    marginLeft: 10,
   },
   messagesList: {
     flex: 1,
   },
   messageItem: {
     flexDirection: 'row',
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-    borderBottomWidth: 0.5,
-    // Dynamic border color from ThemeContext
-    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(255,255,255,0.02)',
+    marginHorizontal: 10,
+    marginVertical: 2,
+    borderRadius: 12,
   },
   avatarContainer: {
-    marginRight: 12,
+    marginRight: 15,
+    position: 'relative',
   },
   avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    borderWidth: 0.5,
-    // Dynamic border color from ThemeContext
+    width: 50,
+    height: 50,
+    borderRadius: 25,
   },
   onlineIndicator: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: '#4CAF50', // Keep this color as it represents online status
     position: 'absolute',
     bottom: 0,
-    right: 0,
+    right: 15,
+    width: 15,
+    height: 15,
+    borderRadius: 10,
+    backgroundColor: '#34C759',
     borderWidth: 2,
-    // Dynamic border color from ThemeContext
+    borderColor: '#fff',
   },
   messageContent: {
     flex: 1,
@@ -428,105 +693,120 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   name: {
-    fontSize: 14,
+    fontSize: 17,
     fontWeight: '600',
-    // Dynamic text color from ThemeContext
+    color: '#fff',
+    letterSpacing: 0.5,
+    flex: 1,
   },
   unreadName: {
-    fontWeight: 'bold',
-    // Dynamic text color from ThemeContext
-  },
-  timeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    color: '#8a5cf5',
+    fontWeight: '700',
   },
   time: {
-    fontSize: 12,
-    // Dynamic text color from ThemeContext
-    marginRight: 4,
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.5)',
+    marginLeft: 10,
   },
-  cameraDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    // Dynamic background color from ThemeContext
-  },
-  messageFooter: {
+  lastMessageContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+  },
+  mediaIcon: {
+    marginRight: 6,
   },
   messageText: {
-    fontSize: 14,
-    // Dynamic text color from ThemeContext
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.7)',
+    lineHeight: 20,
     flex: 1,
   },
   unreadMessageText: {
-    // Dynamic text color from ThemeContext
-    fontWeight: 'bold',
+    color: '#fff',
+    fontWeight: '500',
   },
   unreadBadge: {
-    // Dynamic background color from ThemeContext
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
+    backgroundColor: '#6c3fd8',
+    borderRadius: 12,
+    minWidth: 24,
+    height: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 5,
-    marginLeft: 5,
+    paddingHorizontal: 8,
+    marginLeft: 8,
+    alignSelf: 'center',
   },
   unreadText: {
-    // Dynamic text color from ThemeContext
+    color: '#fff',
     fontSize: 12,
-    fontWeight: 'bold',
+    fontWeight: '600',
   },
-  cameraButton: {
-    padding: 10,
-    marginLeft: 5,
+  newMessageFloatingButton: {
+    position: 'absolute',
+    bottom: 25,
+    right: 25,
+    elevation: 8,
+    shadowColor: '#6c3fd8',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+  },
+  gradientButton: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 30,
+    backgroundColor: 'rgba(255,255,255,0.02)',
+    margin: 20,
+    borderRadius: 20,
+    paddingVertical: 40,
+    minHeight: 300,
   },
   emptyText: {
+    fontSize: 20,
+    color: '#fff',
+    textAlign: 'center',
+    marginBottom: 12,
+    fontWeight: '600',
+    marginTop: 20,
+  },
+  emptySubtext: {
     fontSize: 16,
-    // Dynamic text color from ThemeContext
+    color: 'rgba(255,255,255,0.6)',
     textAlign: 'center',
     marginBottom: 20,
   },
-  emptySubtext: {
-    // Dynamic text color from ThemeContext
-    fontSize: 14,
-    marginTop: 8,
+  retryButton: {
+    backgroundColor: '#6c3fd8',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    marginTop: 10,
   },
-  newMessageFloatingButton: {
-    // Dynamic background color from ThemeContext
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    position: 'absolute',
-    bottom: 20,
-    right: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
+  retryButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: 50,
+    minHeight: 300,
   },
   loadingText: {
-    // Dynamic text color from ThemeContext
     fontSize: 16,
-    marginTop: 10,
+    color: 'rgba(255,255,255,0.7)',
+    marginTop: 15,
+    fontWeight: '500',
   },
 });
 

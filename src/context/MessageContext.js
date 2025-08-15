@@ -204,4 +204,10 @@ export const MessageProvider = ({ children }) => {
   );
 };
 
-export const useMessages = () => useContext(MessageContext);
+export const useMessages = () => {
+  const context = useContext(MessageContext);
+  if (context === undefined) {
+    throw new Error('useMessages must be used within a MessageProvider');
+  }
+  return context;
+};

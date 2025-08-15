@@ -1,6 +1,6 @@
 import React, { createContext, useState, useContext, useRef } from 'react';
 
-const VideoContext = createContext();
+export const VideoContext = createContext();
 
 export const VideoProvider = ({ children }) => {
   const [activeVideoId, setActiveVideoId] = useState(null);
@@ -51,4 +51,10 @@ export const VideoProvider = ({ children }) => {
 };
 
 // Custom hook to use the video context
-export const useVideo = () => useContext(VideoContext);
+export const useVideo = () => {
+  const context = useContext(VideoContext);
+  if (context === undefined) {
+    throw new Error('useVideo must be used within a VideoProvider');
+  }
+  return context;
+};

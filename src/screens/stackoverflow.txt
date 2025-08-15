@@ -1,0 +1,498 @@
+Element type is invalid: expected a string (for built-in components) or a class/function (for composite components) in react native project
+Asked 3 years, 5 months ago
+Modified 1 month ago
+Viewed 392k times
+66
+
+I am building a react native project I get the following error:
+
+Error: Element type is invalid: expected a string (for built-in components) or a class/function (for composite components) but got: object. You likely forgot to export your component from the file it's defined in, or you might have mixed up default and named imports.
+
+Check the render method of SignInScreen.
+
+Here is my code.
+
+import React from 'react';
+
+import { View,Image,StyleSheet,useWindowDimensions } from 'react-native';
+
+import Logo from'../../../assetss/images/logo.png';
+
+import CustomInput from '../../components/CustomInput';
+
+const SignInScreen =  () => {
+
+
+     const {height} = useWindowDimensions();
+
+    return (
+        <View style= {styles.root}>
+          <Image source={Logo} style ={[styles.logo, {height: height * 0.3}]}
+           resizeMode="contain" /> 
+          <CustomInput />
+       </View>
+ );
+};
+
+const styles = StyleSheet.create({
+   root: {
+        alignItems: 'center',
+        padding: 20,
+    },
+
+   logo:{
+    width: 1000,
+    maxWidth: 1100,
+    maxHeight: 200 ,
+   }
+})
+
+
+export default SignInScreen 
+javascriptreact-native
+Share
+Improve this question
+Follow
+edited Jan 7 at 2:50
+President James K. Polk's user avatar
+President James K. Polk
+42.2k3333 gold badges113113 silver badges147147 bronze badges
+asked Mar 13, 2022 at 7:29
+ajay's user avatar
+ajay
+79922 gold badges77 silver badges88 bronze badges
+Add a comment
+18 Answers
+Sorted by:
+
+Highest score (default)
+58
+
+There is a difference between named exports and default exports.
+
+Named Export
+
+Can be used for top level values of a module, e.g.
+
+export const fetch = () => {
+
+}
+
+export const Component = () => {
+    return <></>
+}
+The above can be imported using
+
+import { fetch, Component } from "./MyModule"
+Notice the curly braces.
+
+Default Export
+
+A default export can only be used once per file, e.g.
+
+const Component = () => {
+    return <></>
+}
+
+export default Component;
+The above can be imported using
+
+import Component from "./MyModule"
+Notice that we have not used curly braces here.
+
+The error message
+
+Error: Element type is invalid: expected a string (for built-in components) or a class/function (for composite components) but got: object. You likely forgot to export your component from the file it's defined in, or you might have mixed up default and named imports.
+
+tells us that we have mixed this up for some of our imports. Your imports for View, Image, StyleSheet and useWindowDimensions are correct. Hence, either CustomInput or Logo is not correctly imported (or exported; it depends on how we want to see it).
+
+You are assuming default exports for both. Check if they are exported using default export.
+
+If you do not want to use default exports, then you need to change your import statements to the following.
+
+import { CustomInput } from '../../components/CustomInput';
+Furthermore, check that the import paths, e.g. '../../../assetss/images/logo.png' and '../../components/CustomInput', are correct.
+
+Share
+Improve this answer
+Follow
+answered Mar 13, 2022 at 13:13
+David Scholz's user avatar
+David Scholz
+9,9561414 gold badges2424 silver badges4141 bronze badges
+thanks for your help my probl/em is solved b/y just putting .js . For example import CustomInput from './../../components/CustomInput/CustomInput.js' – 
+ajay
+ CommentedMar 19, 2022 at 7:56 
+Add a comment
+21
+
+In my case the problem was I created all components but didn't save the files. I don't use autosave, so I created all components, imported them to my Home component, but they were not saved so that error was thrown. Once I saved each file, the error disappeared.
+
+Share
+Improve this answer
+Follow
+answered Oct 25, 2022 at 6:51
+Blockchain_addict's user avatar
+Blockchain_addict
+34122 silver badges99 bronze badges
+Add a comment
+16
+
+Faced while unit test in react
+
+Notices the same issue while writing unit test case using jest and react-testing-library.
+
+Problem: It may be due to wrong way of mocking the component using jest.mock
+
+Problem Situation:
+
+jest.mock('./components/notes-list', () => {
+  return {
+    NotesList: () => <div data-testid='note-list-component'>Hello World</div>,
+  };
+});
+Solution
+
+jest.mock('./components/notes-list', () => {
+  const NotesList = () => (
+    <div data-testid='note-list-component'>Hello World</div>
+  );
+
+  return NotesList;
+});
+Share
+Improve this answer
+Follow
+edited Jan 19 at 2:39
+answered Jan 21, 2023 at 18:10
+Muhammad Abdullah's user avatar
+Muhammad Abdullah
+4,6453434 silver badges2727 bronze badges
+Add a comment
+6
+
+Late to the party here, but I just encountered this and the issue actually arose from an import that my IDE (VS Code) generated automatically for me as I was entering JSX.
+
+// This next line is what got generated and caused the issue
+// 🚨 WRONG 🚨 (Default exports):
+import Modal from '@fluentui/react/lib/Modal';
+
+// Here is what _should_ have been generated:
+// ✅ RIGHT ✅ (named exports)
+import { Modal } from '@fluentui/react/lib/Modal';
+
+
+export const myComponent = () => {
+  // ...
+
+  return (
+    <Modal isOpen={...}/>
+      ...
+    </Modal>
+  );
+}
+As you can see from the code, the IDE generated a default import (no braces around Modal). The lib actually exports the Modal component as a named export, and as a result, in the incorrect code, Modal === undefined.
+
+This causes React to crank on about expecting a string or a class/function. In my case, that lib (Modal) has no default export, so React reported getting undefined.
+
+Sadly, it took a while to figure this out. "It's only help when it's helpful" as my grandma used to say. In this case the auto-import was not helpful - it happily threw me under the bus. Unfortunately, React can't really report more about the issue either because, by time the call is made, the incorrect value is already passed. All React does at that point is to say "that ain't right".
+
+Type checking at development time also failed oddly as well - you can see from the pop-up that it's a named constant that's exported, but it's seen as the default import, which is wrong, so this ended up being found by manually stepping through the React code to pin it down.
+
+Hope this helps other folks - check your imports from other libs to ensure you didn't get "helped"...
+
+enter image description here
+
+Share
+Improve this answer
+Follow
+edited Jan 7 at 12:13
+answered Nov 15, 2023 at 16:10
+otto-null's user avatar
+otto-null
+77255 silver badges1919 bronze badges
+Add a comment
+1
+
+Sounds like you had an index.js file in your CustomInput folder, so when you wrote
+
+import CustomInput from './../../components/CustomInput';
+it thought you wanted
+
+import {CustomInput} from './../../components/CustomInput/index.js';
+but really you wanted
+
+import CustomInput from './../../components/CustomInput/CustomInput.js';
+This error
+
+"Error: Element type is invalid: expected a string (for built-in components) or a class/function (for composite components) but got: object. You likely forgot to export your component from the file it's defined in, or you might have mixed up default and named imports.
+
+Check the render method of ..."
+
+shows up for many different types of errors that directly or indirectly eventually boil down to export/import default/named. Besides your case where it thought you were looking in index.js for a {named} in curly braces export/import, you can also get that error message if you accidentally misspell your named import, for example: import {Flatlist} with a lowercase l instead of import {FlatList} with an uppercase L.
+
+Share
+Improve this answer
+Follow
+edited Jul 25, 2023 at 12:27
+Nicholas K's user avatar
+Nicholas K
+15.5k88 gold badges3535 silver badges5959 bronze badges
+answered Jun 12, 2022 at 16:57
+Rob Software's user avatar
+Rob Software
+2133 bronze badges
+Add a comment
+1
+
+As the error message was not pointing me to the exact line/component/cause of the issue, I ended up just deleting sections of the problem code until I was able to pinpoint exactly which component was causing the issue.
+
+In my case, the issue was of course mixed up imports as well... I was able to fix it by changing:
+
+import CustomTooltip from '..';
+to
+
+import { CustomTooltip } from '..';
+Share
+Improve this answer
+Follow
+answered Oct 5, 2023 at 19:24
+Akaisteph7's user avatar
+Akaisteph7
+6,81222 gold badges3838 silver badges5252 bronze badges
+Add a comment
+1
+
+So, I had the same error but for a totally different reason.
+
+I was sending an errorBoundary component as a prop from another component.
+
+<SomeComponent key={key} errorBoundary={<ErrorBoundary />} />
+and then inside SomeComponent
+
+return (
+  <div ... >
+    {ErrorBoundaryComponent ? (
+      <ErrorBoundaryComponent>{componentWithProps}</ErrorBoundaryComponent>
+    ) : (
+      componentWithProps
+    )}
+  </div>
+);
+The problem was that I was sending the ErrorBoundaryComponent as a rendered prop (jsx)
+
+the fix was sending the errorBoundary as such:
+
+<SomeComponent key={key} errorBoundary={ErrorBoundary} />
+Share
+Improve this answer
+Follow
+edited Jan 7 at 8:03
+Sebastian's user avatar
+Sebastian
+1,5551515 silver badges2323 bronze badges
+answered Jun 27, 2023 at 5:00
+Stefanvds's user avatar
+Stefanvds
+5,91655 gold badges5151 silver badges7373 bronze badges
+Add a comment
+1
+
+Sometimes your IDE needs a hot reload/complete restart In my case I use vsCode and in there if you enter (Ctrl+Shift+P), you open a dialog box, There search for Developer:Reload window and enter it This will reload you IDE, and you can even try stopping your project and restarting it, or maybe even close your IDE.
+
+Share
+Improve this answer
+Follow
+edited May 17 at 14:11
+Nimantha's user avatar
+Nimantha
+6,49366 gold badges3232 silver badges7878 bronze badges
+answered Feb 13, 2024 at 7:59
+ubi sage's user avatar
+ubi sage
+9311 silver badge55 bronze badges
+Add a comment
+0
+
+From the code you have shown, it seems like assets is spelt wrong. You can check if the actual folder is spelt like that.
+
+Share
+Improve this answer
+Follow
+answered Jan 4, 2023 at 4:44
+da coconut's user avatar
+da coconut
+87322 gold badges99 silver badges1212 bronze badges
+Add a comment
+0
+
+Thanks for your help my problem is solved by just putting .js . For example:
+
+import CustomInput from './../../components/CustomInput/CustomInput.js
+Share
+Improve this answer
+Follow
+edited Jul 25, 2023 at 12:27
+Nicholas K's user avatar
+Nicholas K
+15.5k88 gold badges3535 silver badges5959 bronze badges
+answered Mar 19, 2022 at 7:58
+ajay's user avatar
+ajay
+79922 gold badges77 silver badges88 bronze badges
+Add a comment
+0
+
+Personally I did encounter this error quite surprisignly after a code change in some .ts file inside a utility lib, used for axios requests.
+
+I tried finding an error source, wrong import or whatever, but since I had just started working on the branch, there were barely any file changes warranting this error.
+
+I ended up restarting the dev-server and the error was gone, without me having to change anything. So it does seem like this error might be appearing wrongfully.
+
+Share
+Improve this answer
+Follow
+answered May 24, 2024 at 8:53
+AbandonedCrypt's user avatar
+AbandonedCrypt
+31422 silver badges1414 bronze badges
+Add a comment
+0
+
+In my case the render() works as expected with a simple <div>aaa</div>. But once I use my MUI components, it throws the error.
+
+What I found is it works when importing components like import { Grid } from '@mui/material'; but it won't if using import Grid from '@mui/material/Grid';.
+
+So I found the initial issue but in my case it's not a solution since I'm using the detailed imports to reduce the load when developping.
+
+Share
+Improve this answer
+Follow
+answered Dec 4, 2024 at 19:15
+Thomas Ramé's user avatar
+Thomas Ramé
+81111 gold badge99 silver badges1818 bronze badges
+Add a comment
+0
+
+Have you tried specifying the type on the screen component? For example:
+
+import { FC } from 'react'
+
+const SignInScreen: FC<any> = () => {
+    const {height} = useWindowDimensions()
+
+    return (
+        <View style= {styles.root}>
+          <Image source={Logo} style ={[styles.logo, {height: height * 0.3}]}
+           resizeMode="contain" /> 
+          <CustomInput />
+       </View>
+    )
+}
+Share
+Improve this answer
+Follow
+edited Jan 6 at 13:19
+Sebastian's user avatar
+Sebastian
+1,5551515 silver badges2323 bronze badges
+answered Dec 4, 2024 at 19:28
+Kaveh Movahedi's user avatar
+Kaveh Movahedi
+17611 silver badge99 bronze badges
+Add a comment
+0
+
+react-icons updated then throwed error 500 on production environment (whole website). It was not updating locally, and in two different environments.
+
+Replace the following in package.json:
+
+"react-icons": "^4.3.1",
+with
+
+"react-icons": "4.3.1",
+Share
+Improve this answer
+Follow
+edited Jan 7 at 4:36
+Sebastian's user avatar
+Sebastian
+1,5551515 silver badges2323 bronze badges
+answered Jun 23, 2023 at 10:55
+Kamil's user avatar
+Kamil
+89211 gold badge1111 silver badges2525 bronze badges
+Add a comment
+0
+
+If you’re getting this error after cloning a working project from a repository, and everything used to work fine before — this might help you.
+
+I’m using:
+
+React: 18.2.0
+
+Node: v18.16.0
+
+nvm: Highly recommended for managing Node versions
+(Run nvm list to check installed versions)
+
+In your package.json, add or use the following script:
+
+"scripts": {
+  "install:clean": "rmdir /s /q node_modules && del /f /q package-lock.json && npm install && npm start"
+}  
+Then just run: npm run install:clean
+
+Share
+Improve this answer
+Follow
+edited Jun 26 at 9:43
+Nimantha's user avatar
+Nimantha
+6,49366 gold badges3232 silver badges7878 bronze badges
+answered Jun 26 at 9:18
+Cihan AŞAN's user avatar
+Cihan AŞAN
+10633 bronze badges
+Add a comment
+0
+
+Sometimes node modules can get corrupted, remove your node modules and install the project modules again.
+
+Share
+Improve this answer
+Follow
+edited Jun 26 at 9:44
+Nimantha's user avatar
+Nimantha
+6,49366 gold badges3232 silver badges7878 bronze badges
+answered Jul 15, 2024 at 11:05
+Joseph Magar's user avatar
+Joseph Magar
+2144 bronze badges
+Add a comment
+-1
+
+In my case it was two files with same names in one directory Footer.tsx and Footer.scss
+
+Share
+Improve this answer
+Follow
+edited Apr 6, 2023 at 9:59
+answered Apr 6, 2023 at 9:59
+axjrl's user avatar
+axjrl
+4944 bronze badges
+As it’s currently written, your answer is unclear. Please edit to add additional details that will help others understand how this addresses the question asked. You can find more information on how to write good answers in the help center. – 
+Community
+Bot
+ CommentedApr 14, 2023 at 8:10
+Add a comment
+-1
+
+I had this error for a different reason, I was importing files from the wrong locations,
+but everything else was alright.
+You can identify this issue if your file runs independently but not work while importing it.
+
+Share

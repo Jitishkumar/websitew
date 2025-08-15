@@ -35,6 +35,7 @@ import WealthiestDonorsScreen from '../screens/WealthiestDonorsScreen';
 import VerifyAccountScreen from '../screens/VerifyAccountScreen';
 import { supabase } from '../config/supabase';
 import PhotoTextViewerScreen from '../screens/PhotoTextViewerScreen';
+import MessageSettingsScreen from '../screens/MessageSettingsScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -152,7 +153,7 @@ const TabNavigator = () => {
   );
 };
 
-export const AppNavigator = () => {
+const AppNavigator = () => {
   const [initialRoute, setInitialRoute] = useState(null);
   useEffect(() => {
     const checkSession = async () => {
@@ -189,6 +190,9 @@ export const AppNavigator = () => {
       <Stack.Screen name="Donate" component={DonateScreen} options={{ headerShown: false }} />
       <Stack.Screen name="WealthiestDonors" component={WealthiestDonorsScreen} options={{ headerShown: false }} />
       <Stack.Screen name="VerifyAccount" component={VerifyAccountScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="MessageSettings" component={MessageSettingsScreen} options={{ headerShown: false }} />
     </Stack.Navigator>
   );
 };
+
+export default AppNavigator;

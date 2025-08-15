@@ -380,8 +380,26 @@ const ConfessionScreen = () => {
         return;
       }
   
+      // Get current user for checking likes
+      const { data: { user } } = await supabase.auth.getUser();
+
       // Process confessions data to ensure media is properly parsed
       const processedConfessions = await Promise.all(confessionsData.map(async confession => {
+        // Check if the current user has liked this confession
+        let isLiked = false;
+        if (user) {
+          const { data: likeData, error: likeError } = await supabase
+            .from('confession_likes')
+            .select('id')
+            .eq('confession_id', confession.id)
+            .eq('user_id', user.id)
+            .maybeSingle();
+          
+          if (!likeError && likeData) {
+            isLiked = true;
+          }
+        }
+
         // Ensure media is properly parsed if it's a string
         let processedMedia = confession.media;
   
@@ -435,6 +453,7 @@ const ConfessionScreen = () => {
         return {
           ...confession,
           media: validatedMedia,
+          is_liked: isLiked,
           ...(userProfile && { username: userProfile.username, avatar_url: userProfile.avatar_url })
         };
       }));
@@ -603,6 +622,129 @@ const ConfessionScreen = () => {
     getCurrentUser();
   }, []);
 
+  // State for likes and comments modals
+  const [showLikesModal, setShowLikesModal] = useState(false);
+  const [showCommentModal, setShowCommentModal] = useState(false);
+  const [selectedConfessionId, setSelectedConfessionId] = useState(null);
+  const [likesList, setLikesList] = useState([]);
+  const [loadingLikes, setLoadingLikes] = useState(false);
+
+  // Handle like toggle for a confession
+  const handleLike = async (confessionId) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        Alert.alert('Error', 'You must be logged in to like a confession');
+        return;
+      }
+      
+      // Check if user already liked the confession
+      const { data: existingLike } = await supabase
+        .from('confession_likes')
+        .select()
+        .eq('confession_id', confessionId)
+        .eq('user_id', user.id)
+        .single();
+      
+      if (existingLike) {
+        // Unlike
+        const { error } = await supabase
+          .from('confession_likes')
+          .delete()
+          .eq('confession_id', confessionId)
+          .eq('user_id', user.id);
+          
+        if (error) throw error;
+        
+        // Update confessions state to reflect the change
+        setConfessions(prevConfessions => 
+          prevConfessions.map(confession => 
+            confession.id === confessionId 
+              ? { 
+                  ...confession, 
+                  likes_count: Math.max(0, (confession.likes_count || 1) - 1),
+                  is_liked: false 
+                } 
+              : confession
+          )
+        );
+      } else {
+        // Like
+        const { error } = await supabase
+          .from('confession_likes')
+          .insert({
+            confession_id: confessionId,
+            user_id: user.id
+          });
+          
+        if (error) throw error;
+        
+        // Update confessions state to reflect the change
+        setConfessions(prevConfessions => 
+          prevConfessions.map(confession => 
+            confession.id === confessionId 
+              ? { 
+                  ...confession, 
+                  likes_count: (confession.likes_count || 0) + 1,
+                  is_liked: true 
+                } 
+              : confession
+          )
+        );
+      }
+    } catch (error) {
+      console.error('Error toggling like:', error);
+      Alert.alert('Error', 'Failed to update like');
+    }
+  };
+
+  // Handle showing likes for a confession
+  const handleShowLikes = async (confessionId) => {
+    try {
+      setLoadingLikes(true);
+      setSelectedConfessionId(confessionId);
+      
+      const { data, error } = await supabase
+        .from('confession_likes')
+        .select(`
+          user_id,
+          profiles:user_id (username, avatar_url)
+        `)
+        .eq('confession_id', confessionId);
+
+      if (error) throw error;
+      setLikesList(data);
+      setShowLikesModal(true);
+    } catch (error) {
+      console.error('Error fetching likes:', error);
+      Alert.alert('Error', 'Failed to load likes');
+    } finally {
+      setLoadingLikes(false);
+    }
+  };
+
+  // Handle showing comments for a confession
+  const handleComment = (confessionId) => {
+    setSelectedConfessionId(confessionId);
+    setShowCommentModal(true);
+  };
+
+  // Handle closing comment modal
+  const handleCloseCommentModal = (newCommentsCount) => {
+    setShowCommentModal(false);
+    
+    // Update the comments count if provided
+    if (newCommentsCount !== undefined && selectedConfessionId) {
+      setConfessions(prevConfessions => 
+        prevConfessions.map(confession => 
+          confession.id === selectedConfessionId 
+            ? { ...confession, comments_count: newCommentsCount } 
+            : confession
+        )
+      );
+    }
+  };
+
   const renderConfessionItem = ({ item }) => {
     // Check if current user is the creator of the confession, even if it's anonymous
     const isCurrentUserConfession = currentUser && (
@@ -695,12 +837,24 @@ const ConfessionScreen = () => {
         )}
         
         <View style={styles.actionBar}>
-          <TouchableOpacity style={styles.actionButton}>
-            <Ionicons name="heart-outline" size={24} color="#ff00ff" />
-            <Text style={styles.actionText}>{item.likes_count || 0}</Text>
+          <TouchableOpacity 
+            style={styles.actionButton} 
+            onPress={() => handleLike(item.id)}
+          >
+            <Ionicons 
+              name={item.is_liked ? "heart" : "heart-outline"} 
+              size={24} 
+              color={item.is_liked ? "#ff0055" : "#ff00ff"} 
+            />
+            <TouchableOpacity onPress={() => item.likes_count > 0 && handleShowLikes(item.id)}>
+              <Text style={styles.actionText}>{item.likes_count || 0}</Text>
+            </TouchableOpacity>
           </TouchableOpacity>
           
-          <TouchableOpacity style={styles.actionButton}>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => handleComment(item.id)}
+          >
             <Ionicons name="chatbubble-outline" size={22} color="#ff00ff" />
             <Text style={styles.actionText}>{item.comments_count || 0}</Text>
           </TouchableOpacity>
@@ -734,8 +888,57 @@ const ConfessionScreen = () => {
     </View>
   );
 
+  // Render Likes Modal
+  const renderLikesModal = () => (
+    <Modal
+      visible={showLikesModal}
+      transparent={true}
+      animationType="slide"
+      onRequestClose={() => setShowLikesModal(false)}
+    >
+      <View style={styles.modalContainer}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Likes</Text>
+            <TouchableOpacity onPress={() => setShowLikesModal(false)}>
+              <Ionicons name="close" size={24} color="#ff00ff" />
+            </TouchableOpacity>
+          </View>
+          
+          {loadingLikes ? (
+            <ActivityIndicator size="large" color="#ff00ff" />
+          ) : (
+            <FlatList
+              data={likesList}
+              keyExtractor={(item, index) => `${item.user_id}-${index}`}
+              renderItem={({ item }) => (
+                <TouchableOpacity 
+                  style={styles.likeItem}
+                  onPress={() => {
+                    setShowLikesModal(false);
+                    navigation.navigate('UserProfileScreen', { userId: item.user_id });
+                  }}
+                >
+                  <Image 
+                    source={{ uri: item.profiles?.avatar_url || 'https://via.placeholder.com/40' }}
+                    style={styles.likeAvatar}
+                  />
+                  <Text style={styles.likeUsername}>{item.profiles?.username || 'User'}</Text>
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={
+                <Text style={styles.emptyText}>No likes yet</Text>
+              }
+            />
+          )}
+        </View>
+      </View>
+    </Modal>
+  );
+
   return (
     <View style={styles.container}>
+      {renderLikesModal()}
       <View style={styles.header}>
         <TouchableOpacity 
           onPress={() => navigation.goBack()}
@@ -1085,6 +1288,30 @@ const ConfessionScreen = () => {
 };
 
 const styles = StyleSheet.create({
+  // Likes Modal Styles
+  likeItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  likeAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 10,
+  },
+  likeUsername: {
+    fontSize: 16,
+    color: '#333',
+  },
+  emptyText: {
+    textAlign: 'center',
+    padding: 20,
+    color: '#666',
+    fontSize: 16,
+  },
   modalContainer: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
