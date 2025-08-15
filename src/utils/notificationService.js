@@ -1,4 +1,4 @@
-import { supabase } from '../config/supabase';
+import { supabase } from '../lib/supabase';
 
 // Your OneSignal REST API key from the OneSignal Dashboard
 const ONE_SIGNAL_REST_API_KEY = 'os_v2_app_xvar67mys5abzhqor6lzw572sndsnutu7kxu2leczhmln2kkpuvfcteu2nzcc7gckpog63mx2ttjuhqjcegi45h257futr2qyxinsqq';

@@ -17,7 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { StoriesService } from '../services/StoriesService';
 import { LinearGradient } from 'expo-linear-gradient';
-import { supabase } from '../config/supabase';
+import { supabase } from '../lib/supabase';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width, height } = Dimensions.get('window');

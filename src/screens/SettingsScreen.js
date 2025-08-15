@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Switch, ScrollView, Alert } f
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { supabase } from '../config/supabase';
+import { supabase } from '../lib/supabase';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const SettingsScreen = () => {
@@ -257,6 +257,19 @@ const SettingsScreen = () => {
             <View style={styles.settingContent}>
               <Text style={styles.settingTitle}>Privacy Policy</Text>
               <Text style={styles.settingDescription}>Read our privacy policy</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#ff00ff" />
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.linkItem}
+            onPress={() => navigation.navigate('BlockedUsers')}
+          >
+            <View style={styles.settingIconContainer}>
+              <Ionicons name="shield-outline" size={24} color="#ff00ff" />
+            </View>
+            <View style={styles.settingContent}>
+              <Text style={styles.settingTitle}>Blocked Users</Text>
+              <Text style={styles.settingDescription}>View and manage blocked users</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color="#ff00ff" />
           </TouchableOpacity>

@@ -33,9 +33,10 @@ import CallPage from '../screens/CallPage';
 import DonateScreen from '../screens/DonateScreen';
 import WealthiestDonorsScreen from '../screens/WealthiestDonorsScreen';
 import VerifyAccountScreen from '../screens/VerifyAccountScreen';
-import { supabase } from '../config/supabase';
+import { supabase } from '../lib/supabase';
 import PhotoTextViewerScreen from '../screens/PhotoTextViewerScreen';
 import MessageSettingsScreen from '../screens/MessageSettingsScreen';
+import BlockedUsersScreen from '../screens/BlockedUsersScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -191,6 +192,7 @@ const AppNavigator = () => {
       <Stack.Screen name="WealthiestDonors" component={WealthiestDonorsScreen} options={{ headerShown: false }} />
       <Stack.Screen name="VerifyAccount" component={VerifyAccountScreen} options={{ headerShown: false }} />
       <Stack.Screen name="MessageSettings" component={MessageSettingsScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} options={{ headerShown: false }} />
     </Stack.Navigator>
   );
 };

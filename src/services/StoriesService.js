@@ -1,4 +1,4 @@
-import { supabase } from '../config/supabase';
+import { supabase } from '../lib/supabase';
 import { uploadToCloudinary, deleteFromCloudinary } from '../config/cloudinary';
 // UUID generator compatible with Supabase UUID type
 const generateUUID = () => {

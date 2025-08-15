@@ -18,6 +18,8 @@ create index IF not exists profiles_rank_idx on public.profiles using btree (ran
 
 create index IF not exists profiles_username_idx on public.profiles using btree (username) TABLESPACE pg_default;
 
+create index IF not exists profiles_gender_idx on public.profiles using btree (gender) TABLESPACE pg_default;
+
 create trigger assign_rank_on_insert BEFORE INSERT on profiles for EACH row
 execute FUNCTION assign_user_rank ();
 

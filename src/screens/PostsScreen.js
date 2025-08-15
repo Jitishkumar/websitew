@@ -18,7 +18,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Video } from 'expo-av';
 import { useNavigation } from '@react-navigation/native';
 import { PostsService } from '../services/PostsService';
-import { supabase } from '../config/supabase';
+import { supabase } from '../lib/supabase';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 

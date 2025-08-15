@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { supabase } from '../config/supabase';
+import { supabase } from '../lib/supabase';
 import { Video } from 'expo-av';
 
 const { width } = Dimensions.get('window');

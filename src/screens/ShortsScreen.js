@@ -6,7 +6,7 @@ import { Video } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useVideo } from '../context/VideoContext';
-import { supabase } from '../config/supabase';
+import { supabase } from '../lib/supabase';
 import { PostsService } from '../services/PostsService';
 
 const { width, height } = Dimensions.get('window');

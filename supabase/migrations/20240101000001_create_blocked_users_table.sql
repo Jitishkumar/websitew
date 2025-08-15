@@ -1,8 +1,8 @@
 -- Create blocked_users table if it doesn't exist
 CREATE TABLE IF NOT EXISTS public.blocked_users (
   id UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
-  blocker_id UUID NOT NULL,
-  blocked_id UUID NOT NULL,
+  blocker_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  blocked_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(blocker_id, blocked_id)
 );

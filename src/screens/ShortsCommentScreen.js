@@ -19,7 +19,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { supabase } from '../config/supabase';
+import { supabase } from '../lib/supabase';
 import { PostsService } from '../services/PostsService';
 import { sendCommentNotification } from '../utils/notificationService';
 import { useNavigation } from '@react-navigation/native';

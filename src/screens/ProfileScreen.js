@@ -5,7 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Video } from 'expo-av';
 import Sidebar from '../components/Sidebar';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { supabase } from '../config/supabase';
+import { supabase } from '../lib/supabase';
 import { useAccounts } from '../context/AccountContext';
 import PostItem from '../components/PostItem';
 

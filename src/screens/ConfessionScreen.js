@@ -19,7 +19,7 @@ import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { WebView } from 'react-native-webview';
 import { decode } from 'base64-arraybuffer';
-import { supabase } from '../config/supabase';
+import { supabase } from '../lib/supabase';
 import * as Location from 'expo-location';
 import * as FileSystem from 'expo-file-system';
 import { uploadToCloudinary, deleteFromCloudinary } from '../config/cloudinary';

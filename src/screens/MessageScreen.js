@@ -19,7 +19,7 @@ import { Video } from 'expo-av';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
-import { supabase } from '../config/supabase';
+import { supabase } from '../lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMessages } from '../context/MessageContext';
@@ -219,7 +219,7 @@ const MessageScreen = () => {
       }
 
       if (settings && !settings.show_read_receipts) {
-        console.log('Read receipts are disabled for the current user.');
+        console.log('Read receipts are disabled for the current user. Not marking messages as read.');
         return;
       }
     } catch (error) {
@@ -275,9 +275,28 @@ const MessageScreen = () => {
     }
   };
   
-  const handleRealTimeUpdate = (payload) => {
+  const handleRealTimeUpdate = async (payload) => {
     if (payload.eventType === 'INSERT') {
       const newMessage = payload.new;
+      
+      // Check if the sender is blocked before processing the message
+      try {
+        const { data: blockedData, error: blockedError } = await supabase
+          .from('blocked_users')
+          .select('*')
+          .or(`blocker_id.eq.${userId},blocked_id.eq.${userId}`)
+          .eq(userId === newMessage.sender_id ? 'blocked_id' : 'blocker_id', newMessage.sender_id);
+        
+        if (blockedError) {
+          console.error('Error checking blocked status:', blockedError);
+        } else if (blockedData && blockedData.length > 0) {
+          // If the sender is blocked, don't process the message
+          console.log('Message from blocked user ignored');
+          return;
+        }
+      } catch (blockCheckError) {
+        console.error('Error checking blocked status:', blockCheckError);
+      }
       
       const formattedMessage = {
         id: newMessage.id,
@@ -338,6 +357,27 @@ const MessageScreen = () => {
             navigation.navigate('Login');
             return;
         }
+    }
+    
+    // Check if the user is blocked
+    try {
+      const { data: blockedData, error: blockedError } = await supabase
+        .from('blocked_users')
+        .select('*')
+        .or(`blocker_id.eq.${actualUserId},blocked_id.eq.${actualUserId}`)
+        .eq(actualUserId === recipientId ? 'blocker_id' : 'blocked_id', actualUserId === recipientId ? userId : recipientId);
+      
+      if (blockedError) {
+        console.error('Error checking blocked status:', blockedError);
+      } else if (blockedData && blockedData.length > 0) {
+        // If the current user has blocked the recipient or vice versa
+        setMessages([]);
+        setLoading(false);
+        Alert.alert('Blocked', 'You cannot exchange messages with this user as one of you has blocked the other.');
+        return;
+      }
+    } catch (blockCheckError) {
+      console.error('Error checking blocked status:', blockCheckError);
     }
 
     // Try to load from cache first for instant loading
@@ -401,6 +441,21 @@ const MessageScreen = () => {
     try {
       if (!userId || !conversationId) {
         console.error('Missing user ID or conversation ID');
+        return;
+      }
+      
+      // Check if the user is blocked before sending a message
+      const { data: blockedData, error: blockedError } = await supabase
+        .from('blocked_users')
+        .select('*')
+        .or(`blocker_id.eq.${userId},blocked_id.eq.${userId}`)
+        .eq(userId === recipientId ? 'blocker_id' : 'blocked_id', userId === recipientId ? userId : recipientId);
+      
+      if (blockedError) {
+        console.error('Error checking blocked status:', blockedError);
+      } else if (blockedData && blockedData.length > 0) {
+        // If the current user has blocked the recipient or vice versa
+        Alert.alert('Blocked', 'You cannot send messages to this user as one of you has blocked the other.');
         return;
       }
       
@@ -925,7 +980,7 @@ const MessageScreen = () => {
             <FlatList
               ref={flatListRef}
               data={messages}
-              keyExtractor={React.useCallback((item) => item.id.toString(), [])}
+              keyExtractor={React.useCallback((item) => `message-${item.id.toString()}`, [])}
               renderItem={renderMessage}
               style={styles.messageList}
               contentContainerStyle={styles.messageListContent}

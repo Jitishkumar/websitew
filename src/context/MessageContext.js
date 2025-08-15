@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import { supabase } from '../config/supabase';
+import { supabase } from '../lib/supabase';
 
 const MessageContext = createContext();
 
@@ -63,6 +63,23 @@ export const MessageProvider = ({ children }) => {
         return false;
       }
       
+      // Check if read receipts are enabled for the current user
+      const { data: settings, error: settingsError } = await supabase
+        .from('user_message_settings')
+        .select('show_read_receipts')
+        .eq('user_id', user.id)
+        .single();
+
+      if (settingsError && settingsError.code !== 'PGRST116') {
+        console.error('Error fetching user settings:', settingsError);
+      }
+
+      // If read receipts are disabled, don't mark messages as read
+      if (settings && !settings.show_read_receipts) {
+        console.log('Read receipts are disabled for the current user. Not marking messages as read.');
+        return true;
+      }
+      
       // Get the most recent unread message (if any)
       const { data: unreadMessages, error: fetchError } = await supabase
         .from('messages')
@@ -89,9 +106,7 @@ export const MessageProvider = ({ children }) => {
         setUnreadCount(prev => Math.max(0, prev - 1));
         console.log(`Marked latest message (${lastUnreadId}) as read in conversation: ${conversationId}`);
       }
-      return true;
-      
-      return true; // No unread messages to mark as read
+      return true; // Operation completed successfully
     } catch (error) {
       console.error('Error marking conversation as read:', error);
       return false;

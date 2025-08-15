@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, Image, Animated, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { supabase } from '../config/supabase';
+import { supabase } from '../lib/supabase';
 import * as ImagePicker from 'expo-image-picker';
 import { Video } from 'expo-av';
 import { decode } from 'base64-arraybuffer';

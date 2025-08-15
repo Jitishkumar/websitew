@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, ScrollView, Image, TouchableOpacity, ActivityIndicator, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { supabase } from '../config/supabase';
+import { supabase } from '../lib/supabase';
 import { useNavigation } from '@react-navigation/native';
 import { useMessages } from '../context/MessageContext';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -288,12 +288,39 @@ const MessagesScreen = () => {
         return;
       }
       
+      // Fetch blocked users
+      const { data: blockedUsers, error: blockedError } = await supabase
+        .from('blocked_users')
+        .select('*')
+        .or(`blocker_id.eq.${userId},blocked_id.eq.${userId}`);
+      
+      if (blockedError) {
+        console.error('Error fetching blocked users:', blockedError);
+      }
+      
+      // Create a set of blocked user IDs for quick lookup
+      const blockedUserIds = new Set();
+      if (blockedUsers && blockedUsers.length > 0) {
+        blockedUsers.forEach(block => {
+          if (block.blocker_id === userId) {
+            blockedUserIds.add(block.blocked_id);
+          } else if (block.blocked_id === userId) {
+            blockedUserIds.add(block.blocker_id);
+          }
+        });
+      }
+      
       // Group messages by conversation
       const conversationsMap = {};
       
       for (const message of messagesData) {
         // Determine the other user in the conversation
         const otherUserId = message.sender_id === userId ? message.receiver_id : message.sender_id;
+        
+        // Skip messages from blocked users
+        if (blockedUserIds.has(otherUserId)) {
+          continue;
+        }
         
         // Create a unique conversation ID
         const participants = [userId, otherUserId].sort();

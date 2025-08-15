@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, ActivityIndicator, Animated, Alert, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { supabase } from '../config/supabase';
+import { supabase } from '../lib/supabase';
 import ProfileViewBlinker from '../components/ProfileViewBlinker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useVideo } from '../context/VideoContext';
@@ -129,6 +129,9 @@ const UserProfileScreen = () => {
   const [hasPrivateAccount, setHasPrivateAccount] = useState(false);
   const [canViewPrivateContent, setCanViewPrivateContent] = useState(false);
 
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [blockReason, setBlockReason] = useState('');
+
   const loadUserProfile = async () => {
     try {
       setLoading(true);
@@ -136,8 +139,39 @@ const UserProfileScreen = () => {
       // Get current user for recording visit
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       
-      // Record profile visit if viewing someone else's profile
+      // Check if either user has blocked the other
       if (currentUser && currentUser.id !== userId) {
+        // Check if current user is blocked by profile owner
+        const { data: blockedByOwner, error: blockedError1 } = await supabase
+          .from('blocked_users')
+          .select('*')
+          .eq('blocker_id', userId)
+          .eq('blocked_id', currentUser.id)
+          .maybeSingle();
+          
+        // Check if current user has blocked profile owner
+        const { data: blockedByViewer, error: blockedError2 } = await supabase
+          .from('blocked_users')
+          .select('*')
+          .eq('blocker_id', currentUser.id)
+          .eq('blocked_id', userId)
+          .maybeSingle();
+          
+        if (blockedByOwner) {
+          setIsBlocked(true);
+          setBlockReason('This user has blocked you.');
+          setLoading(false);
+          return;
+        }
+        
+        if (blockedByViewer) {
+          setIsBlocked(true);
+          setBlockReason('You have blocked this user.');
+          setLoading(false);
+          return;
+        }
+        
+        // Record profile visit if not blocked
         const { error: visitError } = await supabase
           .from('profile_visits')
           .insert({
@@ -786,6 +820,225 @@ const UserProfileScreen = () => {
     );
   };
 
+  // Separate component for profile header to avoid nesting ScrollView and FlatList
+  const ProfileHeader = () => (
+    <View style={styles.profileSection}>
+      {/* Cover Photo */}
+      <View style={styles.coverPhotoContainer}>
+        {console.log('Rendering cover with URL:', userProfile?.cover_url)}
+        <Image
+          style={styles.coverPhoto}
+          source={userProfile?.cover_url 
+            ? { uri: userProfile.cover_url, cache: 'reload' } 
+            : require('../../assets/defaultcover.png')
+          }
+          onError={(e) => {
+            console.log('Cover photo error:', e.nativeEvent.error);
+          }}
+        />
+      </View>
+      
+      {console.log('Rendering avatar with URL:', userProfile?.avatar_url)}
+      <Image
+        style={styles.profileImage}
+        source={userProfile?.avatar_url 
+          ? { uri: userProfile.avatar_url, cache: 'reload' } 
+          : require('../../assets/defaultavatar.png')
+        }
+        onError={(e) => {
+          console.log('Avatar photo error:', e.nativeEvent.error);
+        }}
+      />
+      <Text style={styles.name}>{userProfile?.full_name || 'No name set'}</Text>
+      <View style={styles.usernameContainer}>
+        <Text style={styles.username}>@{userProfile?.username || 'username'}</Text>
+        {userProfile?.isVerified && (
+          <Ionicons name="checkmark-circle" size={20} color="#ff0000" style={styles.verifiedBadge} />
+        )}
+      </View>
+      <View style={styles.rankBadge}>
+        <Ionicons name="trophy-outline" size={16} color="#FFD700" />
+        <Text style={styles.rankNumber}>
+          {userProfile?.rank 
+            ? `Rank #${userProfile.rank} ${userProfile.rank === 1 ? '(First Member!)' : ''}`
+            : 'Rank not assigned'}
+        </Text>
+      </View>
+      {renderBio()}
+      
+      <View style={styles.buttonContainer}>
+        {/* Show follow button for all accounts, but handle private accounts differently */}
+        {followRequestStatus === 'pending' ? (
+          <TouchableOpacity 
+            style={[styles.followButton, styles.pendingButton]}
+            disabled={true}
+          >
+            <Text style={styles.followButtonText}>
+              REQUEST SENT
+            </Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity 
+            style={[
+              styles.followButton,
+              isFollowing ? styles.followingButton : {}
+            ]}
+            onPress={handleFollow}
+          >
+            <Text style={styles.followButtonText}>
+              {isFollowing ? 'FOLLOWING' : 'FOLLOW'}
+            </Text>
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity 
+          style={styles.messageButton}
+          onPress={handleMessage}
+        >
+          <Ionicons name="chatbubble-outline" size={24} color="#ff00ff" />
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.statsContainer}>
+        <View style={styles.stat}>
+          <Text style={styles.statNumber}>{canViewPrivateContent ? postsCount : hasPrivateAccount ? '•••' : postsCount}</Text>
+          <Text style={styles.statLabel}>Post</Text>
+        </View>
+        <View style={styles.stat}>
+          <Text style={styles.statNumber}>{canViewPrivateContent ? shortsCount : hasPrivateAccount ? '•••' : shortsCount}</Text>
+          <Text style={styles.statLabel}>Shorts</Text>
+        </View>
+        <TouchableOpacity style={styles.stat} onPress={handleFollowersPress}>
+          <Text style={styles.statNumber}>{canViewPrivateContent ? followersCount : hasPrivateAccount ? '•••' : followersCount}</Text>
+          <Text style={styles.statLabel}>Followers</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.stat} onPress={handleFollowingPress}>
+          <Text style={styles.statNumber}>{canViewPrivateContent ? followingCount : hasPrivateAccount ? '•••' : followingCount}</Text>
+          <Text style={styles.statLabel}>Following</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  // Tabs component
+  const TabsSection = () => (
+    <View style={styles.tabsContainer}>
+      <TouchableOpacity 
+        style={[styles.tabButton, activeTab === 'Post' && styles.activeTab]}
+        onPress={() => {
+          if (hasPrivateAccount && !canViewPrivateContent) {
+            Alert.alert(
+              'Private Account',
+              'You need to follow this account to see their posts.',
+              [{ text: 'OK' }]
+            );
+            return;
+          }
+          setActiveTab('Post');
+        }}
+      >
+        <Text style={[styles.tabButtonText, activeTab === 'Post' && styles.activeTabText]}>Post</Text>
+      </TouchableOpacity>
+      <TouchableOpacity 
+        style={[styles.tabButton, activeTab === 'Short' && styles.activeTab]}
+        onPress={() => {
+          if (hasPrivateAccount && !canViewPrivateContent) {
+            Alert.alert(
+              'Private Account',
+              'You need to follow this account to see their shorts.',
+              [{ text: 'OK' }]
+            );
+            return;
+          }
+          setActiveTab('Short');
+        }}
+      >
+        <Text style={[styles.tabButtonText, activeTab === 'Short' && styles.activeTabText]}>Shorts</Text>
+      </TouchableOpacity>
+      <TouchableOpacity 
+        style={[styles.tabButton, activeTab === 'Details' && styles.activeTab]}
+        onPress={() => setActiveTab('Details')}
+      >
+        <Text style={[styles.tabButtonText, activeTab === 'Details' && styles.activeTabText]}>Details</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  // Content for Posts and Shorts tabs
+  const ContentSection = () => {
+    if (activeTab === 'Details') {
+      return (
+        <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom }}>
+          <View style={styles.detailsSection}>
+            <View style={styles.detailItem}>
+              <Ionicons name="person-outline" size={24} color="#666" />
+              <View style={styles.detailContent}>
+                <Text style={styles.detailTitle}>About me</Text>
+                <Text style={styles.detailText}>
+                  {userProfile?.bio || 'No bio added yet'}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.detailItem}>
+              <Ionicons name="trophy-outline" size={24} color="#FFD700" />
+              <View style={styles.detailContent}>
+                <Text style={styles.detailTitle}>Member Rank</Text>
+                <Text style={styles.detailText}>
+                  {userProfile?.rank 
+                    ? `Member #${userProfile.rank} on Flexx`
+                    : 'Rank not assigned yet'}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </ScrollView>
+      );
+    }
+
+    const data = activeTab === 'Post' ? memoizedPosts : memoizedShorts;
+    
+    if (loadingContent) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#ff00ff" />
+        </View>
+      );
+    }
+    
+    return data.length > 0 ? (
+      <FlatList
+        data={data}
+        renderItem={renderGridItem}
+        numColumns={3}
+        keyExtractor={item => item.id.toString()}
+        columnWrapperStyle={styles.gridRow}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.gridContainer, { paddingBottom: insets.bottom }]}
+        ListHeaderComponent={<>
+          <ProfileHeader />
+          <TabsSection />
+          {hasPrivateAccount && !canViewPrivateContent && (
+            <View style={styles.privateAccountMessage}>
+              <Ionicons name="lock-closed" size={40} color="#ff00ff" />
+              <Text style={styles.privateAccountTitle}>This Account is Private</Text>
+              <Text style={styles.privateAccountText}>Follow this account to see their posts and shorts.</Text>
+            </View>
+          )}
+        </>}
+      />
+    ) : (
+      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom }}>
+        <ProfileHeader />
+        <TabsSection />
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>
+            {activeTab === 'Post' ? 'No posts yet' : 'No shorts yet'}
+          </Text>
+        </View>
+      </ScrollView>
+    );
+  };
+
   return (
     <View style={styles.container}>
       <ProfileViewBlinker 
@@ -804,155 +1057,62 @@ const UserProfileScreen = () => {
         <View style={[styles.container, styles.centered]}>
           <ActivityIndicator size="large" color="#ff00ff" />
         </View>
+      ) : isBlocked ? (
+        <View style={[styles.container, styles.centered]}>
+          <Ionicons name="ban" size={60} color="#ff00ff" />
+          <Text style={styles.blockedTitle}>Profile Unavailable</Text>
+          <Text style={styles.blockedText}>{blockReason}</Text>
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Text style={styles.backButtonText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
       ) : userProfile ? (
-        <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom }}>
-          <View style={styles.profileSection}>
-            {/* Cover Photo */}
-            <View style={styles.coverPhotoContainer}>
-              {console.log('Rendering cover with URL:', userProfile?.cover_url)}
-              <Image
-                style={styles.coverPhoto}
-                source={userProfile?.cover_url 
-                  ? { uri: userProfile.cover_url, cache: 'reload' } 
-                  : require('../../assets/defaultcover.png')
-                }
-                onError={(e) => {
-                  console.log('Cover photo error:', e.nativeEvent.error);
-                }}
-              />
-            </View>
-            
-            {console.log('Rendering avatar with URL:', userProfile?.avatar_url)}
-            <Image
-              style={styles.profileImage}
-              source={userProfile?.avatar_url 
-                ? { uri: userProfile.avatar_url, cache: 'reload' } 
-                : require('../../assets/defaultavatar.png')
-              }
-              onError={(e) => {
-                console.log('Avatar photo error:', e.nativeEvent.error);
-              }}
-            />
-            <Text style={styles.name}>{userProfile?.full_name || 'No name set'}</Text>
-            <View style={styles.usernameContainer}>
-              <Text style={styles.username}>@{userProfile?.username || 'username'}</Text>
-              {userProfile?.isVerified && (
-                <Ionicons name="checkmark-circle" size={20} color="#ff0000" style={styles.verifiedBadge} />
-              )}
-            </View>
-            <View style={styles.rankBadge}>
-              <Ionicons name="trophy-outline" size={16} color="#FFD700" />
-              <Text style={styles.rankNumber}>
-                {userProfile?.rank 
-                  ? `Rank #${userProfile.rank} ${userProfile.rank === 1 ? '(First Member!)' : ''}`
-                  : 'Rank not assigned'}
-              </Text>
-            </View>
-            {renderBio()}
-            
-            <View style={styles.buttonContainer}>
-              {/* Show follow button for all accounts, but handle private accounts differently */}
-              {followRequestStatus === 'pending' ? (
-                <TouchableOpacity 
-                  style={[styles.followButton, styles.pendingButton]}
-                  disabled={true}
-                >
-                  <Text style={styles.followButtonText}>
-                    REQUEST SENT
+        activeTab === 'Details' ? (
+          <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom }}>
+            <ProfileHeader />
+            <TabsSection />
+            <View style={styles.detailsSection}>
+              <View style={styles.detailItem}>
+                <Ionicons name="person-outline" size={24} color="#666" />
+                <View style={styles.detailContent}>
+                  <Text style={styles.detailTitle}>About me</Text>
+                  <Text style={styles.detailText}>
+                    {userProfile?.bio || 'No bio added yet'}
                   </Text>
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity 
-                  style={[
-                    styles.followButton,
-                    isFollowing ? styles.followingButton : {}
-                  ]}
-                  onPress={handleFollow}
-                >
-                  <Text style={styles.followButtonText}>
-                    {isFollowing ? 'FOLLOWING' : 'FOLLOW'}
+                </View>
+              </View>
+
+              <View style={styles.detailItem}>
+                <Ionicons name="trophy-outline" size={24} color="#FFD700" />
+                <View style={styles.detailContent}>
+                  <Text style={styles.detailTitle}>Member Rank</Text>
+                  <Text style={styles.detailText}>
+                    {userProfile?.rank 
+                      ? `Member #${userProfile.rank} on Flexx`
+                      : 'Rank not assigned yet'}
                   </Text>
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity 
-                style={styles.messageButton}
-                onPress={handleMessage}
-              >
-                <Ionicons name="chatbubble-outline" size={24} color="#ff00ff" />
-              </TouchableOpacity>
+                </View>
+              </View>
             </View>
-  
-            <View style={styles.statsContainer}>
-            <View style={styles.stat}>
-              <Text style={styles.statNumber}>{canViewPrivateContent ? postsCount : hasPrivateAccount ? '•••' : postsCount}</Text>
-              <Text style={styles.statLabel}>Post</Text>
-            </View>
-            <View style={styles.stat}>
-              <Text style={styles.statNumber}>{canViewPrivateContent ? shortsCount : hasPrivateAccount ? '•••' : shortsCount}</Text>
-              <Text style={styles.statLabel}>Shorts</Text>
-            </View>
-            <TouchableOpacity style={styles.stat} onPress={handleFollowersPress}>
-              <Text style={styles.statNumber}>{canViewPrivateContent ? followersCount : hasPrivateAccount ? '•••' : followersCount}</Text>
-              <Text style={styles.statLabel}>Followers</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.stat} onPress={handleFollowingPress}>
-              <Text style={styles.statNumber}>{canViewPrivateContent ? followingCount : hasPrivateAccount ? '•••' : followingCount}</Text>
-              <Text style={styles.statLabel}>Following</Text>
-            </TouchableOpacity>
-          </View>
-          </View>
-  
-          <View style={styles.tabsContainer}>
-            <TouchableOpacity 
-              style={[styles.tabButton, activeTab === 'Post' && styles.activeTab]}
-              onPress={() => {
-                if (hasPrivateAccount && !canViewPrivateContent) {
-                  Alert.alert(
-                    'Private Account',
-                    'You need to follow this account to see their posts.',
-                    [{ text: 'OK' }]
-                  );
-                  return;
-                }
-                setActiveTab('Post');
-              }}
-            >
-              <Text style={[styles.tabButtonText, activeTab === 'Post' && styles.activeTabText]}>Post</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.tabButton, activeTab === 'Short' && styles.activeTab]}
-              onPress={() => {
-                if (hasPrivateAccount && !canViewPrivateContent) {
-                  Alert.alert(
-                    'Private Account',
-                    'You need to follow this account to see their shorts.',
-                    [{ text: 'OK' }]
-                  );
-                  return;
-                }
-                setActiveTab('Short');
-              }}
-            >
-              <Text style={[styles.tabButtonText, activeTab === 'Short' && styles.activeTabText]}>Shorts</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.tabButton, activeTab === 'Details' && styles.activeTab]}
-              onPress={() => setActiveTab('Details')}
-            >
-              <Text style={[styles.tabButtonText, activeTab === 'Details' && styles.activeTabText]}>Details</Text>
-            </TouchableOpacity>
-          </View>
-          
-          {hasPrivateAccount && !canViewPrivateContent && (
-            <View style={styles.privateAccountMessage}>
-              <Ionicons name="lock-closed" size={40} color="#ff00ff" />
-              <Text style={styles.privateAccountTitle}>This Account is Private</Text>
-              <Text style={styles.privateAccountText}>Follow this account to see their posts and shorts.</Text>
-            </View>
-          )}
-          
-          {(!hasPrivateAccount || canViewPrivateContent) && renderContent()}
-        </ScrollView>
+          </ScrollView>
+        ) : (
+          (!hasPrivateAccount || canViewPrivateContent) ? (
+            <ContentSection />
+          ) : (
+            <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom }}>
+              <ProfileHeader />
+              <TabsSection />
+              <View style={styles.privateAccountMessage}>
+                <Ionicons name="lock-closed" size={40} color="#ff00ff" />
+                <Text style={styles.privateAccountTitle}>This Account is Private</Text>
+                <Text style={styles.privateAccountText}>Follow this account to see their posts and shorts.</Text>
+              </View>
+            </ScrollView>
+          )
+        )
       ) : (
         <View style={[styles.container, styles.centered]}>
           <Text style={styles.errorText}>Could not load profile</Text>
@@ -986,10 +1146,64 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+    minHeight: 200,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+  },
+  detailsSection: {
+    padding: 20,
+  },
+  detailItem: {
+    flexDirection: 'row',
+    marginBottom: 20,
+    alignItems: 'flex-start',
+  },
+  detailContent: {
+    marginLeft: 15,
+    flex: 1,
+  },
+  detailTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 5,
+  },
+  detailText: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
+  },
   errorText: {
     color: 'white',
     fontSize: 18,
     marginBottom: 20,
+  },
+  blockedTitle: {
+    color: 'white',
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginTop: 20,
+    marginBottom: 10,
+  },
+  blockedText: {
+    color: '#999',
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 30,
+    paddingHorizontal: 40,
   },
   backButton: {
     backgroundColor: '#ff00ff',
@@ -1306,6 +1520,24 @@ const styles = StyleSheet.create({
   detailText: {
     color: '#faf7f8',
     fontSize: 14,
+  },
+  // New styles for the refactored components
+  bio: {
+    fontSize: 16,
+    color: '#333',
+    textAlign: 'center',
+    marginTop: 15,
+    paddingHorizontal: 20,
+  },
+  bioExpanded: {
+    marginTop: 5,
+  },
+  readMoreButton: {
+    marginTop: 5,
+  },
+  readMoreText: {
+    color: '#ff00ff',
+    fontWeight: 'bold',
   },
 });
 

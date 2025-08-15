@@ -22,7 +22,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useVideo } from '../context/VideoContext';
 import { PostsService } from '../services/PostsService';
-import { supabase } from '../config/supabase';
+import { supabase } from '../lib/supabase';
 import { Alert } from 'react-native';
 import CommentScreen from '../screens/CommentScreen';
 

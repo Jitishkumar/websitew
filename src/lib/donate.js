@@ -1,6 +1,6 @@
 import RazorpayCheckout from 'react-native-razorpay';
 import { Alert } from 'react-native';
-import { supabase } from '../config/supabase';
+import { supabase } from './supabase';
 import { RAZORPAY_KEY_ID } from '@env';
 
 export const donate = async (amount) => {

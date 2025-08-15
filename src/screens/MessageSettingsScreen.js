@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Switch, Alert, ActivityIndica
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { supabase } from '../config/supabase';
+import { supabase } from '../lib/supabase';
 
 const MessageSettingsScreen = () => {
   const navigation = useNavigation();
