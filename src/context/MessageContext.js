@@ -5,7 +5,19 @@ const MessageContext = createContext();
 
 export const MessageProvider = ({ children }) => {
   const [unreadCount, setUnreadCount] = useState(0);
+  const [onlineStatus, setOnlineStatus] = useState({});
   const [loading, setLoading] = useState(true);
+
+  const updateCurrentUserLastActive = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.rpc('update_user_last_active', { user_id: user.id });
+      }
+    } catch (error) {
+      console.error('Error updating current user last active:', error);
+    }
+  };
 
   // Fetch unread messages count
   const fetchUnreadCount = async () => {
@@ -113,7 +125,49 @@ export const MessageProvider = ({ children }) => {
     }
   };
 
-  // Mark all messages as read
+  // Fetch user's online status
+  const fetchOnlineStatus = async (userId) => {
+    if (!userId) return;
+
+    try {
+      const { data, error } = await supabase.rpc('get_user_online_status', { p_user_id: userId });
+      if (error) throw error;
+
+      // Log the response for debugging
+      console.log('Online status response for user', userId, ':', data);
+      
+      if (data && data.length > 0) {
+        const statusData = data[0];
+        
+        // Check if the user is online based on the is_online flag
+        if (statusData.is_online) {
+          setOnlineStatus(prevStatus => ({
+            ...prevStatus,
+            [userId]: 'online',
+          }));
+        } else if (statusData.last_active_time) {
+          // If not online but has last_active_time, show when they were last active
+          setOnlineStatus(prevStatus => ({
+            ...prevStatus,
+            [userId]: statusData.last_active_time,
+          }));
+        } else {
+          setOnlineStatus(prevStatus => ({
+            ...prevStatus,
+            [userId]: null,
+          }));
+        }
+      } else {
+        setOnlineStatus(prevStatus => ({
+          ...prevStatus,
+          [userId]: null,
+        }));
+      }
+    } catch (error) {
+      console.error('Error fetching online status:', error);
+    }
+  };
+
   const markAllAsRead = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -142,6 +196,7 @@ export const MessageProvider = ({ children }) => {
   // Set up real-time subscription for new messages
   useEffect(() => {
     let subscription;
+    let settingsSubscription;
 
     const setupSubscription = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -174,32 +229,37 @@ export const MessageProvider = ({ children }) => {
             }
           })
           .subscribe();
+
+        // Set up subscription for user settings changes to track online status
+        settingsSubscription = supabase
+          .channel('user-settings-changes')
+          .on('postgres_changes', {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'user_message_settings',
+          }, (payload) => {
+            // Only fetch online status if show_online_status was changed or last_active was updated
+            if (payload.old && payload.new && 
+                (payload.old.show_online_status !== payload.new.show_online_status || 
+                 payload.old.last_active !== payload.new.last_active)) {
+              console.log('User settings changed, updating online status for:', payload.new.user_id);
+              fetchOnlineStatus(payload.new.user_id);
+            }
+          })
+          .subscribe();
+
       }
     };
 
     setupSubscription();
 
-    // Cleanup subscription on unmount
     return () => {
       if (subscription) {
         supabase.removeChannel(subscription);
       }
-    };
-  }, []);
-
-  // Refresh unread count periodically
-  useEffect(() => {
-    // Initial fetch
-    fetchUnreadCount();
-    
-    // Set up periodic refresh (every 60 seconds)
-    const intervalId = setInterval(() => {
-      fetchUnreadCount();
-    }, 60000);
-    
-    // Clean up interval on unmount
-    return () => {
-      clearInterval(intervalId);
+      if (settingsSubscription) {
+        supabase.removeChannel(settingsSubscription);
+      }
     };
   }, []);
 
@@ -212,6 +272,9 @@ export const MessageProvider = ({ children }) => {
         markMessageAsRead,
         markConversationAsRead,
         markAllAsRead,
+        onlineStatus,
+        fetchOnlineStatus,
+        updateCurrentUserLastActive,
       }}
     >
       {children}

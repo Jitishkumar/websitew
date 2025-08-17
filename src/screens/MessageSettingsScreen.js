@@ -10,9 +10,9 @@ const MessageSettingsScreen = () => {
   const route = useRoute();
   const { recipientId, recipientName } = route.params;
 
-  const [isOnlineVisible, setIsOnlineVisible] = useState(false);
+  const [isOnlineVisible, setIsOnlineVisible] = useState(true);
   const [isBlocked, setIsBlocked] = useState(false);
-  const [showReadReceipts, setShowReadReceipts] = useState(false);
+  const [showReadReceipts, setShowReadReceipts] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [userId, setUserId] = useState(null);
@@ -57,16 +57,16 @@ const MessageSettingsScreen = () => {
           console.error('Error fetching settings:', settingsError);
         } else if (settings) {
           setSettingsId(settings.id);
-          setIsOnlineVisible(settings.show_online_status ?? false);
-          setShowReadReceipts(settings.show_read_receipts ?? false);
+          setIsOnlineVisible(settings.show_online_status ?? true);
+          setShowReadReceipts(settings.show_read_receipts ?? true);
         } else {
           // Create default settings if none exist
           const { data: newSettings, error: createError } = await supabase
             .from('user_message_settings')
             .insert({
               user_id: user.id,
-              show_online_status: false,
-              show_read_receipts: false
+              show_online_status: true,
+              show_read_receipts: true
             })
             .select()
             .single();
@@ -156,12 +156,30 @@ const MessageSettingsScreen = () => {
     
     try {
       setSaving(true);
+      
+      // If we're updating online status, also update last_active
+      const finalUpdates = { ...updates };
+      if ('show_online_status' in updates) {
+        finalUpdates.last_active = new Date().toISOString();
+      }
+      
       const { error } = await supabase
         .from('user_message_settings')
-        .update(updates)
+        .update(finalUpdates)
         .eq('id', settingsId);
         
       if (error) throw error;
+      
+      // If we're enabling online status, make an additional call to update last_active
+      // This ensures the trigger fires and other users see the status change immediately
+      if (updates.show_online_status === true) {
+        try {
+          await supabase.rpc('update_user_last_active', { user_id: userId });
+        } catch (rpcError) {
+          console.error('Error updating last_active via RPC:', rpcError);
+          // Non-critical error, don't throw
+        }
+      }
     } catch (error) {
       console.error('Error updating settings:', error);
       throw error;
@@ -210,16 +228,7 @@ const MessageSettingsScreen = () => {
           </View>
         ) : (
           <>
-            <View style={styles.settingItem}>
-              <Text style={styles.settingText}>Show when you are online</Text>
-              <Switch
-                value={isOnlineVisible}
-                onValueChange={handleOnlineVisibilityToggle}
-                trackColor={{ false: '#767577', true: '#81b0ff' }}
-                thumbColor={isOnlineVisible ? '#f5dd4b' : '#f4f3f4'}
-                disabled={saving || isBlocked}
-              />
-            </View>
+            
             <View style={styles.settingItem}>
               <Text style={styles.settingText}>Show that you read the message</Text>
               <Switch

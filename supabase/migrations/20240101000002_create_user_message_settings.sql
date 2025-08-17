@@ -16,15 +16,20 @@ CREATE INDEX IF NOT EXISTS idx_user_message_settings_user_id ON public.user_mess
 ALTER TABLE public.user_message_settings ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for user_message_settings
--- Users can view their own settings
-CREATE POLICY "Users can view their own message settings" ON public.user_message_settings
-  FOR SELECT USING (auth.uid() = user_id);
 
--- Users can insert their own settings
+-- Allow users to view each other's settings for features like online status and read receipts.
+DROP POLICY IF EXISTS "Users can view their own message settings" ON public.user_message_settings;
+DROP POLICY IF EXISTS "Users can view other users message settings" ON public.user_message_settings;
+CREATE POLICY "Users can view other users message settings" ON public.user_message_settings
+  FOR SELECT USING (true);
+
+-- Users can only insert their own settings.
+DROP POLICY IF EXISTS "Users can insert their own message settings" ON public.user_message_settings;
 CREATE POLICY "Users can insert their own message settings" ON public.user_message_settings
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
--- Users can update their own settings
+-- Users can only update their own settings.
+DROP POLICY IF EXISTS "Users can update their own message settings" ON public.user_message_settings;
 CREATE POLICY "Users can update their own message settings" ON public.user_message_settings
   FOR UPDATE USING (auth.uid() = user_id);
 
@@ -57,3 +62,22 @@ BEGIN
   WHERE ums.user_id = p_user_id;
 END;
 $$ LANGUAGE plpgsql;
+
+-- Function to manually update a user's last_active timestamp
+CREATE OR REPLACE FUNCTION public.update_user_last_active(user_id UUID)
+RETURNS VOID AS $$
+BEGIN
+  UPDATE public.user_message_settings
+  SET last_active = NOW()
+  WHERE user_id = update_user_last_active.user_id;
+END;
+$$ LANGUAGE plpgsql;
+
+
+
+
+
+
+
+
+

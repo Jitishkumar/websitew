@@ -37,10 +37,10 @@ const MessageScreen = () => {
   const route = useRoute();
   const { recipientId, recipientName = "Chat", recipientAvatar } = route.params;
   const flatListRef = useRef(null);
-  const { markConversationAsRead, fetchUnreadCount } = useMessages();
-  const [recipientOnlineStatus, setRecipientOnlineStatus] = useState(null);
-  const [recipientReadReceipts, setRecipientReadReceipts] = useState(true); // Default to true
-  const [currentUserReadReceipts, setCurrentUserReadReceipts] = useState(true); // Default to true
+  const { markConversationAsRead, fetchUnreadCount, onlineStatus, updateCurrentUserLastActive } = useMessages();
+  const recipientOnlineStatus = onlineStatus[recipientId];
+  const [recipientReadReceipts, setRecipientReadReceipts] = useState(true);
+  const [currentUserReadReceipts, setCurrentUserReadReceipts] = useState(true);
   
   // Use refs to prevent multiple calls
   const isMarkingAsRead = useRef(false);
@@ -74,8 +74,7 @@ const MessageScreen = () => {
         setConversationId(convId);
         
         await loadMessages(convId, user.id);
-        await fetchRecipientSettings(recipientId);
-        await fetchCurrentUserReadReceipts(user.id);
+        fetchReadReceiptsSettings(user.id, recipientId);
       } catch (error) {
         console.error('Error setting up conversation:', error);
       }
@@ -84,49 +83,44 @@ const MessageScreen = () => {
     setupConversation();
   }, [recipientId]);
 
-  const fetchCurrentUserReadReceipts = async (currentUserId) => {
+  const fetchReadReceiptsSettings = async (currentUserId, recipientUserId) => {
     try {
-      const { data, error } = await supabase
+      const { data: currentUserData, error: currentUserError } = await supabase
         .from('user_message_settings')
         .select('show_read_receipts')
         .eq('user_id', currentUserId)
         .single();
 
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error fetching current user read receipts:', error);
-      } else if (data) {
-        setCurrentUserReadReceipts(data.show_read_receipts);
+      if (currentUserError && currentUserError.code !== 'PGRST116') {
+        console.error('Error fetching current user read receipts:', currentUserError);
+      } else if (currentUserData) {
+        setCurrentUserReadReceipts(currentUserData.show_read_receipts);
       }
-    } catch (error) {
-      console.error('Error in fetchCurrentUserReadReceipts:', error);
-    }
-  };
 
-  const fetchRecipientSettings = async (recipientId) => {
-    try {
-      const { data, error } = await supabase
+      const { data: recipientUserData, error: recipientUserError } = await supabase
         .from('user_message_settings')
-        .select('show_online_status, show_read_receipts, last_active')
-        .eq('user_id', recipientId)
+        .select('show_read_receipts')
+        .eq('user_id', recipientUserId)
         .single();
 
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error fetching recipient settings:', error);
-      } else if (data) {
-        const isOnline = (new Date() - new Date(data.last_active)) < 300000 && data.show_online_status;
-        setRecipientOnlineStatus(isOnline ? 'online' : data.last_active);
-        setRecipientReadReceipts(data.show_read_receipts);
+      if (recipientUserError && recipientUserError.code !== 'PGRST116') {
+        console.error('Error fetching recipient read receipts:', recipientUserError);
+      } else if (recipientUserData) {
+        setRecipientReadReceipts(recipientUserData.show_read_receipts);
       }
     } catch (error) {
-      console.error('Error in fetchRecipientSettings:', error);
+      console.error('Error in fetchReadReceiptsSettings:', error);
     }
   };
+
+
 
   // Set up focus listener
   useEffect(() => {
     if (!conversationId || !userId) return;
     
     const unsubscribe = navigation.addListener('focus', () => {
+      updateCurrentUserLastActive();
       if (!hasMarkedOnFocus.current && !isMarkingAsRead.current) {
         console.log('Screen focused, marking messages as read');
         markMessagesAsReadOnce(userId, conversationId);
@@ -140,6 +134,20 @@ const MessageScreen = () => {
     
     return unsubscribe;
   }, [navigation, conversationId, userId]);
+  
+  // Periodically update user's last active status while on message screen
+  useEffect(() => {
+    // Update immediately when component mounts
+    updateCurrentUserLastActive();
+    
+    // Then update every 60 seconds
+    const interval = setInterval(() => {
+      updateCurrentUserLastActive();
+    }, 60000); // 60 seconds
+    
+    // Clean up interval on unmount
+    return () => clearInterval(interval);
+  }, []);
 
   // Reset the focus flag when leaving the screen
   useEffect(() => {
@@ -166,26 +174,18 @@ const MessageScreen = () => {
       })
       .subscribe();
 
-    const settingsSubscription = supabase
-      .channel(`user_message_settings_${recipientId}_${Date.now()}`)
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'user_message_settings',
-        filter: `user_id=eq.${recipientId}`
-      }, (payload) => {
-        const { new: newSettings } = payload;
-        const isOnline = (new Date() - new Date(newSettings.last_active)) < 300000 && newSettings.show_online_status;
-        setRecipientOnlineStatus(isOnline ? 'online' : newSettings.last_active);
-        setRecipientReadReceipts(newSettings.show_read_receipts);
-      })
-      .subscribe();
-      
     return () => {
       supabase.removeChannel(messageSubscription);
-      supabase.removeChannel(settingsSubscription);
     };
   }, [conversationId, userId]);
+
+
+
+
+
+
+
+
 
   // Request permissions
   useEffect(() => {
@@ -759,7 +759,7 @@ const MessageScreen = () => {
           { 
             text: 'Delete', 
             style: 'destructive', 
-            onPress: () => deleteMessage(item.id) 
+            onPress: () => deleteMessage(item.id, item.cloudinary_public_id, item.media_type) 
           }
         ],
         { cancelable: true }
@@ -858,15 +858,43 @@ const MessageScreen = () => {
   };
 
   const formatLastActive = (lastActive) => {
-    if (!lastActive) return '';
+    // Handle null, undefined, or empty array cases
+    if (!lastActive || Array.isArray(lastActive)) {
+      console.log('Invalid lastActive value:', lastActive, 'Type:', typeof lastActive, 'Is Array:', Array.isArray(lastActive));
+      return '';
+    }
+
+    if (lastActive === 'online') {
+      return 'Active now';
+    }
+
     const now = new Date();
     const lastActiveDate = new Date(lastActive);
-    const diffSeconds = Math.floor((now - lastActiveDate) / 1000);
 
-    if (diffSeconds < 60) return `Active now`;
-    if (diffSeconds < 3600) return `Active ${Math.floor(diffSeconds / 60)}m ago`;
-    if (diffSeconds < 86400) return `Active ${Math.floor(diffSeconds / 3600)}h ago`;
-    return `Active ${Math.floor(diffSeconds / 86400)}d ago`;
+    if (isNaN(lastActiveDate.getTime())) {
+      console.error('Invalid date format for lastActive:', lastActive, 'Type:', typeof lastActive);
+      return '';
+    }
+
+    const diffInSeconds = Math.floor((now - lastActiveDate) / 1000);
+
+    if (diffInSeconds < 300) {
+      return 'Active now';
+    }
+
+    const diffInMinutes = Math.floor(diffInSeconds / 60);
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    const diffInDays = Math.floor(diffInHours / 24);
+
+    if (diffInDays > 0) {
+      return `Last seen on ${lastActiveDate.toLocaleDateString()}`;
+    } else if (diffInHours > 0) {
+      return `Last seen ${diffInHours}h ago`;
+    } else if (diffInMinutes > 0) {
+      return `Last seen ${diffInMinutes}m ago`;
+    } else {
+      return 'Last seen just now';
+    }
   };
 
   const MediaPickerModal = () => (
@@ -957,11 +985,13 @@ const MessageScreen = () => {
                 />
                 <TouchableOpacity onPress={() => navigation.navigate('MessageSettings', { recipientId, recipientName })}>
                 <View>
-                  <Text style={styles.headerTitle}>{getDisplayName()}</Text>
-                  {recipientOnlineStatus && (
+                  <Text style={styles.headerTitle} numberOfLines={1} ellipsizeMode="tail">{getDisplayName()}</Text>
+                  {recipientOnlineStatus ? (
                     <Text style={styles.onlineStatusText}>
-                      {recipientOnlineStatus === 'online' ? 'Active now' : formatLastActive(recipientOnlineStatus)}
+                      {formatLastActive(recipientOnlineStatus)}
                     </Text>
+                  ) : (
+                    <Text style={styles.onlineStatusText}>Flexx</Text>
                   )}
                 </View>
               </TouchableOpacity>
@@ -1181,7 +1211,8 @@ const styles = StyleSheet.create({
   },
   onlineStatusText: {
     fontSize: 12,
-    color: '#999',
+    color: '#66ccff',
+    marginTop: 2,
   },
   headerActions: {
     flexDirection: 'row',
