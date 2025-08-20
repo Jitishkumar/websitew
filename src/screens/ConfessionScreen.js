@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -12,10 +12,12 @@ import {
   Switch,
   ActivityIndicator,
   Platform,
-  Alert
+  Alert,
+  Dimensions
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { WebView } from 'react-native-webview';
 import { decode } from 'base64-arraybuffer';
@@ -44,6 +46,24 @@ const ConfessionScreen = () => {
   const [userLocation, setUserLocation] = useState(null);
   const [locationPermission, setLocationPermission] = useState(null);
   const [searchError, setSearchError] = useState(null);
+  const [locationProfileImage, setLocationProfileImage] = useState(null);
+  const [showLocationProfileModal, setShowLocationProfileModal] = useState(false);
+  const [showAddPlaceModal, setShowAddPlaceModal] = useState(false);
+  const [newPlace, setNewPlace] = useState({
+    type: 'institute', // Default type
+    name: '',
+    city: '',
+    district: '',
+    state: '',
+    country: ''
+  });
+  const [searchTimeout, setSearchTimeout] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [showLikesModal, setShowLikesModal] = useState(false);
+  const [showCommentModal, setShowCommentModal] = useState(false);
+  const [selectedConfessionId, setSelectedConfessionId] = useState(null);
+  const [likesList, setLikesList] = useState([]);
+  const [loadingLikes, setLoadingLikes] = useState(false);
 
   // Request location permission and get current location
   useEffect(() => {
@@ -69,6 +89,103 @@ const ConfessionScreen = () => {
     };
   }, [searchTimeout]);
 
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setCurrentUser(user);
+    };
+    getCurrentUser();
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (selectedLocation) {
+        console.log('Screen focused, refreshing confessions for:', selectedLocation.display_name);
+        refreshConfessions();
+      }
+    }, [selectedLocation])
+  );
+
+  useEffect(() => {
+    if (!selectedLocation || !selectedLocation.place_id) return;
+
+    let locationId = selectedLocation.place_id;
+    if (selectedLocation.is_custom && typeof locationId === 'string' && locationId.startsWith('custom_')) {
+      locationId = locationId.replace('custom_', '');
+    }
+
+    console.log('Setting up real-time subscription for location:', locationId);
+    
+    // Create a channel without filter to catch all confession changes
+    const channel = supabase
+      .channel('confessions-channel')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'confessions',
+          // Remove filter to catch all changes and filter manually
+        },
+        (payload) => {
+          console.log('Realtime update received:', payload);
+          
+          // Get the location name from the selected location
+          let locationName = selectedLocation?.display_name || 'Gurugram, Haryana, India';
+          
+          // Standardize Gurugram location name
+          if (locationName.toLowerCase().includes('gurugram') || 
+              locationName.toLowerCase().includes('gurgaon')) {
+            locationName = 'Gurugram, Haryana, India';
+          }
+          
+          // Check if this update is relevant to our current location by location_name
+          let payloadLocationName = payload.new?.location_name;
+          
+          // Standardize payload location name if it's Gurugram
+          if (payloadLocationName && 
+              (payloadLocationName.toLowerCase().includes('gurugram') || 
+               payloadLocationName.toLowerCase().includes('gurgaon'))) {
+            payloadLocationName = 'Gurugram, Haryana, India';
+          }
+          
+          console.log('Comparing location names:', {
+            payloadLocationName,
+            locationName,
+            isMatch: payloadLocationName === locationName
+          });
+          
+          // Only refresh if this update is for our current location name
+          if (payloadLocationName === locationName) {
+            console.log('Refreshing confessions due to relevant update');
+            refreshConfessions();
+          } else if (payloadLocationName && locationName) {
+            // Try partial match (first part of location name)
+            const payloadMainLocation = payloadLocationName.split(',')[0].trim();
+            const currentMainLocation = locationName.split(',')[0].trim();
+            
+            if (payloadMainLocation === currentMainLocation) {
+              console.log('Refreshing confessions due to partial location name match');
+              refreshConfessions();
+            }
+          }
+        }
+      )
+      .subscribe((status, err) => {
+        if (status === 'SUBSCRIBED') {
+          console.log(`Subscribed to realtime updates for location ${locationId}`);
+        }
+        if (status === 'CHANNEL_ERROR') {
+          console.error('Realtime subscription error:', err);
+        }
+      });
+
+    return () => {
+      console.log(`Unsubscribing from realtime updates for location ${locationId}`);
+      supabase.removeChannel(channel);
+    };
+  }, [selectedLocation, refreshConfessions]);
+
   const getMapUrl = () => {
     const lat = mapRegion.latitude;
     const lon = mapRegion.longitude;
@@ -82,19 +199,6 @@ const ConfessionScreen = () => {
     }
     return url;
   };
-
-  const [showAddPlaceModal, setShowAddPlaceModal] = useState(false);
-  const [newPlace, setNewPlace] = useState({
-    type: 'institute', // Default type
-    name: '',
-    city: '',
-    district: '',
-    state: '',
-    country: ''
-  });
-
-  // Add a reference to store the search timeout
-  const [searchTimeout, setSearchTimeout] = useState(null);
 
   const searchLocations = async (query) => {
     if (query.length < 3) {
@@ -308,23 +412,21 @@ const ConfessionScreen = () => {
     loadConfessions(locationId);
   };
 
-  
   // Add a refresh function to reload confessions
-  const refreshConfessions = () => {
+  const refreshConfessions = useCallback(() => {
     if (selectedLocation && selectedLocation.place_id) {
       // Handle custom place IDs consistently
       let locationId = selectedLocation.place_id;
       if (selectedLocation.is_custom && typeof locationId === 'string' && locationId.startsWith('custom_')) {
         locationId = locationId.replace('custom_', '');
       }
+      console.log('Refreshing confessions for location:', locationId);
       loadConfessions(locationId);
     } else {
       console.warn('Cannot refresh: No location selected or invalid location');
     }
-  };
+  }, [selectedLocation]);
 
-  // Mode state is already declared at the top of the component
-  
   const loadConfessions = async (locationId) => {
     setLoading(true);
     try {
@@ -340,9 +442,18 @@ const ConfessionScreen = () => {
       const cleanLocationId = typeof locationId === 'string' && locationId.startsWith('custom_') ? 
         locationId.replace('custom_', '') : locationId;
   
-      console.log('Loading confessions for location:', { originalId: locationId, cleanId: cleanLocationId });
+      console.log('Loading confessions for location:', { originalId: locationId, cleanId: cleanLocationId, type: typeof locationId });
+      
+      // First try a simple query to see all confessions in the table (for debugging)
+      const { data: allConfessions, error: allConfessionsError } = await supabase
+        .from('confessions')
+        .select('id, location_id')
+        .limit(10);
+        
+      console.log('Debug - Sample of all confessions:', allConfessions);
+      console.log('Debug - Error checking all confessions:', allConfessionsError);
   
-      // First get confessions - disable caching to ensure we get the latest data
+      // Now get confessions for this location - disable caching to ensure we get the latest data
       let query = supabase
         .from('confessions')
         .select(`
@@ -353,6 +464,7 @@ const ConfessionScreen = () => {
           location_name,
           content,
           media,
+          location_profile_image,
           is_anonymous,
           likes_count,
           comments_count,
@@ -362,10 +474,61 @@ const ConfessionScreen = () => {
         .order('created_at', { ascending: false })
         .limit(50); // Limit to latest 50 confessions
 
-      // Handle both original and clean location IDs
-      query = query.or(`location_id.eq.${locationId},location_id.eq.${cleanLocationId}`);
+      // Get the location name from the selected location
+      let locationName = selectedLocation?.display_name || 'Gurugram, Haryana, India';
+      
+      // Standardize Gurugram location name
+      if (locationName.toLowerCase().includes('gurugram') || 
+          locationName.toLowerCase().includes('gurgaon')) {
+        locationName = 'Gurugram, Haryana, India';
+      }
+      
+      console.log('Debug - Searching by standardized location_name:', locationName);
+      
+      // Search by location_name instead of location_id
+      query = query.eq('location_name', locationName);
+      
+      console.log('Debug - Query is now searching by location_name');
       
       const { data: confessionsData, error: confessionsError } = await query;
+      
+      // If no results, try a more general approach
+      if (!confessionsError && (!confessionsData || confessionsData.length === 0)) {
+        console.log('No results with location_name exact match, trying partial match');
+        
+        // Try a more general query with ilike for partial matches on location_name
+        query = supabase
+          .from('confessions')
+          .select(`
+            id,
+            user_id,
+            creator_id,
+            location_id,
+            location_name,
+            content,
+            media,
+            location_profile_image,
+            is_anonymous,
+            likes_count,
+            comments_count,
+            created_at,
+            username
+          `)
+          .order('created_at', { ascending: false })
+          .limit(50);
+          
+        // Try with partial match on location_name
+        const locationNameParts = locationName.split(',')[0].trim(); // Get first part of location name
+        console.log('Trying partial match with:', locationNameParts);
+        const { data: partialMatchData, error: partialMatchError } = await query.ilike('location_name', `%${locationNameParts}%`);
+        console.log('Results with partial location_name match:', { count: partialMatchData?.length, error: partialMatchError });
+        
+        // Use the results if available
+        if (partialMatchData && partialMatchData.length > 0) {
+          console.log('Using results from partial location_name match');
+          confessionsData = partialMatchData;
+        }
+      }
   
       if (confessionsError) {
         console.error('Error fetching confessions:', confessionsError);
@@ -470,22 +633,31 @@ const ConfessionScreen = () => {
   };
   
   // Update pickImage function to use Images only (not video)  
-  const pickImage = async () => {
+  const pickImage = async (isProfileImage = false) => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         quality: 1,
+        aspect: isProfileImage ? [1, 1] : [4, 3],
       });
 
     if (!result.canceled) {
       const asset = result.assets[0];
       
-      setMedia([...media, { 
-        uri: asset.uri,
-        type: 'image/jpeg',
-        name: `${Math.random().toString(36).substring(2)}.jpg`
-      }]);
+      if (isProfileImage) {
+        setLocationProfileImage({ 
+          uri: asset.uri,
+          type: 'image/jpeg',
+          name: `${Math.random().toString(36).substring(2)}.jpg`
+        });
+      } else {
+        setMedia([...media, { 
+          uri: asset.uri,
+          type: 'image/jpeg',
+          name: `${Math.random().toString(36).substring(2)}.jpg`
+        }]);
+      }
     }
   } catch (error) {
     console.error('Error picking image:', error);
@@ -529,17 +701,59 @@ const ConfessionScreen = () => {
       }
     }
     
+    // Upload location profile image if present
+    let locationProfileImageData = null;
+    if (locationProfileImage && locationProfileImage.uri) {
+      try {
+        const uploadResult = await uploadToCloudinary(locationProfileImage.uri, 'image');
+        
+        if (!uploadResult || !uploadResult.url) {
+          throw new Error('Failed to upload location profile image');
+        }
+        
+        locationProfileImageData = {
+          url: uploadResult.url,
+          type: 'image',
+          publicId: uploadResult.publicId
+        };
+        
+        console.log('Location profile image uploaded to Cloudinary:', uploadResult.url);
+      } catch (mediaError) {
+        console.error('Location profile image upload error:', mediaError);
+        throw new Error('Failed to upload location profile image: ' + (mediaError.message || 'Unknown error'));
+      }
+    }
+    
     // Ensure media is properly formatted as a JSON string to avoid parsing issues
+    // Handle custom place IDs consistently
+    let locationId = selectedLocation.place_id;
+    if (selectedLocation.is_custom && typeof locationId === 'string' && locationId.startsWith('custom_')) {
+      locationId = locationId.replace('custom_', '');
+    }
+    
+    console.log('Posting confession with location_id:', locationId, 'type:', typeof locationId);
+    
+    // Ensure we're using a consistent location_name format
+    // For Gurugram, use the standard format
+    let locationName = selectedLocation.display_name;
+    if (locationName.toLowerCase().includes('gurugram') || 
+        locationName.toLowerCase().includes('gurgaon')) {
+      locationName = 'Gurugram, Haryana, India';
+    }
+    
+    console.log('Using location_name:', locationName);
+    
     const confessionData = {
       user_id: remainAnonymous ? null : user.id,
       // Store the creator's ID in a separate field for anonymous posts
       creator_id: user.id, // Always store the actual creator ID regardless of anonymity
-      location_id: selectedLocation.place_id,
-      location_name: selectedLocation.display_name,
+      location_id: locationId, // Use the cleaned location ID
+      location_name: locationName, // Use the standardized location name
       content: newConfession.trim(),
       media: mediaUrls, // This is already an array of objects with url and type
       is_anonymous: remainAnonymous,
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
+      location_profile_image: locationProfileImageData
     };
     
     console.log('Saving confession with media:', mediaUrls);
@@ -552,6 +766,7 @@ const ConfessionScreen = () => {
     
     setNewConfession('');
     setMedia([]);
+    setLocationProfileImage(null);
     setShowNewConfessionModal(false);
     loadConfessions(selectedLocation.place_id);
     
@@ -610,24 +825,6 @@ const ConfessionScreen = () => {
       alert('Failed to delete confession. Please try again.');
     }
   };
-
-  // Move currentUser state to component level
-  const [currentUser, setCurrentUser] = useState(null);
-    
-  useEffect(() => {
-    const getCurrentUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setCurrentUser(user);
-    };
-    getCurrentUser();
-  }, []);
-
-  // State for likes and comments modals
-  const [showLikesModal, setShowLikesModal] = useState(false);
-  const [showCommentModal, setShowCommentModal] = useState(false);
-  const [selectedConfessionId, setSelectedConfessionId] = useState(null);
-  const [likesList, setLikesList] = useState([]);
-  const [loadingLikes, setLoadingLikes] = useState(false);
 
   // Handle like toggle for a confession
   const handleLike = async (confessionId) => {
@@ -762,107 +959,179 @@ const ConfessionScreen = () => {
         })
       : '';
     
+    // State for enlarged location image modal
+    const [showEnlargedImage, setShowEnlargedImage] = useState(false);
+    
     return (
-      <View style={styles.confessionCard}>
-        <View style={styles.confessionHeader}>
-          <Image 
-            source={{ uri: item.is_anonymous 
-              ? 'https://via.placeholder.com/40' 
-              : (item.avatar_url || 'https://via.placeholder.com/40') 
-            }}
-            style={styles.avatar}
-          />
-          <View style={styles.userInfoContainer}>
-            <TouchableOpacity 
-              onPress={() => {
-                if (!item.is_anonymous && item.user_id) {
-                  navigation.navigate('UserProfileScreen', { userId: item.user_id });
-                }
-              }}
+      <View style={styles.confessionCardContainer}>
+        <LinearGradient
+          colors={['rgba(138, 35, 135, 0.1)', 'rgba(233, 64, 87, 0.1)', 'rgba(242, 113, 33, 0.1)']}
+          style={styles.confessionCardGradient}
+        >
+          <View style={styles.confessionCard}>
+            {item.location_profile_image && (
+              <View style={styles.locationProfileImageWrapper}>
+                <Image 
+                  source={{ uri: item.location_profile_image.url }} 
+                  style={styles.locationProfileImageHeader} 
+                  resizeMode="cover"
+                />
+                <LinearGradient
+                  colors={['transparent', 'rgba(0,0,0,0.7)']}
+                  style={styles.locationProfileImageGradient}
+                />
+                <View style={styles.locationBioOverlay}>
+                  <Text style={styles.locationBioText}>{selectedLocation?.display_name || 'Location'}</Text>
+                </View>
+              </View>
+            )}
+            
+            {/* Modal for enlarged location image */}
+            <Modal
+              visible={showEnlargedImage}
+              transparent={true}
+              animationType="fade"
+              onRequestClose={() => setShowEnlargedImage(false)}
             >
-              <Text style={[styles.username, { color: '#ff00ff' }]}>
-                {item.is_anonymous ? 'Anonymous' : (item.username || 'User')}
-              </Text>
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.dateText}>{formattedDate}</Text>
-          {isCurrentUserConfession && (
-            <TouchableOpacity
-              style={styles.menuButton}
-              onPress={() => {
-                Alert.alert(
-                  'Confession Options',
-                  'What would you like to do?',
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    { 
-                      text: 'Delete', 
-                      onPress: () => {
-                        Alert.alert(
-                          'Delete Confession',
-                          'Are you sure you want to delete this confession?',
-                          [
-                            { text: 'Cancel', style: 'cancel' },
-                            { 
-                              text: 'Delete', 
-                              onPress: () => deleteConfession(item.id),
-                              style: 'destructive' 
-                            }
-                          ]
-                        );
-                      },
-                      style: 'destructive'
-                    }
-                  ]
-                );
-              }}
-            >
-              <Ionicons name="ellipsis-vertical" size={20} color="#ff00ff" />
-            </TouchableOpacity>
-          )}
-        </View>
-        
-        <Text style={styles.confessionContent}>{item.content}</Text>
-        
-        {item.media && item.media.length > 0 && (
-          <ScrollView horizontal style={styles.mediaContainer}>
-            {item.media.map((mediaItem, index) => (
+              <View style={styles.enlargedImageModalContainer}>
+                <TouchableOpacity 
+                  style={styles.enlargedImageCloseButton}
+                  onPress={() => setShowEnlargedImage(false)}
+                >
+                  <Ionicons name="close" size={28} color="#fff" />
+                </TouchableOpacity>
+                {item.location_profile_image && (
+                  <Image 
+                    source={{ uri: item.location_profile_image.url }} 
+                    style={styles.enlargedLocationImage} 
+                    resizeMode="contain"
+                  />
+                )}
+              </View>
+            </Modal>
+            
+            <View style={styles.confessionHeader}>
               <Image 
-                key={index}
-                source={{ uri: mediaItem.url }}
-                style={styles.mediaItem}
+                source={{ uri: item.is_anonymous 
+                  ? 'https://via.placeholder.com/40' 
+                  : (item.avatar_url || 'https://via.placeholder.com/40') 
+                }}
+                style={styles.avatar}
               />
-            ))}          
-          </ScrollView>
-        )}
-        
-        <View style={styles.actionBar}>
-          <TouchableOpacity 
-            style={styles.actionButton} 
-            onPress={() => handleLike(item.id)}
-          >
-            <Ionicons 
-              name={item.is_liked ? "heart" : "heart-outline"} 
-              size={24} 
-              color={item.is_liked ? "#ff0055" : "#ff00ff"} 
-            />
-            <TouchableOpacity onPress={() => item.likes_count > 0 && handleShowLikes(item.id)}>
-              <Text style={styles.actionText}>{item.likes_count || 0}</Text>
-            </TouchableOpacity>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.actionButton}
-            onPress={() => handleComment(item.id)}
-          >
-            <Ionicons name="chatbubble-outline" size={22} color="#ff00ff" />
-            <Text style={styles.actionText}>{item.comments_count || 0}</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.actionButton}>
-            <Ionicons name="share-social-outline" size={24} color="#ff00ff" />
-          </TouchableOpacity>
-        </View>
+              <View style={styles.userInfoContainer}>
+                <TouchableOpacity 
+                  onPress={() => {
+                    if (!item.is_anonymous && item.user_id) {
+                      navigation.navigate('UserProfileScreen', { userId: item.user_id });
+                    }
+                  }}
+                >
+                  <Text style={[styles.username, { color: '#ff00ff' }]}>
+                    {item.is_anonymous ? 'Anonymous' : (item.username || 'User')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.dateText}>{formattedDate}</Text>
+              {item.location_profile_image && (
+                <TouchableOpacity
+                  style={styles.locationImageButton}
+                  onPress={() => setShowEnlargedImage(true)}
+                >
+                  <Image 
+                    source={{ uri: item.location_profile_image.url }} 
+                    style={styles.locationThumbnail} 
+                  />
+                </TouchableOpacity>
+              )}
+              {isCurrentUserConfession && (
+                <TouchableOpacity
+                  style={styles.menuButton}
+                  onPress={() => {
+                    Alert.alert(
+                      'Confession Options',
+                      'What would you like to do?',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        { 
+                          text: 'Delete', 
+                          onPress: () => {
+                            Alert.alert(
+                              'Delete Confession',
+                              'Are you sure you want to delete this confession?',
+                              [
+                                { text: 'Cancel', style: 'cancel' },
+                                { 
+                                  text: 'Delete', 
+                                  onPress: () => deleteConfession(item.id),
+                                  style: 'destructive' 
+                                }
+                              ]
+                            );
+                          },
+                          style: 'destructive'
+                        }
+                      ]
+                    );
+                  }}
+                >
+                  <Ionicons name="ellipsis-vertical" size={20} color="#ff00ff" />
+                </TouchableOpacity>
+              )}
+            </View>
+            
+            <Text style={styles.confessionContent}>{item.content}</Text>
+            
+            {item.media && item.media.length > 0 && (
+              <ScrollView horizontal style={styles.mediaContainer}>
+                {item.media.map((mediaItem, index) => (
+                  <View key={index} style={styles.mediaItemContainer}>
+                    <Image 
+                      source={{ uri: mediaItem.url }}
+                      style={styles.mediaItem}
+                    />
+                    <View style={styles.mediaBadge}>
+                      <LinearGradient
+                        colors={['#4776E6', '#8E54E9']}
+                        style={styles.mediaBadgeGradient}
+                      >
+                        <Ionicons name="image" size={12} color="#fff" />
+                        <Text style={styles.mediaBadgeText}>Image</Text>
+                      </LinearGradient>
+                    </View>
+                  </View>
+                ))}          
+              </ScrollView>
+            )}
+            
+            <View style={styles.actionBar}>
+              <TouchableOpacity 
+                style={styles.actionButton} 
+                onPress={() => handleLike(item.id)}
+              >
+                <Ionicons 
+                  name={item.is_liked ? "heart" : "heart-outline"} 
+                  size={24} 
+                  color={item.is_liked ? "#ff0055" : "#ff00ff"} 
+                />
+                <TouchableOpacity onPress={() => item.likes_count > 0 && handleShowLikes(item.id)}>
+                  <Text style={styles.actionText}>{item.likes_count || 0}</Text>
+                </TouchableOpacity>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.actionButton}
+                onPress={() => handleComment(item.id)}
+              >
+                <Ionicons name="chatbubble-outline" size={22} color="#ff00ff" />
+                <Text style={styles.actionText}>{item.comments_count || 0}</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.actionButton}>
+                <Ionicons name="share-social-outline" size={24} color="#ff00ff" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </LinearGradient>
       </View>
     );
   };
@@ -949,340 +1218,402 @@ const ConfessionScreen = () => {
         <Text style={styles.headerTitle}>Confessions</Text>
       </View>
 
-      {(
-        <>
-         
-
-         <View style={styles.searchContainer}>
-         
-
-         
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search for a place, institution, company..."
-              placeholderTextColor="#999"
-              value={searchQuery}
-              onChangeText={(text) => {
-                setSearchQuery(text);
-                
-                // Clear any existing timeout
-                if (searchTimeout) {
-                  clearTimeout(searchTimeout);
-                }
-                
-                // Clear results if text is too short
-                if (text.length < 3) {
-                  setSearchResults([]);
-                  return;
-                }
-                
-                // Set a new timeout to delay the search
-                const timeout = setTimeout(() => {
-                  searchLocations(text);
-                }, 500); // 500ms debounce delay
-                
-                setSearchTimeout(timeout);
+      <View style={styles.searchContainer}>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search for a place, institution, company..."
+          placeholderTextColor="#999"
+          value={searchQuery}
+          onChangeText={(text) => {
+            setSearchQuery(text);
+            
+            // Clear any existing timeout
+            if (searchTimeout) {
+              clearTimeout(searchTimeout);
+            }
+            
+            // Clear results if text is too short
+            if (text.length < 3) {
+              setSearchResults([]);
+              return;
+            }
+            
+            // Set a new timeout to delay the search
+            const timeout = setTimeout(() => {
+              searchLocations(text);
+            }, 500); // 500ms debounce delay
+            
+            setSearchTimeout(timeout);
+          }}
+        />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchQuery('')}>
+            <Ionicons name="close-circle" size={20} color="#999" />
+          </TouchableOpacity>
+        )}
+      </View>
+          
+      {searchResults.length > 0 ? (
+        <FlatList
+          data={searchResults}
+          keyExtractor={(item) => item.place_id.toString()}
+          renderItem={({ item }) => (
+            <TouchableOpacity 
+              style={styles.searchResultItem}
+              onPress={() => selectLocation(item)}
+            >
+              <Ionicons name="location" size={20} color="#ff00ff" />
+              <Text style={styles.searchResultText}>{item.display_name}</Text>
+            </TouchableOpacity>
+          )}
+          style={styles.searchResultsList}
+        />
+      ) : (
+        searchQuery.length >= 3 && !loading && (
+          <View style={styles.noResultsContainer}>
+            <Text style={styles.noResultsText}>No locations found</Text>
+            <TouchableOpacity 
+              style={styles.addPlaceButton}
+              onPress={() => {
+                // Only show add place modal when user explicitly clicks this button
+                setShowAddPlaceModal(true);
               }}
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery('')}>
-                <Ionicons name="close-circle" size={20} color="#999" />
-              </TouchableOpacity>
-            )}
+            >
+              <Text style={styles.addPlaceButtonText}>Add New Place</Text>
+            </TouchableOpacity>
           </View>
-
-
-
-          
-          {searchResults.length > 0 ? (
-            <FlatList
-              data={searchResults}
-              keyExtractor={(item) => item.place_id.toString()}
-              renderItem={({ item }) => (
-                <TouchableOpacity 
-                  style={styles.searchResultItem}
-                  onPress={() => selectLocation(item)}
-                >
-                  <Ionicons name="location" size={20} color="#ff00ff" />
-                  <Text style={styles.searchResultText}>{item.display_name}</Text>
-                </TouchableOpacity>
-              )}
-              style={styles.searchResultsList}
-            />
-          ) : (
-            searchQuery.length >= 3 && !loading && (
-              <View style={styles.noResultsContainer}>
-                <Text style={styles.noResultsText}>No locations found</Text>
-                <TouchableOpacity 
-                  style={styles.addPlaceButton}
-                  onPress={() => {
-                    // Only show add place modal when user explicitly clicks this button
-                    setShowAddPlaceModal(true);
-                  }}
-                >
-                  <Text style={styles.addPlaceButtonText}>Add New Place</Text>
-                </TouchableOpacity>
+        )
+      )}
+      
+      {searchError && (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>
+            {searchError.includes('Network request failed') 
+              ? 'Network error. Check your connection.' 
+              : 'Error searching locations. Try again.'}
+          </Text>
+        </View>
+      )}
+      
+      {showMap && (
+        <View style={styles.mapContainer}>
+          <WebView
+            style={styles.map}
+            source={{ uri: getMapUrl() }}
+            javaScriptEnabled={true}
+            domStorageEnabled={true}
+            onError={(e) => console.error('WebView error:', e.nativeEvent)}
+            renderLoading={() => (
+              <View style={[styles.loadingContainer, StyleSheet.absoluteFill]}>
+                <ActivityIndicator size="large" color="#ff00ff" />
               </View>
-            )
-          )}
-          {searchError && (
-            <View style={styles.errorContainer}>
-              <Text style={styles.errorText}>
-                {searchError.includes('Network request failed') 
-                  ? 'Network error. Check your connection.' 
-                  : 'Error searching locations. Try again.'}
-              </Text>
-            </View>
-          )}
+            )}
+            startInLoadingState={true}
+          />
+          <View style={styles.mapControls}>
+            <TouchableOpacity 
+              style={styles.closeMapButton}
+              onPress={() => setShowMap(false)}
+            >
+              <Ionicons name="close-circle" size={30} color="#ff00ff" />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.locationButton}
+              onPress={goToUserLocation}
+            >
+              <Ionicons name="locate" size={24} color="#ff00ff" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+      
+      {selectedLocation && (
+        <View style={styles.locationHeader}>
+          <Text style={styles.locationName}>{selectedLocation.display_name}</Text>
+        </View>
+      )}
+      
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#ff00ff" />
+        </View>
+      ) : selectedLocation ? (
+        confessions.length > 0 ? (
+          <FlatList
+            data={confessions}
+            keyExtractor={(item) => item.id.toString()}
+            renderItem={renderConfessionItem}
+            contentContainerStyle={styles.confessionsList}
+            refreshing={loading}
+            onRefresh={refreshConfessions}
+          />
+        ) : (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="chatbubbles-outline" size={60} color="#ff00ff" />
+            <Text style={styles.emptyText}>No confessions yet. Be the first to share!</Text>
+          </View>
+        )
+      ) : (
+        <View style={styles.instructionContainer}>
+          <Ionicons name="search" size={60} color="#ff00ff" />
+          <Text style={styles.instructionText}>
+            Search for a place or select a location on the map to see confessions
+          </Text>
+        </View>
+      )}
+      
+      {selectedLocation && (
+        <>
+          <TouchableOpacity 
+            style={styles.addButton}
+            onPress={() => setShowNewConfessionModal(true)}
+          >
+            <LinearGradient
+              colors={['#8A2387', '#E94057', '#F27121']}
+              style={styles.gradientButton}
+            >
+              <Ionicons name="add" size={30} color="#fff" />
+            </LinearGradient>
+          </TouchableOpacity>
           
-          {showMap && (
-            <View style={styles.mapContainer}>
-              <WebView
-                style={styles.map}
-                source={{ uri: getMapUrl() }}
-                javaScriptEnabled={true}
-                domStorageEnabled={true}
-                onError={(e) => console.error('WebView error:', e.nativeEvent)}
-                renderLoading={() => (
-                  <View style={[styles.loadingContainer, StyleSheet.absoluteFill]}>
-                    <ActivityIndicator size="large" color="#ff00ff" />
-                  </View>
-                )}
-                startInLoadingState={true}
-              />
-              <View style={styles.mapControls}>
-                <TouchableOpacity 
-                  style={styles.closeMapButton}
-                  onPress={() => setShowMap(false)}
-                >
-                  <Ionicons name="close-circle" size={30} color="#ff00ff" />
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={styles.locationButton}
-                  onPress={goToUserLocation}
-                >
-                  <Ionicons name="locate" size={24} color="#ff00ff" />
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
-          
-          {selectedLocation && (
-            <View style={styles.locationHeader}>
-              <Text style={styles.locationName}>{selectedLocation.display_name}</Text>
-            </View>
-          )}
-          
-          {loading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#ff00ff" />
-            </View>
-          ) : selectedLocation ? (
-            confessions.length > 0 ? (
-              <FlatList
-                data={confessions}
-                keyExtractor={(item) => item.id.toString()}
-                renderItem={renderConfessionItem}
-                contentContainerStyle={styles.confessionsList}
-                refreshing={loading}
-                onRefresh={refreshConfessions}
-              />
-            ) : (
-              <View style={styles.emptyContainer}>
-                <Ionicons name="chatbubbles-outline" size={60} color="#ff00ff" />
-                <Text style={styles.emptyText}>No confessions yet. Be the first to share!</Text>
-              </View>
-            )
-          ) : (
-            <View style={styles.instructionContainer}>
-              <Ionicons name="search" size={60} color="#ff00ff" />
-              <Text style={styles.instructionText}>
-                Search for a place or select a location on the map to see confessions
-              </Text>
-            </View>
-          )}
-          
-          {selectedLocation && (
-            <>
-              <TouchableOpacity 
-                style={styles.addButton}
-                onPress={() => setShowNewConfessionModal(true)}
-              >
-                <Ionicons name="add" size={30} color="#fff" />
-              </TouchableOpacity>
-              
-              
-
-              
-            </>
-          )}
-          
+          {/* Location Profile Modal */}
           <Modal
-            visible={showAddPlaceModal}
             animationType="slide"
             transparent={true}
-            onRequestClose={() => setShowAddPlaceModal(false)}
+            visible={showLocationProfileModal}
+            onRequestClose={() => setShowLocationProfileModal(false)}
           >
             <View style={styles.modalContainer}>
               <View style={styles.modalContent}>
-                <Text style={styles.modalTitle}>Add Place</Text>
+                <Text style={styles.modalTitle}>Add Location Profile Image</Text>
+                <Text style={[styles.modalText, {color: '#ccc', marginBottom: 15}]}>Add a photo of this location to help others recognize it.</Text>
                 
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Type</Text>
-                  <View style={styles.typeSelector}>
-                    {['institute', 'office', 'place', 'building'].map((type) => (
-                      <TouchableOpacity
-                        key={type}
-                        style={[styles.typeButton, newPlace.type === type && styles.selectedType]}
-                        onPress={() => setNewPlace(prev => ({ ...prev, type }))}
-                      >
-                        <Text style={[styles.typeText, newPlace.type === type && styles.selectedTypeText]}>
-                          {type.charAt(0).toUpperCase() + type.slice(1)}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
+                {locationProfileImage && (
+                  <View style={styles.locationProfileImageContainer}>
+                    <Image source={{ uri: locationProfileImage.uri }} style={styles.locationProfileImage} />
+                    <TouchableOpacity 
+                      style={styles.removeMediaButton}
+                      onPress={() => setLocationProfileImage(null)}
+                    >
+                      <Ionicons name="close-circle" size={24} color="#FF3B30" />
+                    </TouchableOpacity>
                   </View>
-                </View>
-
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Name</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={newPlace.name}
-                    onChangeText={(text) => setNewPlace(prev => ({ ...prev, name: text }))}
-                    placeholder="Enter place name"
-                    placeholderTextColor="#666"
-                  />
-                </View>
-
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>City</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={newPlace.city}
-                    onChangeText={(text) => setNewPlace(prev => ({ ...prev, city: text }))}
-                    placeholder="Enter city"
-                    placeholderTextColor="#666"
-                  />
-                </View>
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>District</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={newPlace.district}
-                    onChangeText={(text) => setNewPlace(prev => ({ ...prev, district: text }))}
-                    placeholder="Enter district"
-                    placeholderTextColor="#666"
-                  />
-                </View>
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>State</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={newPlace.state}
-                    onChangeText={(text) => setNewPlace(prev => ({ ...prev, state: text }))}
-                    placeholder="Enter state"
-                    placeholderTextColor="#666"
-                  />
-                </View>
-
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Country</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={newPlace.country}
-                    onChangeText={(text) => setNewPlace(prev => ({ ...prev, country: text }))}
-                    placeholder="Enter country"
-                    placeholderTextColor="#666"
-                  />
-                </View>
-
-                <View style={styles.modalButtons}>
-                  <TouchableOpacity 
-                    style={[styles.modalButton, styles.cancelButton]}
-                    onPress={() => setShowAddPlaceModal(false)}
-                  >
-                    <Text style={styles.buttonText}>Cancel</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={[styles.modalButton, styles.addButton]}
-                    onPress={handleAddPlace}
-                  >
-                    <Text style={styles.buttonText}>Add Place</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-          </Modal>
-
-          <Modal
-            visible={showNewConfessionModal}
-            transparent={true}
-            animationType="slide"
-            onRequestClose={() => setShowNewConfessionModal(false)}
-          >
-            <View style={styles.modalContainer}>
-              <View style={styles.modalContent}>
-                <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>New Confession</Text>
-                  <TouchableOpacity onPress={() => setShowNewConfessionModal(false)}>
-                    <Ionicons name="close" size={24} color="#ff00ff" />
-                  </TouchableOpacity>
-                </View>
-                
-                <TextInput
-                  style={styles.confessionInput}
-                  placeholder="What's your confession about this place?"
-                  placeholderTextColor="#999"
-                  multiline
-                  value={newConfession}
-                  onChangeText={setNewConfession}
-                />
-                
-                {media.length > 0 && (
-                  <ScrollView horizontal style={styles.selectedMediaContainer}>
-                    {media.map((item, index) => (
-                      <View key={index} style={styles.selectedMediaItem}>
-                        <Image source={{ uri: item.uri }} style={styles.selectedMediaPreview} />
-                        <TouchableOpacity 
-                          style={styles.removeMediaButton}
-                          onPress={() => setMedia(media.filter((_, i) => i !== index))}
-                        >
-                          <Ionicons name="close-circle" size={20} color="#ff00ff" />
-                        </TouchableOpacity>
-                      </View>
-                    ))}
-                  </ScrollView>
                 )}
                 
                 <View style={styles.mediaButtons}>
-                  <TouchableOpacity style={styles.mediaButton} onPress={pickImage}>
-                    <Ionicons name="image" size={24} color="#ff00ff" />
-                    <Text style={styles.mediaButtonText}>Add Image</Text>
+                  <TouchableOpacity 
+                    style={styles.mediaButton}
+                    onPress={() => pickImage(true)}
+                  >
+                    <LinearGradient
+                      colors={['#8A2387', '#E94057', '#F27121']}
+                      style={[styles.gradientButton, {paddingHorizontal: 15, paddingVertical: 10}]}
+                    >
+                      <Ionicons name="image" size={24} color="#fff" style={{marginRight: 8}} />
+                      <Text style={[styles.mediaButtonText, {color: '#fff'}]}>
+                        {locationProfileImage ? 'Change Image' : 'Select Image'}
+                      </Text>
+                    </LinearGradient>
                   </TouchableOpacity>
                 </View>
                 
-                <View style={styles.anonymousOption}>
-                  <Text style={styles.anonymousText}>Remain anonymous</Text>
-                  <Switch
-                    value={remainAnonymous}
-                    onValueChange={setRemainAnonymous}
-                    trackColor={{ false: "#767577", true: "#ff00ff" }}
-                    thumbColor={remainAnonymous ? "#f4f3f4" : "#f4f3f4"}
-                  />
-                </View>
-                
                 <TouchableOpacity 
-                  style={styles.postButton}
-                  onPress={postConfession}
+                  style={[styles.postButton, {marginTop: 20}]}
+                  onPress={() => setShowLocationProfileModal(false)}
                 >
-                  <Text style={styles.postButtonText}>Post Confession</Text>
+                  <Text style={styles.postButtonText}>Done</Text>
                 </TouchableOpacity>
               </View>
             </View>
           </Modal>
         </>
       )}
+      
+      <Modal
+        visible={showAddPlaceModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowAddPlaceModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Add Place</Text>
+            
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Type</Text>
+              <View style={styles.typeSelector}>
+                {['institute', 'office', 'place', 'building'].map((type) => (
+                  <TouchableOpacity
+                    key={type}
+                    style={[styles.typeButton, newPlace.type === type && styles.selectedType]}
+                    onPress={() => setNewPlace(prev => ({ ...prev, type }))}
+                  >
+                    <Text style={[styles.typeText, newPlace.type === type && styles.selectedTypeText]}>
+                      {type.charAt(0).toUpperCase() + type.slice(1)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Name</Text>
+              <TextInput
+                style={styles.input}
+                value={newPlace.name}
+                onChangeText={(text) => setNewPlace(prev => ({ ...prev, name: text }))}
+                placeholder="Enter place name"
+                placeholderTextColor="#666"
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>City</Text>
+              <TextInput
+                style={styles.input}
+                value={newPlace.city}
+                onChangeText={(text) => setNewPlace(prev => ({ ...prev, city: text }))}
+                placeholder="Enter city"
+                placeholderTextColor="#666"
+              />
+            </View>
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>District</Text>
+              <TextInput
+                style={styles.input}
+                value={newPlace.district}
+                onChangeText={(text) => setNewPlace(prev => ({ ...prev, district: text }))}
+                placeholder="Enter district"
+                placeholderTextColor="#666"
+              />
+            </View>
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>State</Text>
+              <TextInput
+                style={styles.input}
+                value={newPlace.state}
+                onChangeText={(text) => setNewPlace(prev => ({ ...prev, state: text }))}
+                placeholder="Enter state"
+                placeholderTextColor="#666"
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Country</Text>
+              <TextInput
+                style={styles.input}
+                value={newPlace.country}
+                onChangeText={(text) => setNewPlace(prev => ({ ...prev, country: text }))}
+                placeholder="Enter country"
+                placeholderTextColor="#666"
+              />
+            </View>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => setShowAddPlaceModal(false)}
+              >
+                <Text style={styles.buttonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.confirmButton]}
+                onPress={handleAddPlace}
+              >
+                <Text style={styles.buttonText}>Add Place</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showNewConfessionModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowNewConfessionModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>New Confession</Text>
+              <TouchableOpacity onPress={() => setShowNewConfessionModal(false)}>
+                <Ionicons name="close" size={24} color="#ff00ff" />
+              </TouchableOpacity>
+            </View>
+            
+            <TextInput
+              style={styles.confessionInput}
+              placeholder="What's your confession about this place?"
+              placeholderTextColor="#999"
+              multiline
+              value={newConfession}
+              onChangeText={setNewConfession}
+            />
+            
+            {media.length > 0 && (
+              <ScrollView horizontal style={styles.selectedMediaContainer}>
+                {media.map((item, index) => (
+                  <View key={index} style={styles.selectedMediaItem}>
+                    <Image source={{ uri: item.uri }} style={styles.selectedMediaPreview} />
+                    <TouchableOpacity 
+                      style={styles.removeMediaButton}
+                      onPress={() => setMedia(media.filter((_, i) => i !== index))}
+                    >
+                      <Ionicons name="close-circle" size={20} color="#ff00ff" />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+            
+            <View style={styles.mediaButtons}>
+              <TouchableOpacity style={styles.mediaButton} onPress={() => pickImage(false)}>
+                <LinearGradient
+                  colors={['#8A2387', '#E94057', '#F27121']}
+                  style={[styles.gradientButton, {paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20}]}
+                >
+                  <Ionicons name="image" size={24} color="#fff" style={{marginRight: 5}} />
+                  <Text style={[styles.mediaButtonText, {color: '#fff'}]}>Add Image</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.mediaButton} 
+                onPress={() => {
+                  setShowNewConfessionModal(false);
+                  setTimeout(() => setShowLocationProfileModal(true), 300);
+                }}
+              >
+                <LinearGradient
+                  colors={['#4776E6', '#8E54E9']}
+                  style={[styles.gradientButton, {paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20}]}
+                >
+                  <Ionicons name="location" size={24} color="#fff" style={{marginRight: 5}} />
+                  <Text style={[styles.mediaButtonText, {color: '#fff'}]}>Add Location Photo</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.anonymousOption}>
+              <Text style={styles.anonymousText}>Remain anonymous</Text>
+              <Switch
+                value={remainAnonymous}
+                onValueChange={setRemainAnonymous}
+                trackColor={{ false: "#767577", true: "#ff00ff" }}
+                thumbColor={remainAnonymous ? "#f4f3f4" : "#f4f3f4"}
+              />
+            </View>
+            
+            <TouchableOpacity 
+              style={styles.postButton}
+              onPress={postConfession}
+            >
+              <Text style={styles.postButtonText}>Post Confession</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -1329,6 +1660,101 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 20,
     textAlign: 'center',
+  },
+  modalText: {
+    color: '#fff',
+    fontSize: 16,
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  // Location Profile Image Styles
+  locationProfileImageContainer: {
+    width: '100%',
+    height: 200,
+    borderRadius: 10,
+    overflow: 'hidden',
+    marginBottom: 15,
+    position: 'relative',
+  },
+  locationProfileImage: {
+    width: '100%',
+    height: '100%',
+  },
+  locationProfileImageWrapper: {
+    width: '100%',
+    height: 200,
+    borderTopLeftRadius: 10,
+    borderTopRightRadius: 10,
+    overflow: 'hidden',
+    marginBottom: 10,
+    position: 'relative',
+  },
+  locationProfileImageHeader: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
+  },
+  locationProfileImageGradient: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 80,
+  },
+  locationBioOverlay: {
+    position: 'absolute',
+    bottom: 10,
+    left: 10,
+    right: 10,
+    zIndex: 2,
+  },
+  locationBioText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
+  },
+  // Location Thumbnail in Header
+  locationImageButton: {
+    marginLeft: 10,
+    marginRight: 5,
+  },
+  locationThumbnail: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: '#ff00ff',
+  },
+  // Enlarged Image Modal
+  enlargedImageModalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  enlargedLocationImage: {
+    width: '90%',
+    height: '70%',
+    borderRadius: 10,
+  },
+  enlargedImageCloseButton: {
+    position: 'absolute',
+    top: 40,
+    right: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 20,
+    padding: 8,
+    zIndex: 10,
+  },
+  gradientButton: {
+    borderRadius: 25,
+    padding: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
   },
   formGroup: {
     marginBottom: 15,
@@ -1385,7 +1811,7 @@ const styles = StyleSheet.create({
   cancelButton: {
     backgroundColor: '#333',
   },
-  addButton: {
+  confirmButton: {
     backgroundColor: '#ff00ff',
   },
   buttonText: {
@@ -1397,6 +1823,9 @@ const styles = StyleSheet.create({
   menuButton: {
     padding: 8,
     borderRadius: 15,
+  },
+  userInfoContainer: {
+    flex: 1,
   },
   modeContainer: {
     flexDirection: 'row',
@@ -1436,6 +1865,15 @@ const styles = StyleSheet.create({
   addPlaceButtonText: {
     color: 'white',
     fontWeight: 'bold',
+  },
+  noResultsContainer: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  noResultsText: {
+    color: '#ff00ff',
+    fontSize: 16,
+    marginBottom: 10,
   },
   container: {
     flex: 1,
@@ -1477,14 +1915,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     width: 44,
     height: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  addPlaceButton: {
-    backgroundColor: '#330022',
-    borderRadius: 20,
-    width: 44,
-    height: 80,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1544,16 +1974,26 @@ const styles = StyleSheet.create({
   confessionsList: {
     padding: 10,
   },
+  confessionCardContainer: {
+    marginBottom: 15,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  confessionCardGradient: {
+    borderRadius: 12,
+    padding: 1,
+  },
   confessionCard: {
     backgroundColor: '#330022',
     borderRadius: 10,
     padding: 15,
-    marginBottom: 15,
+    paddingTop: 0,
   },
   confessionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 10,
+    marginTop: 10,
   },
   deleteButton: {
     padding: 8,
@@ -1583,12 +2023,35 @@ const styles = StyleSheet.create({
   mediaContainer: {
     flexDirection: 'row',
     marginBottom: 10,
+    position: 'relative',
+  },
+  mediaBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    zIndex: 1,
+  },
+  mediaBadgeGradient: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  mediaBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginLeft: 4,
+  },
+  mediaItemContainer: {
+    position: 'relative',
+    marginRight: 10,
   },
   mediaItem: {
     width: 150,
     height: 150,
     borderRadius: 10,
-    marginRight: 10,
   },
   videoContainer: {
     width: 150,
@@ -1619,12 +2082,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-  },
-  emptyText: {
-    color: '#ff00ff',
-    textAlign: 'center',
-    marginTop: 10,
-    fontSize: 16,
   },
   instructionContainer: {
     flex: 1,
@@ -1658,28 +2115,11 @@ const styles = StyleSheet.create({
     bottom: 90, // Position above the add button
     backgroundColor: '#3399ff',
   },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: '#330022',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    minHeight: '50%',
-  },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 20,
-  },
-  modalTitle: {
-    color: '#ff00ff',
-    fontSize: 20,
-    fontWeight: 'bold',
   },
   confessionInput: {
     backgroundColor: '#220011',
@@ -1744,7 +2184,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   postButtonText: {
-    color: '#550033',
+    color: '#fff',
     fontWeight: 'bold',
     fontSize: 16,
   },

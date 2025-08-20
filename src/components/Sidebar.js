@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Alert, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
@@ -13,6 +13,7 @@ import { donate } from '../lib/donate';
 const Sidebar = ({ isVisible, onClose }) => {
   const navigation = useNavigation();
   const [showVisitsModal, setShowVisitsModal] = useState(false);
+  const [showConfessionInfoModal, setShowConfessionInfoModal] = useState(false);
   const [isFemaleProfle, setIsFemaleProfle] = useState(false);
   const insets = useSafeAreaInsets();
 
@@ -104,8 +105,7 @@ const Sidebar = ({ isVisible, onClose }) => {
           <TouchableOpacity 
             style={styles.menuItem} 
             onPress={() => {
-              onClose();
-              navigation.navigate('Confession');
+              setShowConfessionInfoModal(true);
             }}
           >
             <Ionicons name="heart" size={24} color="#ff00ff" />
@@ -173,6 +173,62 @@ const Sidebar = ({ isVisible, onClose }) => {
         visible={showVisitsModal}
         onClose={() => setShowVisitsModal(false)}
       />
+      
+      {/* Confession Info Modal */}
+      <Modal
+        visible={showConfessionInfoModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowConfessionInfoModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <ScrollView>
+              <Text style={styles.modalTitle}>How to Use Confessions</Text>
+              <Text style={styles.modalText}>
+                In the Confession feature, you can write about any person, office, building, or place by their name.
+              </Text>
+              <Text style={styles.modalText}>
+                • Search for a person, place, or building by typing their name
+              </Text>
+              <Text style={styles.modalText}>
+                • Select from the suggestions that appear
+              </Text>
+              <Text style={styles.modalText}>
+                • If what you're looking for isn't in the suggestions, you can create a new entry
+              </Text>
+              <Text style={styles.modalText}>
+                • Write your confession and optionally add media
+              </Text>
+              <Text style={styles.modalText}>
+                • Choose whether to remain anonymous
+              </Text>
+              <Text style={styles.modalText}>
+                Share your thoughts, experiences, or feelings about places and people.
+                
+              </Text>
+            </ScrollView>
+            <View style={styles.modalButtonContainer}>
+              <TouchableOpacity 
+                style={styles.modalButton} 
+                onPress={() => {
+                  setShowConfessionInfoModal(false);
+                  onClose();
+                  navigation.navigate('Confession');
+                }}
+              >
+                <Text style={styles.modalButtonText}>Continue to Confessions</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.cancelButton]} 
+                onPress={() => setShowConfessionInfoModal(false)}
+              >
+                <Text style={styles.modalButtonText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </Modal>
   );
 };
@@ -196,6 +252,51 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     borderBottomWidth: 1,
     borderBottomColor: '#440044',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#330033',
+    borderRadius: 10,
+    padding: 20,
+    width: '90%',
+    maxHeight: '80%',
+  },
+  modalTitle: {
+    color: '#ff00ff',
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  modalText: {
+    color: '#ffffff',
+    fontSize: 16,
+    marginBottom: 10,
+    lineHeight: 22,
+  },
+  modalButtonContainer: {
+    marginTop: 20,
+  },
+  modalButton: {
+    backgroundColor: '#ff00ff',
+    padding: 12,
+    borderRadius: 5,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  cancelButton: {
+    backgroundColor: '#550055',
+  },
+  modalButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   menuText: {
     color: '#ff00ff',
