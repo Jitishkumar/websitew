@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -13,22 +13,23 @@ import {
   ActivityIndicator,
   Platform,
   Alert,
+  Animated,
   Dimensions
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { WebView } from 'react-native-webview';
 import { decode } from 'base64-arraybuffer';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../config/supabase';
 import * as Location from 'expo-location';
 import * as FileSystem from 'expo-file-system';
 import { uploadToCloudinary, deleteFromCloudinary } from '../config/cloudinary';
 
+const { width: screenWidth } = Dimensions.get('window');
+
 const ConfessionScreen = () => {
   const navigation = useNavigation();
-  const [mode, setMode] = useState('view'); // Changed default to 'view' to skip selection screen
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [selectedLocation, setSelectedLocation] = useState(null);
@@ -46,24 +47,30 @@ const ConfessionScreen = () => {
   const [userLocation, setUserLocation] = useState(null);
   const [locationPermission, setLocationPermission] = useState(null);
   const [searchError, setSearchError] = useState(null);
-  const [locationProfileImage, setLocationProfileImage] = useState(null);
+  const [locationProfile, setLocationProfile] = useState(null);
   const [showLocationProfileModal, setShowLocationProfileModal] = useState(false);
+  const [profileImage, setProfileImage] = useState(null);
+  const [profileBio, setProfileBio] = useState('');
+  const [showReactionModal, setShowReactionModal] = useState(false);
+  const [selectedConfessionForReaction, setSelectedConfessionForReaction] = useState(null);
+  const [confessionReactions, setConfessionReactions] = useState({});
+  const [confessionVerifications, setConfessionVerifications] = useState({});
+  const [currentUser, setCurrentUser] = useState(null);
+
+  // Emoji options for reactions
+  const emojiOptions = ['😂', '❤️', '😮', '😢', '😡', '👍', '👎', '🔥', '💯', '🤔'];
+
+  // Add a reference to store the search timeout
+  const [searchTimeout, setSearchTimeout] = useState(null);
   const [showAddPlaceModal, setShowAddPlaceModal] = useState(false);
   const [newPlace, setNewPlace] = useState({
-    type: 'institute', // Default type
+    type: 'institute',
     name: '',
     city: '',
     district: '',
     state: '',
     country: ''
   });
-  const [searchTimeout, setSearchTimeout] = useState(null);
-  const [currentUser, setCurrentUser] = useState(null);
-  const [showLikesModal, setShowLikesModal] = useState(false);
-  const [showCommentModal, setShowCommentModal] = useState(false);
-  const [selectedConfessionId, setSelectedConfessionId] = useState(null);
-  const [likesList, setLikesList] = useState([]);
-  const [loadingLikes, setLoadingLikes] = useState(false);
 
   // Request location permission and get current location
   useEffect(() => {
@@ -81,110 +88,20 @@ const ConfessionScreen = () => {
       }
     })();
     
-    // Cleanup function to clear any pending search timeout when component unmounts
+    // Get current user
+    const getCurrentUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setCurrentUser(user);
+    };
+    getCurrentUser();
+    
+    // Cleanup function
     return () => {
       if (searchTimeout) {
         clearTimeout(searchTimeout);
       }
     };
   }, [searchTimeout]);
-
-  useEffect(() => {
-    const getCurrentUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setCurrentUser(user);
-    };
-    getCurrentUser();
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      if (selectedLocation) {
-        console.log('Screen focused, refreshing confessions for:', selectedLocation.display_name);
-        refreshConfessions();
-      }
-    }, [selectedLocation])
-  );
-
-  useEffect(() => {
-    if (!selectedLocation || !selectedLocation.place_id) return;
-
-    let locationId = selectedLocation.place_id;
-    if (selectedLocation.is_custom && typeof locationId === 'string' && locationId.startsWith('custom_')) {
-      locationId = locationId.replace('custom_', '');
-    }
-
-    console.log('Setting up real-time subscription for location:', locationId);
-    
-    // Create a channel without filter to catch all confession changes
-    const channel = supabase
-      .channel('confessions-channel')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'confessions',
-          // Remove filter to catch all changes and filter manually
-        },
-        (payload) => {
-          console.log('Realtime update received:', payload);
-          
-          // Get the location name from the selected location
-          let locationName = selectedLocation?.display_name || 'Gurugram, Haryana, India';
-          
-          // Standardize Gurugram location name
-          if (locationName.toLowerCase().includes('gurugram') || 
-              locationName.toLowerCase().includes('gurgaon')) {
-            locationName = 'Gurugram, Haryana, India';
-          }
-          
-          // Check if this update is relevant to our current location by location_name
-          let payloadLocationName = payload.new?.location_name;
-          
-          // Standardize payload location name if it's Gurugram
-          if (payloadLocationName && 
-              (payloadLocationName.toLowerCase().includes('gurugram') || 
-               payloadLocationName.toLowerCase().includes('gurgaon'))) {
-            payloadLocationName = 'Gurugram, Haryana, India';
-          }
-          
-          console.log('Comparing location names:', {
-            payloadLocationName,
-            locationName,
-            isMatch: payloadLocationName === locationName
-          });
-          
-          // Only refresh if this update is for our current location name
-          if (payloadLocationName === locationName) {
-            console.log('Refreshing confessions due to relevant update');
-            refreshConfessions();
-          } else if (payloadLocationName && locationName) {
-            // Try partial match (first part of location name)
-            const payloadMainLocation = payloadLocationName.split(',')[0].trim();
-            const currentMainLocation = locationName.split(',')[0].trim();
-            
-            if (payloadMainLocation === currentMainLocation) {
-              console.log('Refreshing confessions due to partial location name match');
-              refreshConfessions();
-            }
-          }
-        }
-      )
-      .subscribe((status, err) => {
-        if (status === 'SUBSCRIBED') {
-          console.log(`Subscribed to realtime updates for location ${locationId}`);
-        }
-        if (status === 'CHANNEL_ERROR') {
-          console.error('Realtime subscription error:', err);
-        }
-      });
-
-    return () => {
-      console.log(`Unsubscribing from realtime updates for location ${locationId}`);
-      supabase.removeChannel(channel);
-    };
-  }, [selectedLocation, refreshConfessions]);
 
   const getMapUrl = () => {
     const lat = mapRegion.latitude;
@@ -209,10 +126,9 @@ const ConfessionScreen = () => {
     setLoading(true);
     setSearchError(null);
     try {
-      // Create an array to hold all search results
       let combinedResults = [];
       
-      // 1. Search OpenStreetMap API
+      // Search OpenStreetMap API
       let searchUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=10`;
       
       if (userLocation) {
@@ -231,20 +147,13 @@ const ConfessionScreen = () => {
       const osmData = await response.json();
       combinedResults = [...osmData];
       
-      // 2. Search custom places from Supabase with improved search logic
-      console.log('Searching for custom places with query:', query);
-      
-      // Split the query into words for more flexible matching
+      // Search custom places from Supabase
       const queryWords = query.toLowerCase().split(/\s+/).filter(word => word.length >= 2);
-      
-      // Build a more flexible search filter
       let filterConditions = [];
       
-      // First try exact match with the full query
       filterConditions.push(`name.ilike.%${query}%`);
       filterConditions.push(`city.ilike.%${query}%`);
       
-      // Then try matching individual words across different fields
       queryWords.forEach(word => {
         filterConditions.push(`name.ilike.%${word}%`);
         filterConditions.push(`city.ilike.%${word}%`);
@@ -261,31 +170,22 @@ const ConfessionScreen = () => {
       
       if (placesError) {
         console.error('Error searching custom places:', placesError);
-      } else {
-        console.log('Custom places search results:', placesData ? placesData.length : 0);
-        
-        if (placesData && placesData.length > 0) {
-          // Format custom places to match OpenStreetMap result structure
-          const formattedPlaces = placesData.map(place => {
-            // Create a display name that highlights which part matched the search
-            const displayName = `${place.name}, ${place.city}${place.district ? ', ' + place.district : ''}, ${place.state}, ${place.country} (Custom)`;
-            
-            return {
-              place_id: `custom_${place.id}`, // Add prefix to distinguish from OSM IDs
-              display_name: displayName,
-              lat: place.latitude ? place.latitude.toString() : '0',
-              lon: place.longitude ? place.longitude.toString() : '0',
-              // Add a flag to identify custom places
-              is_custom: true
-            };
-          });
+      } else if (placesData && placesData.length > 0) {
+        const formattedPlaces = placesData.map(place => {
+          const displayName = `${place.name}, ${place.city}${place.district ? ', ' + place.district : ''}, ${place.state}, ${place.country} (Custom)`;
           
-          // Add custom places to the combined results
-          combinedResults = [...combinedResults, ...formattedPlaces];
-        }
+          return {
+            place_id: `custom_${place.id}`,
+            display_name: displayName,
+            lat: place.latitude ? place.latitude.toString() : '0',
+            lon: place.longitude ? place.longitude.toString() : '0',
+            is_custom: true
+          };
+        });
+        
+        combinedResults = [...combinedResults, ...formattedPlaces];
       }
       
-      // Set the combined results
       setSearchResults(combinedResults);
     } catch (error) {
       console.error('Error searching locations:', error);
@@ -303,7 +203,6 @@ const ConfessionScreen = () => {
     }
 
     try {
-      // Get the current authenticated user
       const { data: { user } } = await supabase.auth.getUser();
       
       if (!user) {
@@ -311,7 +210,6 @@ const ConfessionScreen = () => {
         return;
       }
       
-      // Use user's current location as fallback for latitude/longitude
       let latitude = null;
       let longitude = null;
       
@@ -330,10 +228,8 @@ const ConfessionScreen = () => {
         latitude: latitude,
         longitude: longitude,
         created_at: new Date().toISOString(),
-        created_by: user.id // Add the authenticated user's ID to satisfy RLS policy
+        created_by: user.id
       };
-      
-      console.log('Adding new place:', placeData);
       
       const { data, error } = await supabase
         .from('places')
@@ -343,7 +239,6 @@ const ConfessionScreen = () => {
 
       if (error) throw error;
 
-      // Close modal and reset form
       setShowAddPlaceModal(false);
       setNewPlace({
         type: 'institute',
@@ -353,7 +248,6 @@ const ConfessionScreen = () => {
         country: ''
       });
 
-      // Add the new place to search results with proper coordinates
       const newPlaceResult = {
         place_id: `custom_${data.id}`,
         display_name: `${data.name}, ${data.city}${data.district ? ', ' + data.district : ''}, ${data.state}, ${data.country} (Custom)`,
@@ -362,14 +256,7 @@ const ConfessionScreen = () => {
         is_custom: true
       };
       
-      console.log('Added new place to search results:', newPlaceResult);
-      
-      setSearchResults(prevResults => [
-        ...prevResults,
-        newPlaceResult
-      ]);
-      
-      // Immediately select the newly added place
+      setSearchResults(prevResults => [...prevResults, newPlaceResult]);
       selectLocation(newPlaceResult);
       
       Alert.alert('Success', 'Place added successfully');
@@ -395,65 +282,100 @@ const ConfessionScreen = () => {
       });
     }
     
-    // Check if place_id exists before proceeding
     if (!location.place_id) {
       console.error('Error: Selected location has no place_id');
       Alert.alert('Error', 'Invalid location data. Please try selecting a different location.');
       return;
     }
     
-    // Handle custom place IDs (they have 'custom_' prefix)
     let locationId = location.place_id;
     if (location.is_custom && typeof locationId === 'string' && locationId.startsWith('custom_')) {
-      // Extract the numeric ID part for custom places
       locationId = locationId.replace('custom_', '');
     }
     
+    loadLocationProfile(locationId);
     loadConfessions(locationId);
   };
 
-  // Add a refresh function to reload confessions
-  const refreshConfessions = useCallback(() => {
-    if (selectedLocation && selectedLocation.place_id) {
-      // Handle custom place IDs consistently
+  const loadLocationProfile = async (locationId) => {
+    try {
+      const { data, error } = await supabase
+        .from('location_profiles')
+        .select('*')
+        .eq('location_id', locationId)
+        .single();
+      
+      if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows found"
+        throw error;
+      }
+      
+      setLocationProfile(data || null);
+    } catch (error) {
+      console.error('Error loading location profile:', error);
+      setLocationProfile(null);
+    }
+  };
+
+  const saveLocationProfile = async () => {
+    if (!selectedLocation) return;
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        Alert.alert('Error', 'You must be logged in to update the profile');
+        return;
+      }
+
+      let imageUrl = null;
+      if (profileImage) {
+        const uploadResult = await uploadToCloudinary(profileImage.uri, 'image');
+        imageUrl = uploadResult.url;
+      }
+
       let locationId = selectedLocation.place_id;
       if (selectedLocation.is_custom && typeof locationId === 'string' && locationId.startsWith('custom_')) {
         locationId = locationId.replace('custom_', '');
       }
-      console.log('Refreshing confessions for location:', locationId);
-      loadConfessions(locationId);
-    } else {
-      console.warn('Cannot refresh: No location selected or invalid location');
+
+      const profileData = {
+        location_id: locationId,
+        location_name: selectedLocation.display_name,
+        profile_image: imageUrl || (locationProfile?.profile_image || null),
+        bio: profileBio || (locationProfile?.bio || null),
+        updated_at: new Date().toISOString(),
+        created_by: user.id
+      };
+
+      const { error } = await supabase
+        .from('location_profiles')
+        .upsert([profileData], { onConflict: 'location_id' });
+
+      if (error) throw error;
+
+      loadLocationProfile(locationId);
+      setShowLocationProfileModal(false);
+      setProfileImage(null);
+      setProfileBio('');
+      
+      Alert.alert('Success', 'Profile updated successfully');
+    } catch (error) {
+      console.error('Error saving location profile:', error);
+      Alert.alert('Error', 'Failed to update profile. Please try again.');
     }
-  }, [selectedLocation]);
+  };
 
   const loadConfessions = async (locationId) => {
     setLoading(true);
     try {
-      // Check if locationId is undefined or null
       if (!locationId) {
-        console.error('Error: locationId is undefined or null');
         Alert.alert('Error', 'Invalid location. Please select a location and try again.');
         setLoading(false);
         return;
       }
       
-      // Handle custom place IDs (they have 'custom_' prefix)
       const cleanLocationId = typeof locationId === 'string' && locationId.startsWith('custom_') ? 
         locationId.replace('custom_', '') : locationId;
-  
-      console.log('Loading confessions for location:', { originalId: locationId, cleanId: cleanLocationId, type: typeof locationId });
-      
-      // First try a simple query to see all confessions in the table (for debugging)
-      const { data: allConfessions, error: allConfessionsError } = await supabase
-        .from('confessions')
-        .select('id, location_id')
-        .limit(10);
-        
-      console.log('Debug - Sample of all confessions:', allConfessions);
-      console.log('Debug - Error checking all confessions:', allConfessionsError);
-  
-      // Now get confessions for this location - disable caching to ensure we get the latest data
+
       let query = supabase
         .from('confessions')
         .select(`
@@ -464,7 +386,6 @@ const ConfessionScreen = () => {
           location_name,
           content,
           media,
-          location_profile_image,
           is_anonymous,
           likes_count,
           comments_count,
@@ -472,131 +393,48 @@ const ConfessionScreen = () => {
           username
         `)
         .order('created_at', { ascending: false })
-        .limit(50); // Limit to latest 50 confessions
+        .limit(50);
 
-      // Get the location name from the selected location
-      let locationName = selectedLocation?.display_name || 'Gurugram, Haryana, India';
-      
-      // Standardize Gurugram location name
-      if (locationName.toLowerCase().includes('gurugram') || 
-          locationName.toLowerCase().includes('gurgaon')) {
-        locationName = 'Gurugram, Haryana, India';
-      }
-      
-      console.log('Debug - Searching by standardized location_name:', locationName);
-      
-      // Search by location_name instead of location_id
-      query = query.eq('location_name', locationName);
-      
-      console.log('Debug - Query is now searching by location_name');
+      query = query.or(`location_id.eq.${locationId},location_id.eq.${cleanLocationId}`);
       
       const { data: confessionsData, error: confessionsError } = await query;
-      
-      // If no results, try a more general approach
-      if (!confessionsError && (!confessionsData || confessionsData.length === 0)) {
-        console.log('No results with location_name exact match, trying partial match');
-        
-        // Try a more general query with ilike for partial matches on location_name
-        query = supabase
-          .from('confessions')
-          .select(`
-            id,
-            user_id,
-            creator_id,
-            location_id,
-            location_name,
-            content,
-            media,
-            location_profile_image,
-            is_anonymous,
-            likes_count,
-            comments_count,
-            created_at,
-            username
-          `)
-          .order('created_at', { ascending: false })
-          .limit(50);
-          
-        // Try with partial match on location_name
-        const locationNameParts = locationName.split(',')[0].trim(); // Get first part of location name
-        console.log('Trying partial match with:', locationNameParts);
-        const { data: partialMatchData, error: partialMatchError } = await query.ilike('location_name', `%${locationNameParts}%`);
-        console.log('Results with partial location_name match:', { count: partialMatchData?.length, error: partialMatchError });
-        
-        // Use the results if available
-        if (partialMatchData && partialMatchData.length > 0) {
-          console.log('Using results from partial location_name match');
-          confessionsData = partialMatchData;
-        }
-      }
-  
+
       if (confessionsError) {
         console.error('Error fetching confessions:', confessionsError);
         throw confessionsError;
       }
-  
-      console.log('Raw confessions data:', confessionsData); // Debug log for raw data
-  
+
       if (!confessionsData || confessionsData.length === 0) {
-        console.log('No confessions found for location:', cleanLocationId);
         setConfessions([]);
         return;
       }
-  
-      // Get current user for checking likes
-      const { data: { user } } = await supabase.auth.getUser();
 
-      // Process confessions data to ensure media is properly parsed
       const processedConfessions = await Promise.all(confessionsData.map(async confession => {
-        // Check if the current user has liked this confession
-        let isLiked = false;
-        if (user) {
-          const { data: likeData, error: likeError } = await supabase
-            .from('confession_likes')
-            .select('id')
-            .eq('confession_id', confession.id)
-            .eq('user_id', user.id)
-            .maybeSingle();
-          
-          if (!likeError && likeData) {
-            isLiked = true;
-          }
-        }
-
-        // Ensure media is properly parsed if it's a string
         let processedMedia = confession.media;
-  
-        // If media is a string, try to parse it as JSON
+
         if (typeof confession.media === 'string') {
           try {
             processedMedia = JSON.parse(confession.media);
           } catch (e) {
-            console.error('Error parsing media JSON:', e);
-            processedMedia = []; // Default to empty array if parsing fails
+            processedMedia = [];
           }
         }
-  
-        // If media is null or undefined, set it to an empty array
+
         if (!processedMedia) {
           processedMedia = [];
         }
-  
-        // Ensure each media item has the expected structure
+
         const validatedMedia = Array.isArray(processedMedia) ?
           processedMedia.map(item => {
-            // If the item is already in the correct format, return it
             if (item && typeof item === 'object' && item.url) {
               return item;
             }
-            // If it's just a string URL, convert it to the expected format
             if (typeof item === 'string') {
               return { url: item, type: 'image' };
             }
-            // Skip invalid items
             return null;
           }).filter(Boolean) : [];
-  
-        // For non-anonymous confessions, fetch user profile
+
         let userProfile = null;
         if (!confession.is_anonymous && confession.user_id) {
           const { data: profileData } = await supabase
@@ -604,7 +442,7 @@ const ConfessionScreen = () => {
             .select('username, full_name, avatar_url')
             .eq('id', confession.user_id)
             .single();
-  
+
           if (profileData) {
             userProfile = {
               username: profileData.username || profileData.full_name,
@@ -612,182 +450,219 @@ const ConfessionScreen = () => {
             };
           }
         }
-  
+
         return {
           ...confession,
           media: validatedMedia,
-          is_liked: isLiked,
           ...(userProfile && { username: userProfile.username, avatar_url: userProfile.avatar_url })
         };
       }));
-  
-      console.log('Processed confessions:', processedConfessions.length);
+
       setConfessions(processedConfessions);
+      
+      // Load reactions and verifications
+      await loadReactionsAndVerifications(processedConfessions.map(c => c.id));
     } catch (error) {
       console.error('Error loading confessions:', error);
       Alert.alert('Error', 'Failed to load confessions. Please try again.');
-      setConfessions([]); // Reset confessions on error
+      setConfessions([]);
     } finally {
       setLoading(false);
     }
   };
-  
-  // Update pickImage function to use Images only (not video)  
-  const pickImage = async (isProfileImage = false) => {
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        quality: 1,
-        aspect: isProfileImage ? [1, 1] : [4, 3],
-      });
 
-    if (!result.canceled) {
-      const asset = result.assets[0];
-      
-      if (isProfileImage) {
-        setLocationProfileImage({ 
-          uri: asset.uri,
-          type: 'image/jpeg',
-          name: `${Math.random().toString(36).substring(2)}.jpg`
-        });
-      } else {
-        setMedia([...media, { 
-          uri: asset.uri,
-          type: 'image/jpeg',
-          name: `${Math.random().toString(36).substring(2)}.jpg`
-        }]);
-      }
+  const loadReactionsAndVerifications = async (confessionIds) => {
+    try {
+      // Load reactions
+      const { data: reactionsData, error: reactionsError } = await supabase
+        .from('confession_reactions')
+        .select('*')
+        .in('confession_id', confessionIds);
+
+      if (reactionsError) throw reactionsError;
+
+      const reactionsMap = {};
+      reactionsData?.forEach(reaction => {
+        if (!reactionsMap[reaction.confession_id]) {
+          reactionsMap[reaction.confession_id] = [];
+        }
+        reactionsMap[reaction.confession_id].push(reaction);
+      });
+      setConfessionReactions(reactionsMap);
+
+      // Load verifications
+      const { data: verificationsData, error: verificationsError } = await supabase
+        .from('confession_verifications')
+        .select('*')
+        .in('confession_id', confessionIds);
+
+      if (verificationsError) throw verificationsError;
+
+      const verificationsMap = {};
+      verificationsData?.forEach(verification => {
+        if (!verificationsMap[verification.confession_id]) {
+          verificationsMap[verification.confession_id] = { correct: 0, incorrect: 0, userVote: null };
+        }
+        if (verification.is_correct) {
+          verificationsMap[verification.confession_id].correct++;
+        } else {
+          verificationsMap[verification.confession_id].incorrect++;
+        }
+        if (verification.user_id === currentUser?.id) {
+          verificationsMap[verification.confession_id].userVote = verification.is_correct;
+        }
+      });
+      setConfessionVerifications(verificationsMap);
+    } catch (error) {
+      console.error('Error loading reactions and verifications:', error);
     }
-  } catch (error) {
-    console.error('Error picking image:', error);
-    alert('Failed to select image. Please try again.');
-  }
-};
-  
-  // Updated postConfession function with Cloudinary media upload handling
-  const postConfession = async () => {
-  if (!newConfession.trim() && media.length === 0) return;
-  
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      alert('You must be logged in to post a confession');
+  };
+
+  const handleReaction = async (confessionId, emoji) => {
+    if (!currentUser) {
+      Alert.alert('Error', 'You must be logged in to react');
       return;
     }
-    
-    const mediaUrls = [];
-    for (const item of media) {
-      if (item.uri) {
-        try {
-          // Upload to Cloudinary instead of Supabase
-          const uploadResult = await uploadToCloudinary(item.uri, 'image');
-          
-          if (!uploadResult || !uploadResult.url) {
-            throw new Error('Failed to upload media');
-          }
-          
-          mediaUrls.push({
-            url: uploadResult.url,
-            type: 'image',
-            publicId: uploadResult.publicId // Store publicId for potential deletion later
-          });
-          
-          console.log('Media uploaded to Cloudinary:', uploadResult.url);
-        } catch (mediaError) {
-          console.error('Media upload error:', mediaError);
-          throw new Error('Failed to upload media: ' + (mediaError.message || 'Unknown error'));
-        }
-      }
-    }
-    
-    // Upload location profile image if present
-    let locationProfileImageData = null;
-    if (locationProfileImage && locationProfileImage.uri) {
-      try {
-        const uploadResult = await uploadToCloudinary(locationProfileImage.uri, 'image');
-        
-        if (!uploadResult || !uploadResult.url) {
-          throw new Error('Failed to upload location profile image');
-        }
-        
-        locationProfileImageData = {
-          url: uploadResult.url,
-          type: 'image',
-          publicId: uploadResult.publicId
-        };
-        
-        console.log('Location profile image uploaded to Cloudinary:', uploadResult.url);
-      } catch (mediaError) {
-        console.error('Location profile image upload error:', mediaError);
-        throw new Error('Failed to upload location profile image: ' + (mediaError.message || 'Unknown error'));
-      }
-    }
-    
-    // Ensure media is properly formatted as a JSON string to avoid parsing issues
-    // Handle custom place IDs consistently
-    let locationId = selectedLocation.place_id;
-    if (selectedLocation.is_custom && typeof locationId === 'string' && locationId.startsWith('custom_')) {
-      locationId = locationId.replace('custom_', '');
-    }
-    
-    console.log('Posting confession with location_id:', locationId, 'type:', typeof locationId);
-    
-    // Ensure we're using a consistent location_name format
-    // For Gurugram, use the standard format
-    let locationName = selectedLocation.display_name;
-    if (locationName.toLowerCase().includes('gurugram') || 
-        locationName.toLowerCase().includes('gurgaon')) {
-      locationName = 'Gurugram, Haryana, India';
-    }
-    
-    console.log('Using location_name:', locationName);
-    
-    const confessionData = {
-      user_id: remainAnonymous ? null : user.id,
-      // Store the creator's ID in a separate field for anonymous posts
-      creator_id: user.id, // Always store the actual creator ID regardless of anonymity
-      location_id: locationId, // Use the cleaned location ID
-      location_name: locationName, // Use the standardized location name
-      content: newConfession.trim(),
-      media: mediaUrls, // This is already an array of objects with url and type
-      is_anonymous: remainAnonymous,
-      created_at: new Date().toISOString(),
-      location_profile_image: locationProfileImageData
-    };
-    
-    console.log('Saving confession with media:', mediaUrls);
 
-    const { error: confessionError } = await supabase
-      .from('confessions')
-      .insert([confessionData]);
-      
-    if (confessionError) throw confessionError;
-    
-    setNewConfession('');
-    setMedia([]);
-    setLocationProfileImage(null);
-    setShowNewConfessionModal(false);
-    loadConfessions(selectedLocation.place_id);
-    
-  } catch (error) {
-    console.error('Error posting confession:', error);
-    alert(error.message || 'Failed to post confession. Please try again.');
-  }
-};
+    try {
+      const { error } = await supabase
+        .from('confession_reactions')
+        .upsert([{
+          confession_id: confessionId,
+          user_id: currentUser.id,
+          emoji: emoji
+        }], { onConflict: 'confession_id,user_id' });
 
-  const goToUserLocation = () => {
-    if (userLocation) {
-      setMapRegion({
-        latitude: userLocation.coords.latitude,
-        longitude: userLocation.coords.longitude,
+      if (error) throw error;
+
+      // Reload reactions
+      await loadReactionsAndVerifications([confessionId]);
+      setShowReactionModal(false);
+      setSelectedConfessionForReaction(null);
+    } catch (error) {
+      console.error('Error adding reaction:', error);
+      Alert.alert('Error', 'Failed to add reaction. Please try again.');
+    }
+  };
+
+  const handleVerification = async (confessionId, isCorrect) => {
+    if (!currentUser) {
+      Alert.alert('Error', 'You must be logged in to verify');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('confession_verifications')
+        .upsert([{
+          confession_id: confessionId,
+          user_id: currentUser.id,
+          is_correct: isCorrect
+        }], { onConflict: 'confession_id,user_id' });
+
+      if (error) throw error;
+
+      // Reload verifications
+      await loadReactionsAndVerifications([confessionId]);
+    } catch (error) {
+      console.error('Error adding verification:', error);
+      Alert.alert('Error', 'Failed to add verification. Please try again.');
+    }
+  };
+
+  const pickImage = async (isProfile = false) => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        quality: 1,
       });
+
+      if (!result.canceled) {
+        const asset = result.assets[0];
+        
+        if (isProfile) {
+          setProfileImage({ 
+            uri: asset.uri,
+            type: 'image/jpeg',
+            name: `profile_${Math.random().toString(36).substring(2)}.jpg`
+          });
+        } else {
+          setMedia([...media, { 
+            uri: asset.uri,
+            type: 'image/jpeg',
+            name: `${Math.random().toString(36).substring(2)}.jpg`
+          }]);
+        }
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to select image. Please try again.');
+    }
+  };
+
+  const postConfession = async () => {
+    if (!newConfession.trim() && media.length === 0) return;
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        Alert.alert('Error', 'You must be logged in to post a confession');
+        return;
+      }
+      
+      const mediaUrls = [];
+      for (const item of media) {
+        if (item.uri) {
+          try {
+            const uploadResult = await uploadToCloudinary(item.uri, 'image');
+            
+            if (!uploadResult || !uploadResult.url) {
+              throw new Error('Failed to upload media');
+            }
+            
+            mediaUrls.push({
+              url: uploadResult.url,
+              type: 'image',
+              publicId: uploadResult.publicId
+            });
+          } catch (mediaError) {
+            console.error('Media upload error:', mediaError);
+            throw new Error('Failed to upload media: ' + (mediaError.message || 'Unknown error'));
+          }
+        }
+      }
+      
+      const confessionData = {
+        user_id: remainAnonymous ? null : user.id,
+        creator_id: user.id,
+        location_id: selectedLocation.place_id,
+        location_name: selectedLocation.display_name,
+        content: newConfession.trim(),
+        media: mediaUrls,
+        is_anonymous: remainAnonymous,
+        created_at: new Date().toISOString()
+      };
+
+      const { error: confessionError } = await supabase
+        .from('confessions')
+        .insert([confessionData]);
+        
+      if (confessionError) throw confessionError;
+      
+      setNewConfession('');
+      setMedia([]);
+      setShowNewConfessionModal(false);
+      loadConfessions(selectedLocation.place_id);
+      
+    } catch (error) {
+      console.error('Error posting confession:', error);
+      Alert.alert('Error', error.message || 'Failed to post confession. Please try again.');
     }
   };
 
   const deleteConfession = async (confessionId) => {
     try {
-      // First, get the confession to access its media data
       const { data: confessionData, error: fetchError } = await supabase
         .from('confessions')
         .select('media')
@@ -796,158 +671,84 @@ const ConfessionScreen = () => {
       
       if (fetchError) throw fetchError;
       
-      // Delete media from Cloudinary if it exists
       if (confessionData?.media && Array.isArray(confessionData.media)) {
         for (const mediaItem of confessionData.media) {
           if (mediaItem.publicId) {
             try {
-              // Import is at the top of the file
               await deleteFromCloudinary(mediaItem.publicId, 'image');
-              console.log('Deleted media from Cloudinary:', mediaItem.publicId);
             } catch (mediaError) {
               console.error('Error deleting media from Cloudinary:', mediaError);
-              // Continue with deletion even if media deletion fails
             }
           }
         }
       }
       
-      // Delete the confession from the database
       const { error } = await supabase
         .from('confessions')
         .delete()
         .eq('id', confessionId);
 
       if (error) throw error;
-      refreshConfessions();
+      
+      loadConfessions(selectedLocation.place_id);
     } catch (error) {
       console.error('Error deleting confession:', error);
-      alert('Failed to delete confession. Please try again.');
+      Alert.alert('Error', 'Failed to delete confession. Please try again.');
     }
   };
 
-  // Handle like toggle for a confession
-  const handleLike = async (confessionId) => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        Alert.alert('Error', 'You must be logged in to like a confession');
-        return;
+  const refreshConfessions = () => {
+    if (selectedLocation && selectedLocation.place_id) {
+      let locationId = selectedLocation.place_id;
+      if (selectedLocation.is_custom && typeof locationId === 'string' && locationId.startsWith('custom_')) {
+        locationId = locationId.replace('custom_', '');
       }
-      
-      // Check if user already liked the confession
-      const { data: existingLike } = await supabase
-        .from('confession_likes')
-        .select()
-        .eq('confession_id', confessionId)
-        .eq('user_id', user.id)
-        .single();
-      
-      if (existingLike) {
-        // Unlike
-        const { error } = await supabase
-          .from('confession_likes')
-          .delete()
-          .eq('confession_id', confessionId)
-          .eq('user_id', user.id);
-          
-        if (error) throw error;
-        
-        // Update confessions state to reflect the change
-        setConfessions(prevConfessions => 
-          prevConfessions.map(confession => 
-            confession.id === confessionId 
-              ? { 
-                  ...confession, 
-                  likes_count: Math.max(0, (confession.likes_count || 1) - 1),
-                  is_liked: false 
-                } 
-              : confession
-          )
-        );
-      } else {
-        // Like
-        const { error } = await supabase
-          .from('confession_likes')
-          .insert({
-            confession_id: confessionId,
-            user_id: user.id
-          });
-          
-        if (error) throw error;
-        
-        // Update confessions state to reflect the change
-        setConfessions(prevConfessions => 
-          prevConfessions.map(confession => 
-            confession.id === confessionId 
-              ? { 
-                  ...confession, 
-                  likes_count: (confession.likes_count || 0) + 1,
-                  is_liked: true 
-                } 
-              : confession
-          )
-        );
-      }
-    } catch (error) {
-      console.error('Error toggling like:', error);
-      Alert.alert('Error', 'Failed to update like');
+      loadConfessions(locationId);
     }
   };
 
-  // Handle showing likes for a confession
-  const handleShowLikes = async (confessionId) => {
-    try {
-      setLoadingLikes(true);
-      setSelectedConfessionId(confessionId);
-      
-      const { data, error } = await supabase
-        .from('confession_likes')
-        .select(`
-          user_id,
-          profiles:user_id (username, avatar_url)
-        `)
-        .eq('confession_id', confessionId);
+  const renderLocationProfile = () => {
+    if (!selectedLocation) return null;
 
-      if (error) throw error;
-      setLikesList(data);
-      setShowLikesModal(true);
-    } catch (error) {
-      console.error('Error fetching likes:', error);
-      Alert.alert('Error', 'Failed to load likes');
-    } finally {
-      setLoadingLikes(false);
-    }
-  };
-
-  // Handle showing comments for a confession
-  const handleComment = (confessionId) => {
-    setSelectedConfessionId(confessionId);
-    setShowCommentModal(true);
-  };
-
-  // Handle closing comment modal
-  const handleCloseCommentModal = (newCommentsCount) => {
-    setShowCommentModal(false);
-    
-    // Update the comments count if provided
-    if (newCommentsCount !== undefined && selectedConfessionId) {
-      setConfessions(prevConfessions => 
-        prevConfessions.map(confession => 
-          confession.id === selectedConfessionId 
-            ? { ...confession, comments_count: newCommentsCount } 
-            : confession
-        )
-      );
-    }
+    return (
+      <View style={styles.locationProfileContainer}>
+        <View style={styles.locationProfileHeader}>
+          <TouchableOpacity onPress={() => setShowLocationProfileModal(true)}>
+            <Image 
+              source={{ 
+                uri: locationProfile?.profile_image || 'https://via.placeholder.com/80x80?text=Add+Photo'
+              }}
+              style={styles.locationProfileImage}
+            />
+          </TouchableOpacity>
+          <View style={styles.locationProfileInfo}>
+            <Text style={styles.locationProfileName} numberOfLines={2}>
+              {selectedLocation.display_name}
+            </Text>
+            <Text style={styles.locationProfileBio} numberOfLines={3}>
+              {locationProfile?.bio || 'No description yet. Tap to add one!'}
+            </Text>
+          </View>
+          <TouchableOpacity 
+            style={styles.editProfileButton}
+            onPress={() => {
+              setProfileBio(locationProfile?.bio || '');
+              setShowLocationProfileModal(true);
+            }}
+          >
+            <Ionicons name="create-outline" size={20} color="#ff00ff" />
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
   };
 
   const renderConfessionItem = ({ item }) => {
-    // Check if current user is the creator of the confession, even if it's anonymous
     const isCurrentUserConfession = currentUser && (
-      (item.user_id === currentUser.id) || // For non-anonymous posts
-      (item.is_anonymous && item.creator_id === currentUser.id) // For anonymous posts
+      (item.user_id === currentUser.id) || 
+      (item.is_anonymous && item.creator_id === currentUser.id)
     );
+    
     const formattedDate = item.created_at 
       ? new Date(item.created_at).toLocaleDateString('en-US', {
           month: 'short',
@@ -958,256 +759,179 @@ const ConfessionScreen = () => {
           minute: '2-digit'
         })
       : '';
-    
-    // State for enlarged location image modal
-    const [showEnlargedImage, setShowEnlargedImage] = useState(false);
+
+    const reactions = confessionReactions[item.id] || [];
+    const verifications = confessionVerifications[item.id] || { correct: 0, incorrect: 0, userVote: null };
     
     return (
-      <View style={styles.confessionCardContainer}>
-        <LinearGradient
-          colors={['rgba(138, 35, 135, 0.1)', 'rgba(233, 64, 87, 0.1)', 'rgba(242, 113, 33, 0.1)']}
-          style={styles.confessionCardGradient}
-        >
-          <View style={styles.confessionCard}>
-            {item.location_profile_image && (
-              <View style={styles.locationProfileImageWrapper}>
-                <Image 
-                  source={{ uri: item.location_profile_image.url }} 
-                  style={styles.locationProfileImageHeader} 
-                  resizeMode="cover"
-                />
-                <LinearGradient
-                  colors={['transparent', 'rgba(0,0,0,0.7)']}
-                  style={styles.locationProfileImageGradient}
-                />
-                <View style={styles.locationBioOverlay}>
-                  <Text style={styles.locationBioText}>{selectedLocation?.display_name || 'Location'}</Text>
-                </View>
-              </View>
-            )}
-            
-            {/* Modal for enlarged location image */}
-            <Modal
-              visible={showEnlargedImage}
-              transparent={true}
-              animationType="fade"
-              onRequestClose={() => setShowEnlargedImage(false)}
+      <TouchableOpacity 
+        style={styles.confessionCard}
+        onLongPress={() => {
+          setSelectedConfessionForReaction(item.id);
+          setShowReactionModal(true);
+        }}
+        delayLongPress={500}
+      >
+        <View style={styles.confessionHeader}>
+          <Image 
+            source={{ uri: item.is_anonymous 
+              ? 'https://via.placeholder.com/40x40?text=Anon' 
+              : (item.avatar_url || 'https://via.placeholder.com/40x40?text=User') 
+            }}
+            style={styles.avatar}
+          />
+          <View style={styles.userInfoContainer}>
+            <TouchableOpacity 
+              onPress={() => {
+                if (!item.is_anonymous && item.user_id) {
+                  navigation.navigate('UserProfileScreen', { userId: item.user_id });
+                }
+              }}
             >
-              <View style={styles.enlargedImageModalContainer}>
-                <TouchableOpacity 
-                  style={styles.enlargedImageCloseButton}
-                  onPress={() => setShowEnlargedImage(false)}
-                >
-                  <Ionicons name="close" size={28} color="#fff" />
-                </TouchableOpacity>
-                {item.location_profile_image && (
-                  <Image 
-                    source={{ uri: item.location_profile_image.url }} 
-                    style={styles.enlargedLocationImage} 
-                    resizeMode="contain"
-                  />
-                )}
-              </View>
-            </Modal>
-            
-            <View style={styles.confessionHeader}>
-              <Image 
-                source={{ uri: item.is_anonymous 
-                  ? 'https://via.placeholder.com/40' 
-                  : (item.avatar_url || 'https://via.placeholder.com/40') 
-                }}
-                style={styles.avatar}
-              />
-              <View style={styles.userInfoContainer}>
-                <TouchableOpacity 
-                  onPress={() => {
-                    if (!item.is_anonymous && item.user_id) {
-                      navigation.navigate('UserProfileScreen', { userId: item.user_id });
-                    }
-                  }}
-                >
-                  <Text style={[styles.username, { color: '#ff00ff' }]}>
-                    {item.is_anonymous ? 'Anonymous' : (item.username || 'User')}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.dateText}>{formattedDate}</Text>
-              {item.location_profile_image && (
-                <TouchableOpacity
-                  style={styles.locationImageButton}
-                  onPress={() => setShowEnlargedImage(true)}
-                >
-                  <Image 
-                    source={{ uri: item.location_profile_image.url }} 
-                    style={styles.locationThumbnail} 
-                  />
-                </TouchableOpacity>
-              )}
-              {isCurrentUserConfession && (
-                <TouchableOpacity
-                  style={styles.menuButton}
-                  onPress={() => {
-                    Alert.alert(
-                      'Confession Options',
-                      'What would you like to do?',
-                      [
-                        { text: 'Cancel', style: 'cancel' },
-                        { 
-                          text: 'Delete', 
-                          onPress: () => {
-                            Alert.alert(
-                              'Delete Confession',
-                              'Are you sure you want to delete this confession?',
-                              [
-                                { text: 'Cancel', style: 'cancel' },
-                                { 
-                                  text: 'Delete', 
-                                  onPress: () => deleteConfession(item.id),
-                                  style: 'destructive' 
-                                }
-                              ]
-                            );
-                          },
-                          style: 'destructive'
-                        }
-                      ]
-                    );
-                  }}
-                >
-                  <Ionicons name="ellipsis-vertical" size={20} color="#ff00ff" />
-                </TouchableOpacity>
-              )}
-            </View>
-            
-            <Text style={styles.confessionContent}>{item.content}</Text>
-            
-            {item.media && item.media.length > 0 && (
-              <ScrollView horizontal style={styles.mediaContainer}>
-                {item.media.map((mediaItem, index) => (
-                  <View key={index} style={styles.mediaItemContainer}>
-                    <Image 
-                      source={{ uri: mediaItem.url }}
-                      style={styles.mediaItem}
-                    />
-                    <View style={styles.mediaBadge}>
-                      <LinearGradient
-                        colors={['#4776E6', '#8E54E9']}
-                        style={styles.mediaBadgeGradient}
-                      >
-                        <Ionicons name="image" size={12} color="#fff" />
-                        <Text style={styles.mediaBadgeText}>Image</Text>
-                      </LinearGradient>
-                    </View>
-                  </View>
-                ))}          
-              </ScrollView>
-            )}
-            
-            <View style={styles.actionBar}>
-              <TouchableOpacity 
-                style={styles.actionButton} 
-                onPress={() => handleLike(item.id)}
-              >
-                <Ionicons 
-                  name={item.is_liked ? "heart" : "heart-outline"} 
-                  size={24} 
-                  color={item.is_liked ? "#ff0055" : "#ff00ff"} 
-                />
-                <TouchableOpacity onPress={() => item.likes_count > 0 && handleShowLikes(item.id)}>
-                  <Text style={styles.actionText}>{item.likes_count || 0}</Text>
-                </TouchableOpacity>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.actionButton}
-                onPress={() => handleComment(item.id)}
-              >
-                <Ionicons name="chatbubble-outline" size={22} color="#ff00ff" />
-                <Text style={styles.actionText}>{item.comments_count || 0}</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity style={styles.actionButton}>
-                <Ionicons name="share-social-outline" size={24} color="#ff00ff" />
-              </TouchableOpacity>
-            </View>
+              <Text style={[styles.username, { color: '#ff00ff' }]}>
+                {item.is_anonymous ? 'Anonymous' : (item.username || 'User')}
+              </Text>
+            </TouchableOpacity>
           </View>
-        </LinearGradient>
-      </View>
+          <Text style={styles.dateText}>{formattedDate}</Text>
+          {isCurrentUserConfession && (
+            <TouchableOpacity
+              style={styles.menuButton}
+              onPress={() => {
+                Alert.alert(
+                  'Confession Options',
+                  'What would you like to do?',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    { 
+                      text: 'Delete', 
+                      onPress: () => {
+                        Alert.alert(
+                          'Delete Confession',
+                          'Are you sure you want to delete this confession?',
+                          [
+                            { text: 'Cancel', style: 'cancel' },
+                            { 
+                              text: 'Delete', 
+                              onPress: () => deleteConfession(item.id),
+                              style: 'destructive' 
+                            }
+                          ]
+                        );
+                      },
+                      style: 'destructive'
+                    }
+                  ]
+                );
+              }}
+            >
+              <Ionicons name="ellipsis-vertical" size={20} color="#ff00ff" />
+            </TouchableOpacity>
+          )}
+        </View>
+        
+        <Text style={styles.confessionContent}>{item.content}</Text>
+        
+        {item.media && item.media.length > 0 && (
+          <ScrollView horizontal style={styles.mediaContainer} showsHorizontalScrollIndicator={false}>
+            {item.media.map((mediaItem, index) => (
+              <Image 
+                key={index}
+                source={{ uri: mediaItem.url }}
+                style={styles.mediaItem}
+                resizeMode="cover"
+              />
+            ))}          
+          </ScrollView>
+        )}
+
+        {/* Reactions Display */}
+        {reactions.length > 0 && (
+          <View style={styles.reactionsDisplay}>
+            {reactions.slice(0, 5).map((reaction, index) => (
+              <View key={index} style={styles.reactionItem}>
+                <Text style={styles.reactionEmoji}>{reaction.emoji}</Text>
+              </View>
+            ))}
+            {reactions.length > 5 && (
+              <Text style={styles.moreReactions}>+{reactions.length - 5}</Text>
+            )}
+          </View>
+        )}
+        
+        <View style={styles.actionBar}>
+          <TouchableOpacity style={styles.actionButton}>
+            <Ionicons name="heart-outline" size={24} color="#ff00ff" />
+            <Text style={styles.actionText}>{item.likes_count || 0}</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.actionButton}>
+            <Ionicons name="chatbubble-outline" size={22} color="#ff00ff" />
+            <Text style={styles.actionText}>{item.comments_count || 0}</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.actionButton}>
+            <Ionicons name="share-social-outline" size={24} color="#ff00ff" />
+          </TouchableOpacity>
+
+          {/* Verification Buttons */}
+          <View style={styles.verificationContainer}>
+            <TouchableOpacity 
+              style={[
+                styles.verificationButton, 
+                verifications.userVote === true && styles.verificationButtonActive
+              ]}
+              onPress={() => handleVerification(item.id, true)}
+            >
+              <Ionicons 
+                name="checkmark-circle" 
+                size={20} 
+                color={verifications.userVote === true ? "#fff" : "#00ff00"} 
+              />
+              <Text style={[
+                styles.verificationText,
+                verifications.userVote === true && styles.verificationTextActive
+              ]}>
+                {verifications.correct}
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[
+                styles.verificationButton, 
+                verifications.userVote === false && styles.verificationButtonActive
+              ]}
+              onPress={() => handleVerification(item.id, false)}
+            >
+              <Ionicons 
+                name="close-circle" 
+                size={20} 
+                color={verifications.userVote === false ? "#fff" : "#ff0000"} 
+              />
+              <Text style={[
+                styles.verificationText,
+                verifications.userVote === false && styles.verificationTextActive
+              ]}>
+                {verifications.incorrect}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </TouchableOpacity>
     );
   };
 
-  // Add mode selection component
-  const renderModeSelection = () => (
-    <View style={styles.modeContainer}>
-      <TouchableOpacity 
-        style={[styles.modeButton, mode === 'write' && styles.modeButtonActive]}
-        onPress={() => setMode('write')}
-      >
-        <Ionicons name="create" size={24} color={mode === 'write' ? '#fff' : '#ff00ff'} />
-        <Text style={[styles.modeButtonText, mode === 'write' && styles.modeButtonTextActive]}>Write Confession</Text>
-      </TouchableOpacity>
-      
-      <TouchableOpacity 
-        style={[styles.modeButton, mode === 'view' && styles.modeButtonActive]}
-        onPress={() => setMode('view')}
-      >
-        <Ionicons name="eye" size={24} color={mode === 'view' ? '#fff' : '#ff00ff'} />
-        <Text style={[styles.modeButtonText, mode === 'view' && styles.modeButtonTextActive]}>View Confessions</Text>
-      </TouchableOpacity>
-    </View>
-  );
-
-  // Render Likes Modal
-  const renderLikesModal = () => (
-    <Modal
-      visible={showLikesModal}
-      transparent={true}
-      animationType="slide"
-      onRequestClose={() => setShowLikesModal(false)}
-    >
-      <View style={styles.modalContainer}>
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Likes</Text>
-            <TouchableOpacity onPress={() => setShowLikesModal(false)}>
-              <Ionicons name="close" size={24} color="#ff00ff" />
-            </TouchableOpacity>
-          </View>
-          
-          {loadingLikes ? (
-            <ActivityIndicator size="large" color="#ff00ff" />
-          ) : (
-            <FlatList
-              data={likesList}
-              keyExtractor={(item, index) => `${item.user_id}-${index}`}
-              renderItem={({ item }) => (
-                <TouchableOpacity 
-                  style={styles.likeItem}
-                  onPress={() => {
-                    setShowLikesModal(false);
-                    navigation.navigate('UserProfileScreen', { userId: item.user_id });
-                  }}
-                >
-                  <Image 
-                    source={{ uri: item.profiles?.avatar_url || 'https://via.placeholder.com/40' }}
-                    style={styles.likeAvatar}
-                  />
-                  <Text style={styles.likeUsername}>{item.profiles?.username || 'User'}</Text>
-                </TouchableOpacity>
-              )}
-              ListEmptyComponent={
-                <Text style={styles.emptyText}>No likes yet</Text>
-              }
-            />
-          )}
-        </View>
-      </View>
-    </Modal>
-  );
+  const goToUserLocation = () => {
+    if (userLocation) {
+      setMapRegion({
+        latitude: userLocation.coords.latitude,
+        longitude: userLocation.coords.longitude,
+      });
+    }
+  };
 
   return (
     <View style={styles.container}>
-      {renderLikesModal()}
       <View style={styles.header}>
         <TouchableOpacity 
           onPress={() => navigation.goBack()}
@@ -1227,21 +951,18 @@ const ConfessionScreen = () => {
           onChangeText={(text) => {
             setSearchQuery(text);
             
-            // Clear any existing timeout
             if (searchTimeout) {
               clearTimeout(searchTimeout);
             }
             
-            // Clear results if text is too short
             if (text.length < 3) {
               setSearchResults([]);
               return;
             }
             
-            // Set a new timeout to delay the search
             const timeout = setTimeout(() => {
               searchLocations(text);
-            }, 500); // 500ms debounce delay
+            }, 500);
             
             setSearchTimeout(timeout);
           }}
@@ -1251,8 +972,14 @@ const ConfessionScreen = () => {
             <Ionicons name="close-circle" size={20} color="#999" />
           </TouchableOpacity>
         )}
+        <TouchableOpacity 
+          style={styles.mapButton}
+          onPress={() => setShowMap(!showMap)}
+        >
+          <Ionicons name={showMap ? "map" : "map-outline"} size={20} color="#ff00ff" />
+        </TouchableOpacity>
       </View>
-          
+
       {searchResults.length > 0 ? (
         <FlatList
           data={searchResults}
@@ -1274,17 +1001,14 @@ const ConfessionScreen = () => {
             <Text style={styles.noResultsText}>No locations found</Text>
             <TouchableOpacity 
               style={styles.addPlaceButton}
-              onPress={() => {
-                // Only show add place modal when user explicitly clicks this button
-                setShowAddPlaceModal(true);
-              }}
+              onPress={() => setShowAddPlaceModal(true)}
             >
               <Text style={styles.addPlaceButtonText}>Add New Place</Text>
             </TouchableOpacity>
           </View>
         )
       )}
-      
+
       {searchError && (
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>
@@ -1327,11 +1051,7 @@ const ConfessionScreen = () => {
         </View>
       )}
       
-      {selectedLocation && (
-        <View style={styles.locationHeader}>
-          <Text style={styles.locationName}>{selectedLocation.display_name}</Text>
-        </View>
-      )}
+      {selectedLocation && renderLocationProfile()}
       
       {loading ? (
         <View style={styles.loadingContainer}>
@@ -1346,6 +1066,7 @@ const ConfessionScreen = () => {
             contentContainerStyle={styles.confessionsList}
             refreshing={loading}
             onRefresh={refreshConfessions}
+            showsVerticalScrollIndicator={false}
           />
         ) : (
           <View style={styles.emptyContainer}>
@@ -1363,72 +1084,15 @@ const ConfessionScreen = () => {
       )}
       
       {selectedLocation && (
-        <>
-          <TouchableOpacity 
-            style={styles.addButton}
-            onPress={() => setShowNewConfessionModal(true)}
-          >
-            <LinearGradient
-              colors={['#8A2387', '#E94057', '#F27121']}
-              style={styles.gradientButton}
-            >
-              <Ionicons name="add" size={30} color="#fff" />
-            </LinearGradient>
-          </TouchableOpacity>
-          
-          {/* Location Profile Modal */}
-          <Modal
-            animationType="slide"
-            transparent={true}
-            visible={showLocationProfileModal}
-            onRequestClose={() => setShowLocationProfileModal(false)}
-          >
-            <View style={styles.modalContainer}>
-              <View style={styles.modalContent}>
-                <Text style={styles.modalTitle}>Add Location Profile Image</Text>
-                <Text style={[styles.modalText, {color: '#ccc', marginBottom: 15}]}>Add a photo of this location to help others recognize it.</Text>
-                
-                {locationProfileImage && (
-                  <View style={styles.locationProfileImageContainer}>
-                    <Image source={{ uri: locationProfileImage.uri }} style={styles.locationProfileImage} />
-                    <TouchableOpacity 
-                      style={styles.removeMediaButton}
-                      onPress={() => setLocationProfileImage(null)}
-                    >
-                      <Ionicons name="close-circle" size={24} color="#FF3B30" />
-                    </TouchableOpacity>
-                  </View>
-                )}
-                
-                <View style={styles.mediaButtons}>
-                  <TouchableOpacity 
-                    style={styles.mediaButton}
-                    onPress={() => pickImage(true)}
-                  >
-                    <LinearGradient
-                      colors={['#8A2387', '#E94057', '#F27121']}
-                      style={[styles.gradientButton, {paddingHorizontal: 15, paddingVertical: 10}]}
-                    >
-                      <Ionicons name="image" size={24} color="#fff" style={{marginRight: 8}} />
-                      <Text style={[styles.mediaButtonText, {color: '#fff'}]}>
-                        {locationProfileImage ? 'Change Image' : 'Select Image'}
-                      </Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
-                </View>
-                
-                <TouchableOpacity 
-                  style={[styles.postButton, {marginTop: 20}]}
-                  onPress={() => setShowLocationProfileModal(false)}
-                >
-                  <Text style={styles.postButtonText}>Done</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </Modal>
-        </>
+        <TouchableOpacity 
+          style={styles.addButton}
+          onPress={() => setShowNewConfessionModal(true)}
+        >
+          <Ionicons name="add" size={30} color="#fff" />
+        </TouchableOpacity>
       )}
-      
+
+      {/* Add Place Modal */}
       <Modal
         visible={showAddPlaceModal}
         animationType="slide"
@@ -1477,6 +1141,7 @@ const ConfessionScreen = () => {
                 placeholderTextColor="#666"
               />
             </View>
+
             <View style={styles.formGroup}>
               <Text style={styles.label}>District</Text>
               <TextInput
@@ -1487,6 +1152,7 @@ const ConfessionScreen = () => {
                 placeholderTextColor="#666"
               />
             </View>
+
             <View style={styles.formGroup}>
               <Text style={styles.label}>State</Text>
               <TextInput
@@ -1517,7 +1183,7 @@ const ConfessionScreen = () => {
                 <Text style={styles.buttonText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity 
-                style={[styles.modalButton, styles.confirmButton]}
+                style={[styles.modalButton, styles.submitButton]}
                 onPress={handleAddPlace}
               >
                 <Text style={styles.buttonText}>Add Place</Text>
@@ -1527,6 +1193,63 @@ const ConfessionScreen = () => {
         </View>
       </Modal>
 
+      {/* Location Profile Modal */}
+      <Modal
+        visible={showLocationProfileModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowLocationProfileModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Edit Location Profile</Text>
+              <TouchableOpacity onPress={() => setShowLocationProfileModal(false)}>
+                <Ionicons name="close" size={24} color="#ff00ff" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.profileImageSection}>
+              <TouchableOpacity 
+                style={styles.profileImageContainer}
+                onPress={() => pickImage(true)}
+              >
+                <Image 
+                  source={{ 
+                    uri: profileImage?.uri || locationProfile?.profile_image || 'https://via.placeholder.com/120x120?text=Add+Photo'
+                  }}
+                  style={styles.profileImagePreview}
+                />
+                <View style={styles.profileImageOverlay}>
+                  <Ionicons name="camera" size={30} color="#fff" />
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Bio/Description</Text>
+              <TextInput
+                style={[styles.input, styles.bioInput]}
+                value={profileBio}
+                onChangeText={setProfileBio}
+                placeholder="Tell others about this place..."
+                placeholderTextColor="#666"
+                multiline
+                numberOfLines={4}
+              />
+            </View>
+
+            <TouchableOpacity 
+              style={styles.saveProfileButton}
+              onPress={saveLocationProfile}
+            >
+              <Text style={styles.saveProfileButtonText}>Save Profile</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* New Confession Modal */}
       <Modal
         visible={showNewConfessionModal}
         transparent={true}
@@ -1552,7 +1275,7 @@ const ConfessionScreen = () => {
             />
             
             {media.length > 0 && (
-              <ScrollView horizontal style={styles.selectedMediaContainer}>
+              <ScrollView horizontal style={styles.selectedMediaContainer} showsHorizontalScrollIndicator={false}>
                 {media.map((item, index) => (
                   <View key={index} style={styles.selectedMediaItem}>
                     <Image source={{ uri: item.uri }} style={styles.selectedMediaPreview} />
@@ -1569,29 +1292,8 @@ const ConfessionScreen = () => {
             
             <View style={styles.mediaButtons}>
               <TouchableOpacity style={styles.mediaButton} onPress={() => pickImage(false)}>
-                <LinearGradient
-                  colors={['#8A2387', '#E94057', '#F27121']}
-                  style={[styles.gradientButton, {paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20}]}
-                >
-                  <Ionicons name="image" size={24} color="#fff" style={{marginRight: 5}} />
-                  <Text style={[styles.mediaButtonText, {color: '#fff'}]}>Add Image</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.mediaButton} 
-                onPress={() => {
-                  setShowNewConfessionModal(false);
-                  setTimeout(() => setShowLocationProfileModal(true), 300);
-                }}
-              >
-                <LinearGradient
-                  colors={['#4776E6', '#8E54E9']}
-                  style={[styles.gradientButton, {paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20}]}
-                >
-                  <Ionicons name="location" size={24} color="#fff" style={{marginRight: 5}} />
-                  <Text style={[styles.mediaButtonText, {color: '#fff'}]}>Add Location Photo</Text>
-                </LinearGradient>
+                <Ionicons name="image" size={24} color="#ff00ff" />
+                <Text style={styles.mediaButtonText}>Add Image</Text>
               </TouchableOpacity>
             </View>
             
@@ -1614,267 +1316,40 @@ const ConfessionScreen = () => {
           </View>
         </View>
       </Modal>
+
+      {/* Reaction Modal */}
+      <Modal
+        visible={showReactionModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowReactionModal(false)}
+      >
+        <TouchableOpacity 
+          style={styles.reactionModalContainer}
+          activeOpacity={1}
+          onPress={() => setShowReactionModal(false)}
+        >
+          <View style={styles.reactionModalContent}>
+            <Text style={styles.reactionModalTitle}>Choose a reaction</Text>
+            <View style={styles.emojiContainer}>
+              {emojiOptions.map((emoji, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={styles.emojiButton}
+                  onPress={() => handleReaction(selectedConfessionForReaction, emoji)}
+                >
+                  <Text style={styles.emoji}>{emoji}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  // Likes Modal Styles
-  likeItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  likeAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 10,
-  },
-  likeUsername: {
-    fontSize: 16,
-    color: '#333',
-  },
-  emptyText: {
-    textAlign: 'center',
-    padding: 20,
-    color: '#666',
-    fontSize: 16,
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  modalContent: {
-    backgroundColor: '#1a1a1a',
-    borderRadius: 15,
-    padding: 20,
-  },
-  modalTitle: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  modalText: {
-    color: '#fff',
-    fontSize: 16,
-    marginBottom: 15,
-    textAlign: 'center',
-  },
-  // Location Profile Image Styles
-  locationProfileImageContainer: {
-    width: '100%',
-    height: 200,
-    borderRadius: 10,
-    overflow: 'hidden',
-    marginBottom: 15,
-    position: 'relative',
-  },
-  locationProfileImage: {
-    width: '100%',
-    height: '100%',
-  },
-  locationProfileImageWrapper: {
-    width: '100%',
-    height: 200,
-    borderTopLeftRadius: 10,
-    borderTopRightRadius: 10,
-    overflow: 'hidden',
-    marginBottom: 10,
-    position: 'relative',
-  },
-  locationProfileImageHeader: {
-    width: '100%',
-    height: '100%',
-    objectFit: 'cover',
-  },
-  locationProfileImageGradient: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 80,
-  },
-  locationBioOverlay: {
-    position: 'absolute',
-    bottom: 10,
-    left: 10,
-    right: 10,
-    zIndex: 2,
-  },
-  locationBioText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: 'bold',
-    textShadowColor: 'rgba(0, 0, 0, 0.75)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
-  },
-  // Location Thumbnail in Header
-  locationImageButton: {
-    marginLeft: 10,
-    marginRight: 5,
-  },
-  locationThumbnail: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 2,
-    borderColor: '#ff00ff',
-  },
-  // Enlarged Image Modal
-  enlargedImageModalContainer: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.9)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  enlargedLocationImage: {
-    width: '90%',
-    height: '70%',
-    borderRadius: 10,
-  },
-  enlargedImageCloseButton: {
-    position: 'absolute',
-    top: 40,
-    right: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    borderRadius: 20,
-    padding: 8,
-    zIndex: 10,
-  },
-  gradientButton: {
-    borderRadius: 25,
-    padding: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  formGroup: {
-    marginBottom: 15,
-  },
-  label: {
-    color: '#fff',
-    fontSize: 16,
-    marginBottom: 5,
-  },
-  input: {
-    backgroundColor: '#333',
-    borderRadius: 8,
-    color: '#fff',
-    fontSize: 16,
-    padding: 12,
-  },
-  typeSelector: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 10,
-  },
-  typeButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    backgroundColor: '#333',
-    borderWidth: 1,
-    borderColor: '#666',
-  },
-  selectedType: {
-    backgroundColor: '#ff00ff',
-    borderColor: '#ff00ff',
-  },
-  typeText: {
-    color: '#fff',
-    fontSize: 14,
-  },
-  selectedTypeText: {
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 20,
-  },
-  modalButton: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 8,
-    marginHorizontal: 5,
-  },
-  cancelButton: {
-    backgroundColor: '#333',
-  },
-  confirmButton: {
-    backgroundColor: '#ff00ff',
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    textAlign: 'center',
-    fontWeight: 'bold',
-  },
-  menuButton: {
-    padding: 8,
-    borderRadius: 15,
-  },
-  userInfoContainer: {
-    flex: 1,
-  },
-  modeContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    padding: 20,
-    backgroundColor: '#550033',
-  },
-  modeButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#330022',
-    padding: 15,
-    borderRadius: 10,
-    marginHorizontal: 10,
-  },
-  modeButtonActive: {
-    backgroundColor: '#ff00ff',
-  },
-  modeButtonText: {
-    color: '#ff00ff',
-    marginLeft: 10,
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  modeButtonTextActive: {
-    color: '#fff',
-  },
-  addPlaceButton: {
-    backgroundColor: '#ff00ff',
-    padding: 10,
-    borderRadius: 5,
-    marginBottom: 10,
-    alignItems: 'center',
-  },
-  addPlaceButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-  },
-  noResultsContainer: {
-    padding: 20,
-    alignItems: 'center',
-  },
-  noResultsText: {
-    color: '#ff00ff',
-    fontSize: 16,
-    marginBottom: 10,
-  },
   container: {
     flex: 1,
     backgroundColor: '#000033',
@@ -1900,6 +1375,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingVertical: 10,
     backgroundColor: '#550033',
+    alignItems: 'center',
   },
   searchInput: {
     flex: 1,
@@ -1934,6 +1410,33 @@ const styles = StyleSheet.create({
     marginLeft: 10,
     flex: 1,
   },
+  noResultsContainer: {
+    padding: 15,
+    alignItems: 'center',
+    backgroundColor: '#330022',
+  },
+  noResultsText: {
+    color: '#fff',
+    marginBottom: 10,
+  },
+  addPlaceButton: {
+    backgroundColor: '#ff00ff',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  addPlaceButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  errorContainer: {
+    padding: 15,
+    backgroundColor: '#550033',
+  },
+  errorText: {
+    color: '#ff0000',
+    textAlign: 'center',
+  },
   mapContainer: {
     height: 300,
     position: 'relative',
@@ -1957,14 +1460,39 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 8,
   },
-  locationHeader: {
-    padding: 15,
+  locationProfileContainer: {
     backgroundColor: '#550033',
+    padding: 15,
   },
-  locationName: {
+  locationProfileHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  locationProfileImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    marginRight: 15,
+  },
+  locationProfileInfo: {
+    flex: 1,
+    marginRight: 10,
+  },
+  locationProfileName: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+    marginBottom: 5,
+  },
+  locationProfileBio: {
+    color: '#ccc',
+    fontSize: 14,
+    lineHeight: 18,
+  },
+  editProfileButton: {
+    padding: 8,
+    backgroundColor: '#330022',
+    borderRadius: 20,
   },
   loadingContainer: {
     flex: 1,
@@ -1974,31 +1502,16 @@ const styles = StyleSheet.create({
   confessionsList: {
     padding: 10,
   },
-  confessionCardContainer: {
-    marginBottom: 15,
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  confessionCardGradient: {
-    borderRadius: 12,
-    padding: 1,
-  },
   confessionCard: {
     backgroundColor: '#330022',
     borderRadius: 10,
     padding: 15,
-    paddingTop: 0,
+    marginBottom: 15,
   },
   confessionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 10,
-    marginTop: 10,
-  },
-  deleteButton: {
-    padding: 8,
-    borderRadius: 20,
-    backgroundColor: '#FFF0F0',
   },
   avatar: {
     width: 40,
@@ -2006,64 +1519,58 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     marginRight: 10,
   },
+  userInfoContainer: {
+    flex: 1,
+  },
   username: {
     color: '#fff',
     fontWeight: 'bold',
   },
   dateText: {
-    color: '#FFFF00',
+    color: '#999',
     fontSize: 12,
-    marginLeft: 'auto',
+    marginRight: 10,
+  },
+  menuButton: {
+    padding: 8,
+    borderRadius: 15,
   },
   confessionContent: {
     color: '#fff',
     fontSize: 16,
     marginBottom: 10,
+    lineHeight: 22,
   },
   mediaContainer: {
     flexDirection: 'row',
     marginBottom: 10,
-    position: 'relative',
-  },
-  mediaBadge: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    zIndex: 1,
-  },
-  mediaBadgeGradient: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  mediaBadgeText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 'bold',
-    marginLeft: 4,
-  },
-  mediaItemContainer: {
-    position: 'relative',
-    marginRight: 10,
   },
   mediaItem: {
     width: 150,
     height: 150,
     borderRadius: 10,
-  },
-  videoContainer: {
-    width: 150,
-    height: 150,
-    borderRadius: 10,
     marginRight: 10,
-    backgroundColor: '#220011',
-    justifyContent: 'center',
+  },
+  reactionsDisplay: {
+    flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 10,
+    paddingHorizontal: 5,
+  },
+  reactionItem: {
+    marginRight: 5,
+  },
+  reactionEmoji: {
+    fontSize: 18,
+  },
+  moreReactions: {
+    color: '#999',
+    fontSize: 12,
+    marginLeft: 5,
   },
   actionBar: {
     flexDirection: 'row',
+    alignItems: 'center',
     borderTopWidth: 1,
     borderTopColor: '#550033',
     paddingTop: 10,
@@ -2077,11 +1584,43 @@ const styles = StyleSheet.create({
     color: '#ff00ff',
     marginLeft: 5,
   },
+  verificationContainer: {
+    flexDirection: 'row',
+    marginLeft: 'auto',
+    alignItems: 'center',
+  },
+  verificationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#220011',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 15,
+    marginLeft: 8,
+  },
+  verificationButtonActive: {
+    backgroundColor: '#ff00ff',
+  },
+  verificationText: {
+    color: '#ccc',
+    marginLeft: 4,
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  verificationTextActive: {
+    color: '#fff',
+  },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+  },
+  emptyText: {
+    color: '#ff00ff',
+    textAlign: 'center',
+    marginTop: 10,
+    fontSize: 16,
   },
   instructionContainer: {
     flex: 1,
@@ -2111,15 +1650,127 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 3,
   },
-  refreshButton: {
-    bottom: 90, // Position above the add button
-    backgroundColor: '#3399ff',
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#330022',
+    borderRadius: 15,
+    padding: 20,
+    maxHeight: '80%',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 20,
+  },
+  modalTitle: {
+    color: '#ff00ff',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  formGroup: {
+    marginBottom: 15,
+  },
+  label: {
+    color: '#fff',
+    fontSize: 16,
+    marginBottom: 5,
+  },
+  input: {
+    backgroundColor: '#220011',
+    borderRadius: 8,
+    color: '#fff',
+    fontSize: 16,
+    padding: 12,
+  },
+  bioInput: {
+    height: 100,
+    textAlignVertical: 'top',
+  },
+  typeSelector: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  typeButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    backgroundColor: '#220011',
+    borderWidth: 1,
+    borderColor: '#666',
+  },
+  selectedType: {
+    backgroundColor: '#ff00ff',
+    borderColor: '#ff00ff',
+  },
+  typeText: {
+    color: '#fff',
+    fontSize: 14,
+  },
+  selectedTypeText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+  },
+  modalButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    marginHorizontal: 5,
+  },
+  cancelButton: {
+    backgroundColor: '#666',
+  },
+  submitButton: {
+    backgroundColor: '#ff00ff',
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    textAlign: 'center',
+    fontWeight: 'bold',
+  },
+  profileImageSection: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  profileImageContainer: {
+    position: 'relative',
+  },
+  profileImagePreview: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+  },
+  profileImageOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: 'rgba(255, 0, 255, 0.8)',
+    borderRadius: 20,
+    padding: 8,
+  },
+  saveProfileButton: {
+    backgroundColor: '#ff00ff',
+    borderRadius: 10,
+    padding: 15,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  saveProfileButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
   },
   confessionInput: {
     backgroundColor: '#220011',
@@ -2188,13 +1839,41 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 16,
   },
-  errorContainer: {
-    padding: 15,
-    backgroundColor: '#550033',
+  reactionModalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  errorText: {
-    color: '#ff0000',
-    textAlign: 'center',
+  reactionModalContent: {
+    backgroundColor: '#330022',
+    borderRadius: 20,
+    padding: 20,
+    alignItems: 'center',
+    minWidth: 300,
+  },
+  reactionModalTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 20,
+  },
+  emojiContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 15,
+  },
+  emojiButton: {
+    backgroundColor: '#220011',
+    borderRadius: 25,
+    width: 50,
+    height: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emoji: {
+    fontSize: 24,
   },
 });
 
