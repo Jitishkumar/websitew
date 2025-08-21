@@ -19,16 +19,21 @@ const SignupScreen = () => {
       return;
     }
 
+    // ✅ Restrict to Gmail or Hotmail
+    const lowerEmail = email.trim().toLowerCase();
+    if (!lowerEmail.endsWith('@gmail.com') && !lowerEmail.endsWith('@hotmail.com')) {
+      Alert.alert('Error', 'Only Gmail or Hotmail addresses are allowed');
+      return;
+    }
+
     setLoading(true);
     try {
-      // Step 1: Sign up the user with auth
-      const { data, error } = await supabase.auth.signUp({
-        email: email.trim(),
+      // Step 1: Sign up the user with Supabase auth
+      const { error } = await supabase.auth.signUp({
+        email: lowerEmail,
         password: password.trim(),
         options: {
-          data: {
-            username: username.trim(),
-          },
+          data: { username: username.trim() },
         },
       });
 
@@ -36,57 +41,13 @@ const SignupScreen = () => {
         Alert.alert('Error', error.message);
         return;
       }
-      
-      // Step 2: Create a profile record for the user
-      if (data && data.user) {
-        // Get the current highest rank to assign the next rank number
-        const { data: rankData, error: rankError } = await supabase
-          .from('profiles')
-          .select('rank')
-          .order('rank', { ascending: false })
-          .limit(1);
-        
-        const nextRank = rankData && rankData.length > 0 && rankData[0].rank 
-          ? rankData[0].rank + 1 
-          : 1; // Start with 1 if no profiles exist
 
-        // First insert the profile without trying to return it
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert([
-            { 
-              id: data.user.id,
-              username: username.trim(),
-              created_at: new Date().toISOString(),
-              avatar_url: null,
-              bio: null,
-              rank: nextRank
-            }
-          ]);
-          
-        // If profile creation was successful, verify it exists by fetching it separately
-        if (!profileError) {
-          const { data: profileData, error: fetchError } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', data.user.id)
-            .maybeSingle(); // Use maybeSingle() instead of single() to avoid PGRST116 error
-            
-          if (fetchError) {
-            console.error('Error verifying profile:', fetchError);
-          }
-        }
-          
-        if (profileError) {
-          console.error('Error creating profile:', profileError);
-          Alert.alert('Warning', 'Account created but profile setup failed. Some features may be limited.');
-        } else {
-          Alert.alert('Success', 'Account created successfully!');
-        }
-      } else {
-        Alert.alert('Success', 'Account created successfully!');
-      }
-      
+      // ✅ No profile insert yet! Wait until email is confirmed
+      Alert.alert(
+        'Verify your email',
+        'We sent you a confirmation link. Please verify your email before logging in.'
+      );
+
       navigation.navigate('Login');
     } catch (error) {
       Alert.alert('Error', 'An unexpected error occurred');
@@ -115,7 +76,7 @@ const SignupScreen = () => {
         />
         <TextInput 
           style={styles.input}
-          placeholder="Email"
+          placeholder="Email (Gmail or Hotmail only)"
           placeholderTextColor="#666666"
           value={email}
           onChangeText={setEmail}
@@ -147,30 +108,11 @@ const SignupScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#000033',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 15,
-    paddingBottom: 15,
-  },
-  backButton: {
-    padding: 5,
-  },
-  headerTitle: {
-    color: '#3399ff',
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginLeft: 15,
-  },
-  content: {
-    flex: 1,
-    padding: 20,
-    justifyContent: 'center',
-  },
+  container: { flex: 1, backgroundColor: '#000033' },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, paddingBottom: 15 },
+  backButton: { padding: 5 },
+  headerTitle: { color: '#3399ff', fontSize: 20, fontWeight: 'bold', marginLeft: 15 },
+  content: { flex: 1, padding: 20, justifyContent: 'center' },
   input: {
     backgroundColor: '#000066',
     borderRadius: 10,
@@ -187,14 +129,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 20,
   },
-  buttonDisabled: {
-    opacity: 0.7,
-  },
-  signupButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
+  buttonDisabled: { opacity: 0.7 },
+  signupButtonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
 });
 
 export default SignupScreen;

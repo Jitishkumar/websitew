@@ -16,6 +16,7 @@ import {
   Animated,
   Dimensions
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
@@ -590,7 +591,7 @@ const ConfessionScreen = () => {
         } else {
           setMedia([...media, { 
             uri: asset.uri,
-            type: 'image/jpeg',
+            type: 'image',
             name: `${Math.random().toString(36).substring(2)}.jpg`
           }]);
         }
@@ -835,12 +836,40 @@ const ConfessionScreen = () => {
         {item.media && item.media.length > 0 && (
           <ScrollView horizontal style={styles.mediaContainer} showsHorizontalScrollIndicator={false}>
             {item.media.map((mediaItem, index) => (
-              <Image 
-                key={index}
-                source={{ uri: mediaItem.url }}
-                style={styles.mediaItem}
-                resizeMode="cover"
-              />
+              <View key={index} style={styles.mediaItemContainer}>
+                <Image 
+                  source={{ uri: mediaItem.url }}
+                  style={styles.mediaItem}
+                  resizeMode="cover"
+                />
+                {mediaItem.type === 'video' && (
+                  <TouchableOpacity style={styles.playButton}>
+                    <LinearGradient
+                      colors={['#FF00FF', '#8A2387']}
+                      style={styles.gradientButton}
+                    >
+                      <Ionicons name="play-circle" size={40} color="#fff" />
+                    </LinearGradient>
+                  </TouchableOpacity>
+                )}
+                {mediaItem.type === 'video' ? (
+                  <View style={[styles.mediaBadge, styles.videoBadge]}>
+                    <Ionicons name="videocam" size={16} color="#fff" />
+                    <Text style={styles.mediaBadgeText}>Video</Text>
+                  </View>
+                ) : (
+                  <View style={[styles.mediaBadge, styles.imageBadge]}>
+                    <Ionicons name="image" size={16} color="#fff" />
+                    <Text style={styles.mediaBadgeText}>Image</Text>
+                  </View>
+                )}
+                {mediaItem.loading && (
+                  <View style={styles.loadingOverlay}>
+                    <ActivityIndicator size="small" color="#fff" />
+                    <Text style={styles.loadingText}>Loading...</Text>
+                  </View>
+                )}
+              </View>
             ))}          
           </ScrollView>
         )}
@@ -1507,6 +1536,16 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 15,
     marginBottom: 15,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.30,
+    shadowRadius: 4.65,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: '#440022',
   },
   confessionHeader: {
     flexDirection: 'row',
@@ -1525,11 +1564,17 @@ const styles = StyleSheet.create({
   username: {
     color: '#fff',
     fontWeight: 'bold',
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: -1, height: 1 },
+    textShadowRadius: 5,
   },
   dateText: {
     color: '#999',
     fontSize: 12,
     marginRight: 10,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: -1, height: 1 },
+    textShadowRadius: 3,
   },
   menuButton: {
     padding: 8,
@@ -1540,16 +1585,43 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginBottom: 10,
     lineHeight: 22,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 2,
   },
   mediaContainer: {
     flexDirection: 'row',
     marginBottom: 10,
   },
-  mediaItem: {
+  mediaItemContainer: {
+    position: 'relative',
     width: 150,
     height: 150,
     borderRadius: 10,
     marginRight: 10,
+    overflow: 'hidden',
+  },
+  mediaItem: {
+    width: '100%',
+    height: '100%',
+  },
+  playButton: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 10,
+  },
+  gradientButton: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   reactionsDisplay: {
     flexDirection: 'row',
@@ -1803,18 +1875,18 @@ const styles = StyleSheet.create({
   },
   mediaButtons: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     marginBottom: 20,
   },
   mediaButton: {
-    backgroundColor: '#220011',
+    backgroundColor: 'transparent',
     borderRadius: 10,
-    padding: 10,
-    marginRight: 10,
     flexDirection: 'row',
     alignItems: 'center',
+    // Remove explicit padding and margin if using gradientButton
   },
   mediaButtonText: {
-    color: '#ff00ff',
+    color: '#fff',
     marginLeft: 8,
     fontSize: 14,
   },
@@ -1874,6 +1946,51 @@ const styles = StyleSheet.create({
   },
   emoji: {
     fontSize: 24,
+  },
+  mediaBadge: {
+    position: 'absolute',
+    top: 5,
+    left: 5,
+    borderRadius: 10,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    zIndex: 1,
+  },
+  videoBadge: {
+    backgroundColor: 'rgba(138, 35, 135, 0.8)', // Purple/Pink gradient start
+  },
+  imageBadge: {
+    backgroundColor: 'rgba(0, 255, 255, 0.8)', // Teal
+  },
+  mediaBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginLeft: 5,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderRadius: 10,
+    zIndex: 2,
+  },
+  loadingText: {
+    color: '#fff',
+    marginTop: 10,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   },
 });
 
