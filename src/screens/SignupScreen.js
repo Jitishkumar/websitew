@@ -19,7 +19,6 @@ const SignupScreen = () => {
       return;
     }
 
-    // ✅ Restrict to Gmail or Hotmail
     const lowerEmail = email.trim().toLowerCase();
     if (!lowerEmail.endsWith('@gmail.com') && !lowerEmail.endsWith('@hotmail.com')) {
       Alert.alert('Error', 'Only Gmail or Hotmail addresses are allowed');
@@ -28,8 +27,7 @@ const SignupScreen = () => {
 
     setLoading(true);
     try {
-      // Step 1: Sign up the user with Supabase auth
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email: lowerEmail,
         password: password.trim(),
         options: {
@@ -42,13 +40,15 @@ const SignupScreen = () => {
         return;
       }
 
-      // ✅ No profile insert yet! Wait until email is confirmed
-      Alert.alert(
-        'Verify your email',
-        'We sent you a confirmation link. Please verify your email before logging in.'
-      );
-
-      navigation.navigate('Login');
+      if (data.user) {
+        Alert.alert(
+          'Verify your email',
+          'We sent you a confirmation code. Please check your email and enter the code to verify your account.'
+        );
+        navigation.navigate('OTPVerification', { email: lowerEmail });
+      } else {
+        Alert.alert('Error', 'An unexpected error occurred during sign-up.');
+      }
     } catch (error) {
       Alert.alert('Error', 'An unexpected error occurred');
     } finally {

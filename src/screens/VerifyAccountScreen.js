@@ -415,7 +415,7 @@ const VerifyAccountScreen = () => {
           <View style={styles.infoContainer}>
             <Ionicons name="checkmark-circle" size={24} color="#ff0000" style={styles.infoIcon} />
             <Text style={styles.infoText}>
-              Get a red verification badge next to your username for ₹10/month. Your information will be reviewed manually.
+              Get a red verification badge next to your username for ₹70/month. Your information will be reviewed manually.
             </Text>
           </View>
           
@@ -497,7 +497,7 @@ const VerifyAccountScreen = () => {
 
           <View style={styles.paymentSection}>
             <Text style={styles.paymentTitle}>Verification Fee</Text>
-            <Text style={styles.paymentAmount}>₹10.00</Text>
+            <Text style={styles.paymentAmount}>₹70.00</Text>
             <Text style={styles.paymentDescription}>One month of account verification</Text>
           </View>
 

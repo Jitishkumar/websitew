@@ -9,6 +9,7 @@ import { useMessages } from '../context/MessageContext';
 import HomeScreen from '../screens/HomeScreen';
 import LoginScreen from '../screens/LoginScreen';
 import SignupScreen from '../screens/SignupScreen';
+import OTPVerificationScreen from '../screens/OTPVerificationScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import EditProfileScreen from '../screens/EditProfileScreen';
 import MessagesScreen from '../screens/MessagesScreen';
@@ -168,6 +169,7 @@ const AppNavigator = () => {
     <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName={initialRoute}>
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="Signup" component={SignupScreen} />
+      <Stack.Screen name="OTPVerification" component={OTPVerificationScreen} />
       <Stack.Screen name="PostViewer" component={PostViewerScreen} options={{ headerShown: false }} />
       <Stack.Screen name="MainApp" component={TabNavigator} />
       <Stack.Screen name="EditProfile" component={EditProfileScreen} />

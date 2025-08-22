@@ -1,5 +1,6 @@
 {
   "expo": {
+    "scheme": "perfectfl",
     "name": "perfectfl",
     "slug": "perfectfl",
     "version": "1.0.0",
