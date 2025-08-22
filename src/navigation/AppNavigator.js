@@ -38,6 +38,7 @@ import { supabase } from '../lib/supabase';
 import PhotoTextViewerScreen from '../screens/PhotoTextViewerScreen';
 import MessageSettingsScreen from '../screens/MessageSettingsScreen';
 import BlockedUsersScreen from '../screens/BlockedUsersScreen';
+import ConfessionCommentScreen from '../screens/ConfessionCommentScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -195,6 +196,7 @@ const AppNavigator = () => {
       <Stack.Screen name="VerifyAccount" component={VerifyAccountScreen} options={{ headerShown: false }} />
       <Stack.Screen name="MessageSettings" component={MessageSettingsScreen} options={{ headerShown: false }} />
       <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="ConfessionComment" component={ConfessionCommentScreen} options={{ headerShown: false }} />
     </Stack.Navigator>
   );
 };

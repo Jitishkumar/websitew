@@ -26,6 +26,7 @@ import { supabase } from '../config/supabase';
 import * as Location from 'expo-location';
 import * as FileSystem from 'expo-file-system';
 import { uploadToCloudinary, deleteFromCloudinary } from '../config/cloudinary';
+import ConfessionCommentScreen from './ConfessionCommentScreen'; // Added import for ConfessionCommentScreen
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -57,6 +58,9 @@ const ConfessionScreen = () => {
   const [confessionReactions, setConfessionReactions] = useState({});
   const [confessionVerifications, setConfessionVerifications] = useState({});
   const [currentUser, setCurrentUser] = useState(null);
+  const [confessionLikes, setConfessionLikes] = useState({});
+  const [confessionComments, setConfessionComments] = useState({});
+  const [showCommentModal, setShowCommentModal] = useState(false); // Added state for CommentScreen modal
 
   // Emoji options for reactions
   const emojiOptions = ['😂', '❤️', '😮', '😢', '😡', '👍', '👎', '🔥', '💯', '🤔'];
@@ -391,7 +395,8 @@ const ConfessionScreen = () => {
           likes_count,
           comments_count,
           created_at,
-          username
+          username,
+          confession_likes!left(user_id)
         `)
         .order('created_at', { ascending: false })
         .limit(50);
@@ -455,7 +460,8 @@ const ConfessionScreen = () => {
         return {
           ...confession,
           media: validatedMedia,
-          ...(userProfile && { username: userProfile.username, avatar_url: userProfile.avatar_url })
+          ...(userProfile && { username: userProfile.username, avatar_url: userProfile.avatar_url }),
+          is_liked: !!confession.confession_likes.find(like => like.user_id === currentUser?.id)
         };
       }));
 
@@ -569,6 +575,69 @@ const ConfessionScreen = () => {
       console.error('Error adding verification:', error);
       Alert.alert('Error', 'Failed to add verification. Please try again.');
     }
+  };
+
+  const handleLike = async (confessionId) => {
+    if (!currentUser) {
+      Alert.alert('Error', 'You must be logged in to like a confession');
+      return;
+    }
+
+    try {
+      // Check if already liked
+      const { data: existingLike, error: fetchError } = await supabase
+        .from('confession_likes')
+        .select('id')
+        .eq('confession_id', confessionId)
+        .eq('user_id', currentUser.id)
+        .single();
+
+      if (fetchError && fetchError.code !== 'PGRST116') {
+        throw fetchError; // Rethrow if it's an actual error, not just no rows found
+      }
+
+      if (existingLike) {
+        // Unlike
+        const { error: deleteError } = await supabase
+          .from('confession_likes')
+          .delete()
+          .eq('id', existingLike.id);
+
+        if (deleteError) throw deleteError;
+
+        // Update local state
+        setConfessions(prevConfessions => prevConfessions.map(conf => 
+          conf.id === confessionId 
+            ? { ...conf, is_liked: false, likes_count: (conf.likes_count || 0) - 1 } 
+            : conf
+        ));
+      } else {
+        // Like
+        const { error: insertError } = await supabase
+          .from('confession_likes')
+          .insert([{
+            confession_id: confessionId,
+            user_id: currentUser.id,
+          }]);
+
+        if (insertError) throw insertError;
+
+        // Update local state
+        setConfessions(prevConfessions => prevConfessions.map(conf => 
+          conf.id === confessionId 
+            ? { ...conf, is_liked: true, likes_count: (conf.likes_count || 0) + 1 } 
+            : conf
+        ));
+      }
+    } catch (error) {
+      console.error('Error toggling like:', error);
+      Alert.alert('Error', 'Failed to update like. Please try again.');
+    }
+  };
+
+  const handleCommentPress = (confessionId) => {
+    setSelectedConfessionForReaction(confessionId); // Set the confession ID for the comment modal
+    setShowCommentModal(true); // Show the comment modal
   };
 
   const pickImage = async (isProfile = false) => {
@@ -889,12 +958,14 @@ const ConfessionScreen = () => {
         )}
         
         <View style={styles.actionBar}>
-          <TouchableOpacity style={styles.actionButton}>
-            <Ionicons name="heart-outline" size={24} color="#ff00ff" />
-            <Text style={styles.actionText}>{item.likes_count || 0}</Text>
+          <TouchableOpacity style={styles.actionButton} onPress={() => handleLike(item.id)}>
+            <LinearGradient colors={item.is_liked ? ['#ff00ff', '#9900ff'] : ['transparent', 'transparent']} style={item.is_liked ? styles.likedIconBackground : {}}>
+              <Ionicons name={item.is_liked ? 'heart' : 'heart-outline'} size={24} color={item.is_liked ? '#fff' : '#ff00ff'} />
+            </LinearGradient>
+            <Text style={[styles.actionText, item.is_liked && styles.likedText]}>{item.likes_count || 0}</Text>
           </TouchableOpacity>
           
-          <TouchableOpacity style={styles.actionButton}>
+          <TouchableOpacity style={styles.actionButton} onPress={() => handleCommentPress(item.id)}>
             <Ionicons name="chatbubble-outline" size={22} color="#ff00ff" />
             <Text style={styles.actionText}>{item.comments_count || 0}</Text>
           </TouchableOpacity>
@@ -959,9 +1030,14 @@ const ConfessionScreen = () => {
     }
   };
 
-  return (
-    <View style={styles.container}>
-      <View style={styles.header}>
+  const renderConfessionsHeader = () => (
+    <View>
+      <LinearGradient
+        colors={['#0a0a2a', '#1a1a3a']}
+        start={{x: 0, y: 0}}
+        end={{x: 1, y: 1}}
+        style={styles.header}
+      >
         <TouchableOpacity 
           onPress={() => navigation.goBack()}
           style={styles.backButton}
@@ -969,9 +1045,14 @@ const ConfessionScreen = () => {
           <Ionicons name="arrow-back" size={24} color="#ff00ff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Confessions</Text>
-      </View>
+      </LinearGradient>
 
-      <View style={styles.searchContainer}>
+      <LinearGradient
+        colors={['#1a1a3a', '#0d0d2a']}
+        start={{x: 0, y: 0}}
+        end={{x: 1, y: 1}}
+        style={styles.searchContainer}
+      >
         <TextInput
           style={styles.searchInput}
           placeholder="Search for a place, institution, company..."
@@ -1007,23 +1088,21 @@ const ConfessionScreen = () => {
         >
           <Ionicons name={showMap ? "map" : "map-outline"} size={20} color="#ff00ff" />
         </TouchableOpacity>
-      </View>
+      </LinearGradient>
 
       {searchResults.length > 0 ? (
-        <FlatList
-          data={searchResults}
-          keyExtractor={(item) => item.place_id.toString()}
-          renderItem={({ item }) => (
+        <View style={styles.searchResultsList}>
+          {searchResults.map((item) => (
             <TouchableOpacity 
+              key={item.place_id.toString()}
               style={styles.searchResultItem}
               onPress={() => selectLocation(item)}
             >
               <Ionicons name="location" size={20} color="#ff00ff" />
               <Text style={styles.searchResultText}>{item.display_name}</Text>
             </TouchableOpacity>
-          )}
-          style={styles.searchResultsList}
-        />
+          ))}
+        </View>
       ) : (
         searchQuery.length >= 3 && !loading && (
           <View style={styles.noResultsContainer}>
@@ -1081,28 +1160,34 @@ const ConfessionScreen = () => {
       )}
       
       {selectedLocation && renderLocationProfile()}
-      
+    </View>
+  );
+
+  return (
+    <View style={styles.container}>
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#ff00ff" />
         </View>
       ) : selectedLocation ? (
-        confessions.length > 0 ? (
-          <FlatList
-            data={confessions}
-            keyExtractor={(item) => item.id.toString()}
-            renderItem={renderConfessionItem}
-            contentContainerStyle={styles.confessionsList}
-            refreshing={loading}
-            onRefresh={refreshConfessions}
-            showsVerticalScrollIndicator={false}
-          />
-        ) : (
-          <View style={styles.emptyContainer}>
-            <Ionicons name="chatbubbles-outline" size={60} color="#ff00ff" />
-            <Text style={styles.emptyText}>No confessions yet. Be the first to share!</Text>
-          </View>
-        )
+        <FlatList
+          data={confessions}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={renderConfessionItem}
+          ListHeaderComponent={renderConfessionsHeader}
+          contentContainerStyle={styles.confessionsList}
+          refreshing={loading}
+          onRefresh={refreshConfessions}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={() => (
+            selectedLocation && !loading ? (
+              <View style={styles.emptyContainer}>
+                <Ionicons name="chatbubbles-outline" size={60} color="#ff00ff" />
+                <Text style={styles.emptyText}>No confessions yet. Be the first to share!</Text>
+              </View>
+            ) : null
+          )}
+        />
       ) : (
         <View style={styles.instructionContainer}>
           <Ionicons name="search" size={60} color="#ff00ff" />
@@ -1119,6 +1204,14 @@ const ConfessionScreen = () => {
         >
           <Ionicons name="add" size={30} color="#fff" />
         </TouchableOpacity>
+      )}
+      {!selectedLocation && !loading && ( // Render instruction container if no location selected and not loading
+        <View style={styles.instructionContainer}>
+          <Ionicons name="search" size={60} color="#ff00ff" />
+          <Text style={styles.instructionText}>
+            Search for a place or select a location on the map to see confessions
+          </Text>
+        </View>
       )}
 
       {/* Add Place Modal */}
@@ -1374,6 +1467,12 @@ const ConfessionScreen = () => {
           </View>
         </TouchableOpacity>
       </Modal>
+      <ConfessionCommentScreen 
+        visible={showCommentModal} 
+        onClose={() => setShowCommentModal(false)} 
+        confessionId={selectedConfessionForReaction} 
+        onCommentPosted={refreshConfessions} // Refresh confessions when a comment is posted
+      />
     </View>
   );
 };
@@ -1381,7 +1480,7 @@ const ConfessionScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000033',
+    backgroundColor: '#0a0a2a',
   },
   header: {
     flexDirection: 'row',
@@ -1389,82 +1488,120 @@ const styles = StyleSheet.create({
     paddingTop: 50,
     paddingHorizontal: 15,
     paddingBottom: 15,
+    backgroundColor: '#0a0a2a',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 0, 255, 0.2)',
   },
   backButton: {
-    padding: 5,
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 0, 255, 0.1)',
   },
   headerTitle: {
-    color: '#ff00ff',
-    fontSize: 20,
+    color: '#fff',
+    fontSize: 22,
     fontWeight: 'bold',
     marginLeft: 15,
+    textShadowColor: 'rgba(255, 0, 255, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 8,
   },
   searchContainer: {
     flexDirection: 'row',
     paddingHorizontal: 15,
-    paddingVertical: 10,
-    backgroundColor: '#550033',
+    paddingVertical: 12,
+    backgroundColor: '#1a1a3a',
     alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 255, 255, 0.2)',
   },
   searchInput: {
     flex: 1,
-    backgroundColor: '#330022',
-    borderRadius: 20,
-    paddingHorizontal: 15,
-    paddingVertical: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 25,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
     color: '#fff',
-    marginRight: 10,
+    marginRight: 12,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 255, 255, 0.3)',
   },
   mapButton: {
-    backgroundColor: '#330022',
-    borderRadius: 20,
-    width: 44,
-    height: 44,
+    backgroundColor: 'rgba(0, 255, 255, 0.2)',
+    borderRadius: 25,
+    width: 50,
+    height: 50,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#00ffff',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 5,
+    elevation: 8,
   },
   searchResultsList: {
-    backgroundColor: '#330022',
+    backgroundColor: '#1a1a3a',
     maxHeight: 200,
+    borderBottomLeftRadius: 15,
+    borderBottomRightRadius: 15,
+    overflow: 'hidden',
   },
   searchResultItem: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#550033',
+    borderBottomWidth: 0.5,
+    borderBottomColor: 'rgba(0, 255, 255, 0.1)',
+    backgroundColor: '#2a0a3a',
   },
   searchResultText: {
-    color: '#fff',
+    color: '#e0e0ff',
     marginLeft: 10,
     flex: 1,
+    fontSize: 15,
   },
   noResultsContainer: {
-    padding: 15,
+    padding: 20,
     alignItems: 'center',
-    backgroundColor: '#330022',
+    backgroundColor: '#1a1a3a',
+    borderRadius: 15,
+    marginHorizontal: 15,
+    marginTop: 10,
   },
   noResultsText: {
-    color: '#fff',
-    marginBottom: 10,
+    color: '#e0e0ff',
+    marginBottom: 15,
+    fontSize: 16,
+    textAlign: 'center',
   },
   addPlaceButton: {
-    backgroundColor: '#ff00ff',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
+    backgroundColor: '#00ffff',
+    paddingHorizontal: 25,
+    paddingVertical: 12,
+    borderRadius: 30,
+    shadowColor: '#00ffff',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 5,
+    elevation: 8,
   },
   addPlaceButtonText: {
-    color: '#fff',
+    color: '#0a0a2a',
     fontWeight: 'bold',
+    fontSize: 16,
   },
   errorContainer: {
     padding: 15,
-    backgroundColor: '#550033',
+    backgroundColor: '#ff3333',
+    borderRadius: 10,
+    marginHorizontal: 15,
+    marginTop: 10,
   },
   errorText: {
-    color: '#ff0000',
+    color: '#fff',
     textAlign: 'center',
+    fontWeight: 'bold',
   },
   mapContainer: {
     height: 300,
@@ -1490,18 +1627,30 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   locationProfileContainer: {
-    backgroundColor: '#550033',
-    padding: 15,
+    backgroundColor: '#1a1a3a',
+    padding: 20,
+    margin: 15,
+    borderRadius: 15,
+    shadowColor: "#9900ff",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 0, 255, 0.3)',
   },
   locationProfileHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 10,
   },
   locationProfileImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 90,
+    height: 90,
+    borderRadius: 45,
     marginRight: 15,
+    borderWidth: 3,
+    borderColor: '#ff00ff',
   },
   locationProfileInfo: {
     flex: 1,
@@ -1509,19 +1658,27 @@ const styles = StyleSheet.create({
   },
   locationProfileName: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 5,
+    textShadowColor: 'rgba(255, 0, 255, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 8,
   },
   locationProfileBio: {
-    color: '#ccc',
+    color: '#e0e0ff',
     fontSize: 14,
-    lineHeight: 18,
+    lineHeight: 20,
   },
   editProfileButton: {
-    padding: 8,
-    backgroundColor: '#330022',
-    borderRadius: 20,
+    padding: 10,
+    backgroundColor: 'rgba(0, 255, 255, 0.2)',
+    borderRadius: 25,
+    shadowColor: '#00ffff',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 5,
+    elevation: 8,
   },
   loadingContainer: {
     flex: 1,
@@ -1533,19 +1690,19 @@ const styles = StyleSheet.create({
   },
   confessionCard: {
     backgroundColor: '#330022',
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 15,
-    shadowColor: "#000",
+    borderRadius: 15,
+    padding: 18,
+    marginBottom: 18,
+    shadowColor: "#9900ff",
     shadowOffset: {
       width: 0,
-      height: 4,
+      height: 6,
     },
-    shadowOpacity: 0.30,
-    shadowRadius: 4.65,
-    elevation: 8,
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 12,
     borderWidth: 1,
-    borderColor: '#440022',
+    borderColor: 'rgba(255, 0, 255, 0.4)',
   },
   confessionHeader: {
     flexDirection: 'row',
@@ -1560,17 +1717,20 @@ const styles = StyleSheet.create({
   },
   userInfoContainer: {
     flex: 1,
+    justifyContent: 'center',
   },
   username: {
-    color: '#fff',
+    color: '#ff00ff',
     fontWeight: 'bold',
-    textShadowColor: 'rgba(0, 0, 0, 0.75)',
-    textShadowOffset: { width: -1, height: 1 },
-    textShadowRadius: 5,
+    fontSize: 15,
+    marginBottom: 2,
+    textShadowColor: 'rgba(255, 0, 255, 0.7)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 6,
   },
   dateText: {
-    color: '#999',
-    fontSize: 12,
+    color: '#b0b0ff',
+    fontSize: 11,
     marginRight: 10,
     textShadowColor: 'rgba(0, 0, 0, 0.5)',
     textShadowOffset: { width: -1, height: 1 },
@@ -1622,6 +1782,11 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#FF00FF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 5,
+    elevation: 8,
   },
   reactionsDisplay: {
     flexDirection: 'row',
@@ -1644,17 +1809,30 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderTopWidth: 1,
-    borderTopColor: '#550033',
-    paddingTop: 10,
+    borderTopColor: 'rgba(255, 0, 255, 0.4)',
+    paddingTop: 15,
+    paddingHorizontal: 5,
+    justifyContent: 'space-between',
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     marginRight: 20,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    borderRadius: 20,
   },
   actionText: {
     color: '#ff00ff',
     marginLeft: 5,
+  },
+  likedText: {
+    color: '#ff00ff',
+  },
+  likedIconBackground: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 0, 255, 0.3)',
   },
   verificationContainer: {
     flexDirection: 'row',
@@ -1664,14 +1842,17 @@ const styles = StyleSheet.create({
   verificationButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#220011',
+    backgroundColor: '#1a1a3a',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 15,
     marginLeft: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 255, 255, 0.3)',
   },
   verificationButtonActive: {
-    backgroundColor: '#ff00ff',
+    backgroundColor: '#00ffff',
+    borderColor: '#00ffff',
   },
   verificationText: {
     color: '#ccc',
@@ -1724,228 +1905,354 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: 'rgba(0,0,0,0.8)',
     justifyContent: 'center',
+    alignItems: 'center',
     padding: 20,
   },
   modalContent: {
-    backgroundColor: '#330022',
-    borderRadius: 15,
-    padding: 20,
-    maxHeight: '80%',
+    backgroundColor: '#1a001a',
+    borderRadius: 20,
+    padding: 25,
+    width: '95%',
+    maxHeight: '85%',
+    shadowColor: "#ff00ff",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.6,
+    shadowRadius: 15,
+    elevation: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 0, 255, 0.6)',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 25,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 0, 255, 0.3)',
   },
   modalTitle: {
-    color: '#ff00ff',
-    fontSize: 20,
+    color: '#00ffff',
+    fontSize: 24,
     fontWeight: 'bold',
+    textShadowColor: 'rgba(0, 255, 255, 0.7)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 8,
   },
   formGroup: {
-    marginBottom: 15,
+    marginBottom: 20,
   },
   label: {
-    color: '#fff',
-    fontSize: 16,
-    marginBottom: 5,
+    color: '#e0e0ff',
+    fontSize: 18,
+    marginBottom: 8,
+    fontWeight: 'bold',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
   },
   input: {
-    backgroundColor: '#220011',
-    borderRadius: 8,
+    backgroundColor: '#2a0a3a',
+    borderRadius: 12,
     color: '#fff',
     fontSize: 16,
-    padding: 12,
+    padding: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 0, 255, 0.3)',
+    shadowColor: "#9900ff",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 8,
   },
   bioInput: {
-    height: 100,
+    height: 120,
     textAlignVertical: 'top',
+    lineHeight: 22,
   },
   typeSelector: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 12,
   },
   typeButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    backgroundColor: '#220011',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 25,
+    backgroundColor: '#2a0a3a',
     borderWidth: 1,
-    borderColor: '#666',
+    borderColor: 'rgba(0, 255, 255, 0.3)',
+    shadowColor: "#00ffff",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 8,
   },
   selectedType: {
-    backgroundColor: '#ff00ff',
-    borderColor: '#ff00ff',
+    backgroundColor: '#00ffff',
+    borderColor: '#00ffff',
+    shadowColor: '#00ffff',
   },
   typeText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 15,
+    fontWeight: '500',
   },
   selectedTypeText: {
-    color: '#fff',
+    color: '#1a0a2a',
     fontWeight: 'bold',
   },
   modalButtons: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 20,
+    justifyContent: 'space-around',
+    marginTop: 30,
   },
   modalButton: {
     flex: 1,
-    padding: 12,
-    borderRadius: 8,
-    marginHorizontal: 5,
+    padding: 15,
+    borderRadius: 12,
+    marginHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 8,
   },
   cancelButton: {
-    backgroundColor: '#666',
+    backgroundColor: '#663366',
+    borderColor: 'rgba(255, 0, 255, 0.4)',
+    borderWidth: 1,
   },
   submitButton: {
-    backgroundColor: '#ff00ff',
+    backgroundColor: '#00ffff',
+    borderColor: '#00ffff',
+    borderWidth: 1,
   },
   buttonText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 18,
     textAlign: 'center',
     fontWeight: 'bold',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
   },
   profileImageSection: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 30,
   },
   profileImageContainer: {
     position: 'relative',
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    borderWidth: 3,
+    borderColor: '#ff00ff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#ff00ff',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+    elevation: 12,
   },
   profileImagePreview: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: '100%',
+    height: '100%',
+    borderRadius: 65,
   },
   profileImageOverlay: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
-    backgroundColor: 'rgba(255, 0, 255, 0.8)',
-    borderRadius: 20,
-    padding: 8,
+    bottom: 5,
+    right: 5,
+    backgroundColor: 'rgba(0, 255, 255, 0.8)',
+    borderRadius: 25,
+    padding: 10,
+    borderWidth: 2,
+    borderColor: '#fff',
   },
   saveProfileButton: {
     backgroundColor: '#ff00ff',
-    borderRadius: 10,
+    borderRadius: 12,
     padding: 15,
     alignItems: 'center',
-    marginTop: 10,
+    marginTop: 20,
+    shadowColor: '#ff00ff',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+    elevation: 12,
   },
   saveProfileButtonText: {
     color: '#fff',
     fontWeight: 'bold',
-    fontSize: 16,
+    fontSize: 18,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
   },
   confessionInput: {
-    backgroundColor: '#220011',
-    borderRadius: 10,
+    backgroundColor: '#2a0a3a',
+    borderRadius: 12,
     padding: 15,
     color: '#fff',
-    minHeight: 100,
+    minHeight: 120,
     textAlignVertical: 'top',
-    marginBottom: 15,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 0, 255, 0.3)',
+    shadowColor: "#9900ff",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 8,
   },
   selectedMediaContainer: {
     flexDirection: 'row',
-    marginBottom: 15,
+    marginBottom: 20,
+    paddingVertical: 5,
   },
   selectedMediaItem: {
     position: 'relative',
-    marginRight: 10,
+    marginRight: 15,
+    borderWidth: 2,
+    borderColor: 'rgba(0, 255, 255, 0.4)',
+    borderRadius: 10,
+    shadowColor: '#00ffff',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 5,
+    elevation: 8,
   },
   selectedMediaPreview: {
-    width: 80,
-    height: 80,
-    borderRadius: 5,
+    width: 90,
+    height: 90,
+    borderRadius: 8,
   },
   removeMediaButton: {
     position: 'absolute',
-    top: -5,
-    right: -5,
-    backgroundColor: '#330022',
-    borderRadius: 10,
+    top: -8,
+    right: -8,
+    backgroundColor: '#ff00ff',
+    borderRadius: 15,
+    padding: 3,
+    borderWidth: 2,
+    borderColor: '#fff',
   },
   mediaButtons: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 20,
+    justifyContent: 'center',
+    marginBottom: 25,
   },
   mediaButton: {
-    backgroundColor: 'transparent',
-    borderRadius: 10,
+    backgroundColor: '#2a0a3a',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
-    // Remove explicit padding and margin if using gradientButton
+    shadowColor: "#00ffff",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 255, 255, 0.4)',
   },
   mediaButtonText: {
-    color: '#fff',
-    marginLeft: 8,
-    fontSize: 14,
+    color: '#00ffff',
+    marginLeft: 10,
+    fontSize: 16,
+    fontWeight: 'bold',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
   },
   anonymousOption: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 25,
+    paddingHorizontal: 5,
   },
   anonymousText: {
-    color: '#fff',
+    color: '#e0e0ff',
     fontSize: 16,
+    fontWeight: '500',
   },
   postButton: {
     backgroundColor: '#ff00ff',
-    borderRadius: 10,
+    borderRadius: 12,
     padding: 15,
     alignItems: 'center',
+    shadowColor: '#ff00ff',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+    elevation: 12,
   },
   postButtonText: {
     color: '#fff',
     fontWeight: 'bold',
-    fontSize: 16,
+    fontSize: 18,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
   },
   reactionModalContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   reactionModalContent: {
-    backgroundColor: '#330022',
-    borderRadius: 20,
-    padding: 20,
+    backgroundColor: '#1a0a2a',
+    borderRadius: 25,
+    padding: 30,
     alignItems: 'center',
-    minWidth: 300,
+    minWidth: 320,
+    shadowColor: "#ff00ff",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.7,
+    shadowRadius: 15,
+    elevation: 25,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 0, 255, 0.7)',
   },
   reactionModalTitle: {
-    color: '#fff',
-    fontSize: 18,
+    color: '#00ffff',
+    fontSize: 22,
     fontWeight: 'bold',
-    marginBottom: 20,
+    marginBottom: 25,
+    textShadowColor: 'rgba(0, 255, 255, 0.7)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 8,
   },
   emojiContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
-    gap: 15,
+    gap: 20,
   },
   emojiButton: {
-    backgroundColor: '#220011',
-    borderRadius: 25,
-    width: 50,
-    height: 50,
+    backgroundColor: '#2a0a3a',
+    borderRadius: 30,
+    width: 60,
+    height: 60,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: "#ff00ff",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 10,
   },
   emoji: {
-    fontSize: 24,
+    fontSize: 30,
   },
   mediaBadge: {
     position: 'absolute',
@@ -1959,7 +2266,7 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   videoBadge: {
-    backgroundColor: 'rgba(138, 35, 135, 0.8)', // Purple/Pink gradient start
+    backgroundColor: 'rgba(255, 0, 255, 0.8)', // Pink/Purple gradient start
   },
   imageBadge: {
     backgroundColor: 'rgba(0, 255, 255, 0.8)', // Teal
@@ -1969,9 +2276,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
     marginLeft: 5,
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowColor: 'rgba(0, 0, 0, 0.7)',
     textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
+    textShadowRadius: 3,
   },
   loadingOverlay: {
     position: 'absolute',
