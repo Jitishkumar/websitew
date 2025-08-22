@@ -1198,37 +1198,33 @@ const ConfessionScreen = () => {
     setShowAddPlaceModal(value);
   }, [setShowAddPlaceModal]); // Dependencies for useCallback
 
-  const renderConfessionsHeader = () => {
-    return (
-      <ConfessionsHeader
-        navigation={navigation}
-        searchQuery={searchQuery}
-        setSearchQuery={setSearchQuery}
-        searchTimeoutRef={searchTimeoutRef}
-        searchLocations={searchLocations}
-        searchResults={searchResults}
-        selectLocation={selectLocation}
-        searchLoading={searchLoading}
-        showMap={showMap}
-        setShowMap={setShowMapCallback}
-        goToUserLocation={goToUserLocation}
-        selectedLocation={selectedLocation}
-        renderLocationProfile={renderLocationProfile}
-        setShowAddPlaceModal={setShowAddPlaceModalCallback}
-        searchError={searchError}
-        loading={loading}
-        userLocation={userLocation}
-      />
-    );
-  };
-
   return (
     <View style={styles.container}>
       <FlatList
         data={confessions}
         keyExtractor={(item) => item.id.toString()}
         renderItem={renderConfessionItem}
-        ListHeaderComponent={renderConfessionsHeader}
+        ListHeaderComponent={
+          <ConfessionsHeader
+            navigation={navigation}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            searchTimeoutRef={searchTimeoutRef}
+            searchLocations={searchLocations}
+            searchResults={searchResults}
+            selectLocation={selectLocation}
+            searchLoading={searchLoading}
+            showMap={showMap}
+            setShowMap={setShowMapCallback}
+            goToUserLocation={goToUserLocation}
+            selectedLocation={selectedLocation}
+            renderLocationProfile={renderLocationProfile}
+            setShowAddPlaceModal={setShowAddPlaceModalCallback}
+            searchError={searchError}
+            loading={loading}
+            userLocation={userLocation}
+          />
+        }
         contentContainerStyle={styles.confessionsList}
         refreshing={loading} // Use 'loading' for confessions loading
         onRefresh={refreshConfessions}
