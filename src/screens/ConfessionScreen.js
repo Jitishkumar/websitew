@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+//djjdjdjd
 import { 
   View, 
   Text, 
@@ -29,6 +30,165 @@ import { uploadToCloudinary, deleteFromCloudinary } from '../config/cloudinary';
 import ConfessionCommentScreen from './ConfessionCommentScreen'; // Added import for ConfessionCommentScreen
 
 const { width: screenWidth } = Dimensions.get('window');
+
+// New ConfessionsHeader component
+const ConfessionsHeader = React.memo(({
+  navigation,
+  searchQuery,
+  setSearchQuery,
+  searchTimeoutRef,
+  searchLocations,
+  searchResults,
+  selectLocation,
+  searchLoading,
+  showMap,
+  setShowMap,
+  goToUserLocation,
+  selectedLocation,
+  renderLocationProfile,
+  setShowAddPlaceModal,
+  searchError,
+  loading, // Keep loading for the `noResultsContainer` conditional rendering
+  userLocation,
+}) => {
+  return (
+    <View>
+      <LinearGradient
+        colors={['#0a0a2a', '#1a1a3a']}
+        start={{x: 0, y: 0}}
+        end={{x: 1, y: 1}}
+        style={styles.header}
+      >
+        <TouchableOpacity 
+          onPress={() => navigation.goBack()}
+          style={styles.backButton}
+        >
+          <Ionicons name="arrow-back" size={24} color="#ff00ff" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Confessions</Text>
+      </LinearGradient>
+
+      <LinearGradient
+        colors={['#1a1a3a', '#0d0d2a']}
+        start={{x: 0, y: 0}}
+        end={{x: 1, y: 1}}
+        style={styles.searchContainer}
+      >
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search for a place, institution, company..."
+          placeholderTextColor="#999"
+          value={searchQuery}
+          onChangeText={(text) => {
+            setSearchQuery(text);
+            
+            if (searchTimeoutRef.current) {
+              clearTimeout(searchTimeoutRef.current);
+            }
+            
+            if (text.length < 3) {
+              // setSearchResults([]); // Handled by searchLocations when query < 3
+              return;
+            }
+            
+            searchTimeoutRef.current = setTimeout(() => {
+              searchLocations(text);
+            }, 500);
+          }}
+        />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchQuery('')}>
+            <Ionicons name="close-circle" size={20} color="#999" />
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity 
+          style={styles.mapButton}
+          onPress={() => setShowMap(!showMap)}
+        >
+          <Ionicons name={showMap ? "map" : "map-outline"} size={20} color="#ff00ff" />
+        </TouchableOpacity>
+      </LinearGradient>
+
+      {searchResults.length > 0 ? (
+        <View style={styles.searchResultsList}>
+          {searchResults.map((item) => (
+            <TouchableOpacity 
+              key={item.place_id.toString()}
+              style={styles.searchResultItem}
+              onPress={() => selectLocation(item)}
+            >
+              <Ionicons name="location" size={20} color="#ff00ff" />
+              <Text style={styles.searchResultText}>{item.display_name}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      ) : (
+        searchQuery.length >= 3 && !searchLoading && (
+          <View style={styles.noResultsContainer}>
+            <Text style={styles.noResultsText}>No locations found</Text>
+            <TouchableOpacity 
+              style={styles.addPlaceButton}
+              onPress={() => setShowAddPlaceModal(true)}
+            >
+              <Text style={styles.addPlaceButtonText}>Add New Place</Text>
+            </TouchableOpacity>
+          </View>
+        )
+      )}
+
+      {searchError && (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>
+            {searchError.includes('Network request failed') 
+              ? 'Network error. Check your connection.' 
+              : 'Error searching locations. Try again.'}
+          </Text>
+        </View>
+      )}
+      
+      {showMap && (
+        <View style={styles.mapContainer}>
+          <WebView
+            style={styles.map}
+            source={{ uri: getMapUrl({ mapRegion: { latitude: selectedLocation?.lat || userLocation?.coords.latitude, longitude: selectedLocation?.lon || userLocation?.coords.longitude }, selectedLocation, userLocation }) }}
+            javaScriptEnabled={true}
+            domStorageEnabled={true}
+            onError={(e) => console.error('WebView error:', e.nativeEvent)}
+            renderLoading={() => (
+              <View style={[styles.loadingContainer, StyleSheet.absoluteFill]}>
+                <ActivityIndicator size="large" color="#ff00ff" />
+              </View>
+            )}
+            startInLoadingState={true}
+          />
+          <View style={styles.mapControls}>
+            <TouchableOpacity 
+              style={styles.closeMapButton}
+              onPress={() => setShowMap(false)}
+            >
+              <Ionicons name="close-circle" size={30} color="#ff00ff" />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.locationButton}
+              onPress={goToUserLocation}
+            >
+              <Ionicons name="locate" size={24} color="#ff00ff" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+      
+      {selectedLocation && renderLocationProfile()}
+
+      {searchLoading && ( // Display search-specific loading indicator
+        <View style={styles.searchOverlayLoading}>
+          <ActivityIndicator size="small" color="#ff00ff" />
+          <Text style={styles.searchOverlayLoadingText}>Searching...</Text>
+        </View>
+      )}
+    </View>
+  );
+});
 
 const ConfessionScreen = () => {
   const navigation = useNavigation();
@@ -61,12 +221,8 @@ const ConfessionScreen = () => {
   const [confessionLikes, setConfessionLikes] = useState({});
   const [confessionComments, setConfessionComments] = useState({});
   const [showCommentModal, setShowCommentModal] = useState(false); // Added state for CommentScreen modal
-
-  // Emoji options for reactions
-  const emojiOptions = ['😂', '❤️', '😮', '😢', '😡', '👍', '👎', '🔥', '💯', '🤔'];
-
-  // Add a reference to store the search timeout
   const [searchTimeout, setSearchTimeout] = useState(null);
+  const searchTimeoutRef = useRef(null); // Added
   const [showAddPlaceModal, setShowAddPlaceModal] = useState(false);
   const [newPlace, setNewPlace] = useState({
     type: 'institute',
@@ -76,10 +232,14 @@ const ConfessionScreen = () => {
     state: '',
     country: ''
   });
+  const [searchLoading, setSearchLoading] = useState(false); // New state for search loading
 
-  // Request location permission and get current location
+  // Emoji options for reactions
+  const emojiOptions = ['😂', '❤️', '😮', '😢', '😡', '👍', '👎', '🔥', '💯', '🤔'];
+
+  // Request location permission and get current location (runs once on mount)
   useEffect(() => {
-    (async () => {
+    const setupInitialData = async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
       setLocationPermission(status);
       
@@ -91,24 +251,23 @@ const ConfessionScreen = () => {
           longitude: location.coords.longitude,
         });
       }
-    })();
-    
-    // Get current user
-    const getCurrentUser = async () => {
+      
+      // Get current user
       const { data: { user } } = await supabase.auth.getUser();
       setCurrentUser(user);
     };
-    getCurrentUser();
     
-    // Cleanup function
+    setupInitialData();
+
+    // Cleanup function for search timeout (runs on unmount)
     return () => {
-      if (searchTimeout) {
-        clearTimeout(searchTimeout);
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
       }
     };
-  }, [searchTimeout]);
+  }, []); // Empty dependency array ensures this runs only once on mount
 
-  const getMapUrl = () => {
+  const getMapUrl = React.useCallback(({ mapRegion, selectedLocation, userLocation }) => {
     const lat = mapRegion.latitude;
     const lon = mapRegion.longitude;
     let url = `https://www.openstreetmap.org/export/embed.html?bbox=${lon-0.05},${lat-0.05},${lon+0.05},${lat+0.05}&layer=mapnik`;
@@ -120,15 +279,15 @@ const ConfessionScreen = () => {
       url += `&marker=${userLocation.coords.latitude},${userLocation.coords.longitude}`;
     }
     return url;
-  };
+  }, [mapRegion, selectedLocation, userLocation]); // Dependencies for useCallback
 
-  const searchLocations = async (query) => {
+  const searchLocations = React.useCallback(async (query) => {
     if (query.length < 3) {
       setSearchResults([]);
       return;
     }
     
-    setLoading(true);
+    setSearchLoading(true);
     setSearchError(null);
     try {
       let combinedResults = [];
@@ -197,9 +356,9 @@ const ConfessionScreen = () => {
       setSearchError(error.message);
       setSearchResults([]);
     } finally {
-      setLoading(false);
+      setSearchLoading(false);
     }
-  };
+  }, [userLocation, setSearchResults, setSearchLoading, setSearchError]); // Dependencies for useCallback
 
   const handleAddPlace = async () => {
     if (!newPlace.name || !newPlace.city || !newPlace.state || !newPlace.country) {
@@ -271,7 +430,7 @@ const ConfessionScreen = () => {
     }
   };
 
-  const selectLocation = (location) => {
+  const selectLocation = React.useCallback((location) => {
     if (!location) {
       console.error('Error: Attempted to select undefined location');
       return;
@@ -300,9 +459,9 @@ const ConfessionScreen = () => {
     
     loadLocationProfile(locationId);
     loadConfessions(locationId);
-  };
+  }, [setSearchResults, setSelectedLocation, setMapRegion, loadLocationProfile, loadConfessions]); // Dependencies for useCallback
 
-  const loadLocationProfile = async (locationId) => {
+  const loadLocationProfile = React.useCallback(async (locationId) => {
     try {
       const { data, error } = await supabase
         .from('location_profiles')
@@ -319,7 +478,7 @@ const ConfessionScreen = () => {
       console.error('Error loading location profile:', error);
       setLocationProfile(null);
     }
-  };
+  }, [setLocationProfile]); // Dependencies for useCallback
 
   const saveLocationProfile = async () => {
     if (!selectedLocation) return;
@@ -369,7 +528,7 @@ const ConfessionScreen = () => {
     }
   };
 
-  const loadConfessions = async (locationId) => {
+  const loadConfessions = React.useCallback(async (locationId) => {
     setLoading(true);
     try {
       if (!locationId) {
@@ -476,7 +635,7 @@ const ConfessionScreen = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [setLoading, setConfessions, loadReactionsAndVerifications, currentUser]); // Dependencies for useCallback
 
   const loadReactionsAndVerifications = async (confessionIds) => {
     try {
@@ -777,7 +936,8 @@ const ConfessionScreen = () => {
     }
   };
 
-  const renderLocationProfile = () => {
+  // Memoized renderLocationProfile function
+  const renderLocationProfile = React.useCallback(() => {
     if (!selectedLocation) return null;
 
     return (
@@ -811,7 +971,7 @@ const ConfessionScreen = () => {
         </View>
       </View>
     );
-  };
+  }, [selectedLocation, locationProfile, setProfileBio, setShowLocationProfileModal]); // Dependencies for useCallback
 
   const renderConfessionItem = ({ item }) => {
     const isCurrentUserConfession = currentUser && (
@@ -1021,181 +1181,74 @@ const ConfessionScreen = () => {
     );
   };
 
-  const goToUserLocation = () => {
+  const goToUserLocation = React.useCallback(() => {
     if (userLocation) {
       setMapRegion({
         latitude: userLocation.coords.latitude,
         longitude: userLocation.coords.longitude,
       });
     }
+  }, [userLocation, setMapRegion]); // Dependencies for useCallback
+
+  const setShowMapCallback = React.useCallback((value) => {
+    setShowMap(value);
+  }, [setShowMap]); // Dependencies for useCallback
+
+  const setShowAddPlaceModalCallback = React.useCallback((value) => {
+    setShowAddPlaceModal(value);
+  }, [setShowAddPlaceModal]); // Dependencies for useCallback
+
+  const renderConfessionsHeader = () => {
+    return (
+      <ConfessionsHeader
+        navigation={navigation}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        searchTimeoutRef={searchTimeoutRef}
+        searchLocations={searchLocations}
+        searchResults={searchResults}
+        selectLocation={selectLocation}
+        searchLoading={searchLoading}
+        showMap={showMap}
+        setShowMap={setShowMapCallback}
+        goToUserLocation={goToUserLocation}
+        selectedLocation={selectedLocation}
+        renderLocationProfile={renderLocationProfile}
+        setShowAddPlaceModal={setShowAddPlaceModalCallback}
+        searchError={searchError}
+        loading={loading}
+        userLocation={userLocation}
+      />
+    );
   };
-
-  const renderConfessionsHeader = () => (
-    <View>
-      <LinearGradient
-        colors={['#0a0a2a', '#1a1a3a']}
-        start={{x: 0, y: 0}}
-        end={{x: 1, y: 1}}
-        style={styles.header}
-      >
-        <TouchableOpacity 
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-        >
-          <Ionicons name="arrow-back" size={24} color="#ff00ff" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Confessions</Text>
-      </LinearGradient>
-
-      <LinearGradient
-        colors={['#1a1a3a', '#0d0d2a']}
-        start={{x: 0, y: 0}}
-        end={{x: 1, y: 1}}
-        style={styles.searchContainer}
-      >
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search for a place, institution, company..."
-          placeholderTextColor="#999"
-          value={searchQuery}
-          onChangeText={(text) => {
-            setSearchQuery(text);
-            
-            if (searchTimeout) {
-              clearTimeout(searchTimeout);
-            }
-            
-            if (text.length < 3) {
-              setSearchResults([]);
-              return;
-            }
-            
-            const timeout = setTimeout(() => {
-              searchLocations(text);
-            }, 500);
-            
-            setSearchTimeout(timeout);
-          }}
-        />
-        {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <Ionicons name="close-circle" size={20} color="#999" />
-          </TouchableOpacity>
-        )}
-        <TouchableOpacity 
-          style={styles.mapButton}
-          onPress={() => setShowMap(!showMap)}
-        >
-          <Ionicons name={showMap ? "map" : "map-outline"} size={20} color="#ff00ff" />
-        </TouchableOpacity>
-      </LinearGradient>
-
-      {searchResults.length > 0 ? (
-        <View style={styles.searchResultsList}>
-          {searchResults.map((item) => (
-            <TouchableOpacity 
-              key={item.place_id.toString()}
-              style={styles.searchResultItem}
-              onPress={() => selectLocation(item)}
-            >
-              <Ionicons name="location" size={20} color="#ff00ff" />
-              <Text style={styles.searchResultText}>{item.display_name}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      ) : (
-        searchQuery.length >= 3 && !loading && (
-          <View style={styles.noResultsContainer}>
-            <Text style={styles.noResultsText}>No locations found</Text>
-            <TouchableOpacity 
-              style={styles.addPlaceButton}
-              onPress={() => setShowAddPlaceModal(true)}
-            >
-              <Text style={styles.addPlaceButtonText}>Add New Place</Text>
-            </TouchableOpacity>
-          </View>
-        )
-      )}
-
-      {searchError && (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>
-            {searchError.includes('Network request failed') 
-              ? 'Network error. Check your connection.' 
-              : 'Error searching locations. Try again.'}
-          </Text>
-        </View>
-      )}
-      
-      {showMap && (
-        <View style={styles.mapContainer}>
-          <WebView
-            style={styles.map}
-            source={{ uri: getMapUrl() }}
-            javaScriptEnabled={true}
-            domStorageEnabled={true}
-            onError={(e) => console.error('WebView error:', e.nativeEvent)}
-            renderLoading={() => (
-              <View style={[styles.loadingContainer, StyleSheet.absoluteFill]}>
-                <ActivityIndicator size="large" color="#ff00ff" />
-              </View>
-            )}
-            startInLoadingState={true}
-          />
-          <View style={styles.mapControls}>
-            <TouchableOpacity 
-              style={styles.closeMapButton}
-              onPress={() => setShowMap(false)}
-            >
-              <Ionicons name="close-circle" size={30} color="#ff00ff" />
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.locationButton}
-              onPress={goToUserLocation}
-            >
-              <Ionicons name="locate" size={24} color="#ff00ff" />
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-      
-      {selectedLocation && renderLocationProfile()}
-    </View>
-  );
 
   return (
     <View style={styles.container}>
-      {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#ff00ff" />
-        </View>
-      ) : selectedLocation ? (
-        <FlatList
-          data={confessions}
-          keyExtractor={(item) => item.id.toString()}
-          renderItem={renderConfessionItem}
-          ListHeaderComponent={renderConfessionsHeader}
-          contentContainerStyle={styles.confessionsList}
-          refreshing={loading}
-          onRefresh={refreshConfessions}
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={() => (
-            selectedLocation && !loading ? (
-              <View style={styles.emptyContainer}>
-                <Ionicons name="chatbubbles-outline" size={60} color="#ff00ff" />
-                <Text style={styles.emptyText}>No confessions yet. Be the first to share!</Text>
-              </View>
-            ) : null
-          )}
-        />
-      ) : (
-        <View style={styles.instructionContainer}>
-          <Ionicons name="search" size={60} color="#ff00ff" />
-          <Text style={styles.instructionText}>
-            Search for a place or select a location on the map to see confessions
-          </Text>
-        </View>
-      )}
+      <FlatList
+        data={confessions}
+        keyExtractor={(item) => item.id.toString()}
+        renderItem={renderConfessionItem}
+        ListHeaderComponent={renderConfessionsHeader}
+        contentContainerStyle={styles.confessionsList}
+        refreshing={loading} // Use 'loading' for confessions loading
+        onRefresh={refreshConfessions}
+        showsVerticalScrollIndicator={false}
+        ListEmptyComponent={() => (
+          !selectedLocation ? (
+            <View style={styles.instructionContainer}>
+              <Ionicons name="search" size={60} color="#ff00ff" />
+              <Text style={styles.instructionText}>
+                Search for a place or select a location on the map to see confessions
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="chatbubbles-outline" size={60} color="#ff00ff" />
+              <Text style={styles.emptyText}>No confessions yet. Be the first to share!</Text>
+            </View>
+          )
+        )}
+      />
       
       {selectedLocation && (
         <TouchableOpacity 
@@ -1204,14 +1257,6 @@ const ConfessionScreen = () => {
         >
           <Ionicons name="add" size={30} color="#fff" />
         </TouchableOpacity>
-      )}
-      {!selectedLocation && !loading && ( // Render instruction container if no location selected and not loading
-        <View style={styles.instructionContainer}>
-          <Ionicons name="search" size={60} color="#ff00ff" />
-          <Text style={styles.instructionText}>
-            Search for a place or select a location on the map to see confessions
-          </Text>
-        </View>
       )}
 
       {/* Add Place Modal */}
@@ -1867,7 +1912,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
   },
   emptyText: {
     color: '#ff00ff',
@@ -1879,7 +1923,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
   },
   instructionText: {
     color: '#ff00ff',
@@ -2160,8 +2203,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 5,
     elevation: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 255, 255, 0.4)',
   },
   mediaButtonText: {
     color: '#00ffff',
@@ -2298,6 +2339,30 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0, 0, 0, 0.5)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
+  },
+  searchOverlayLoading: {
+    position: 'absolute',
+    top: 150,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(26, 26, 58, 0.8)',
+    padding: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 10,
+    marginHorizontal: 15,
+    zIndex: 10,
+    shadowColor: "#00ffff",
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  searchOverlayLoadingText: {
+    color: '#00ffff',
+    marginTop: 5,
+    fontSize: 14,
+    fontWeight: 'bold',
   },
 });
 
