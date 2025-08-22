@@ -15,7 +15,8 @@ import {
   Platform,
   Alert,
   Animated,
-  Dimensions
+  Dimensions,
+  KeyboardAvoidingView
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -1234,7 +1235,7 @@ const ConfessionScreen = () => {
             <View style={styles.instructionContainer}>
               <Ionicons name="search" size={60} color="#ff00ff" />
               <Text style={styles.instructionText}>
-                Search for a place or select a location on the map to see confessions
+                Search for a place/Person or select a location on the map to see confessions
               </Text>
             </View>
           ) : (
@@ -1262,98 +1263,103 @@ const ConfessionScreen = () => {
         transparent={true}
         onRequestClose={() => setShowAddPlaceModal(false)}
       >
-        <View style={styles.modalContainer}>
+        <KeyboardAvoidingView 
+          style={styles.keyboardAvoidingContainer} 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Add Place</Text>
             
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Type</Text>
-              <View style={styles.typeSelector}>
-                {['institute', 'office', 'place', 'building'].map((type) => (
-                  <TouchableOpacity
-                    key={type}
-                    style={[styles.typeButton, newPlace.type === type && styles.selectedType]}
-                    onPress={() => setNewPlace(prev => ({ ...prev, type }))}
-                  >
-                    <Text style={[styles.typeText, newPlace.type === type && styles.selectedTypeText]}>
-                      {type.charAt(0).toUpperCase() + type.slice(1)}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollViewContent}>
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Type</Text>
+                <View style={styles.typeSelector}>
+                  {['institute', 'office', 'place', 'building'].map((type) => (
+                    <TouchableOpacity
+                      key={type}
+                      style={[styles.typeButton, newPlace.type === type && styles.selectedType]}
+                      onPress={() => setNewPlace(prev => ({ ...prev, type }))}
+                    >
+                      <Text style={[styles.typeText, newPlace.type === type && styles.selectedTypeText]}>
+                        {type.charAt(0).toUpperCase() + type.slice(1)}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
-            </View>
 
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Name</Text>
-              <TextInput
-                style={styles.input}
-                value={newPlace.name}
-                onChangeText={(text) => setNewPlace(prev => ({ ...prev, name: text }))}
-                placeholder="Enter place name"
-                placeholderTextColor="#666"
-              />
-            </View>
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Name</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newPlace.name}
+                  onChangeText={(text) => setNewPlace(prev => ({ ...prev, name: text }))}
+                  placeholder="Enter place name"
+                  placeholderTextColor="#666"
+                />
+              </View>
 
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>City</Text>
-              <TextInput
-                style={styles.input}
-                value={newPlace.city}
-                onChangeText={(text) => setNewPlace(prev => ({ ...prev, city: text }))}
-                placeholder="Enter city"
-                placeholderTextColor="#666"
-              />
-            </View>
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>City</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newPlace.city}
+                  onChangeText={(text) => setNewPlace(prev => ({ ...prev, city: text }))}
+                  placeholder="Enter city"
+                  placeholderTextColor="#666"
+                />
+              </View>
 
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>District</Text>
-              <TextInput
-                style={styles.input}
-                value={newPlace.district}
-                onChangeText={(text) => setNewPlace(prev => ({ ...prev, district: text }))}
-                placeholder="Enter district"
-                placeholderTextColor="#666"
-              />
-            </View>
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>District</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newPlace.district}
+                  onChangeText={(text) => setNewPlace(prev => ({ ...prev, district: text }))}
+                  placeholder="Enter district"
+                  placeholderTextColor="#666"
+                />
+              </View>
 
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>State</Text>
-              <TextInput
-                style={styles.input}
-                value={newPlace.state}
-                onChangeText={(text) => setNewPlace(prev => ({ ...prev, state: text }))}
-                placeholder="Enter state"
-                placeholderTextColor="#666"
-              />
-            </View>
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>State</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newPlace.state}
+                  onChangeText={(text) => setNewPlace(prev => ({ ...prev, state: text }))}
+                  placeholder="Enter state"
+                  placeholderTextColor="#666"
+                />
+              </View>
 
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Country</Text>
-              <TextInput
-                style={styles.input}
-                value={newPlace.country}
-                onChangeText={(text) => setNewPlace(prev => ({ ...prev, country: text }))}
-                placeholder="Enter country"
-                placeholderTextColor="#666"
-              />
-            </View>
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Country</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newPlace.country}
+                  onChangeText={(text) => setNewPlace(prev => ({ ...prev, country: text }))}
+                  placeholder="Enter country"
+                  placeholderTextColor="#666"
+                />
+              </View>
 
-            <View style={styles.modalButtons}>
-              <TouchableOpacity 
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setShowAddPlaceModal(false)}
-              >
-                <Text style={styles.buttonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.modalButton, styles.submitButton]}
-                onPress={handleAddPlace}
-              >
-                <Text style={styles.buttonText}>Add Place</Text>
-              </TouchableOpacity>
-            </View>
+              <View style={styles.modalButtons}>
+                <TouchableOpacity 
+                  style={[styles.modalButton, styles.cancelButton]}
+                  onPress={() => setShowAddPlaceModal(false)}
+                >
+                  <Text style={styles.buttonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.modalButton, styles.submitButton]}
+                  onPress={handleAddPlace}
+                >
+                  <Text style={styles.buttonText}>Add Place</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Location Profile Modal */}
@@ -2359,6 +2365,14 @@ const styles = StyleSheet.create({
     marginTop: 5,
     fontSize: 14,
     fontWeight: 'bold',
+  },
+  keyboardAvoidingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scrollViewContent: {
+    padding: 20,
   },
 });
 
