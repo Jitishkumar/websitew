@@ -1,36 +1,37 @@
 {
   "expo": {
-    "scheme": "perfectfl",
-    "name": "perfectfl",
-    "slug": "perfectfl",
-    "version": "1.0.0",
+    "scheme": "flexx",
+    "name": "Flexx",
+    "slug": "flexx-app",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#000000",
     "newArchEnabled": true,
     "jsEngine": "hermes",
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#000000"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.time.da.perfectfl",
+      "bundleIdentifier": "com.flexx.app",
       "infoPlist": {
-        "NSCameraUsageDescription": "Allow $(PRODUCT_NAME) to access your camera for video calls.",
-        "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to access your microphone for video calls.",
-        "NSPhotoLibraryUsageDescription": "Allow $(PRODUCT_NAME) to access your photo library to share photos and videos.",
-        "NSPhotoLibraryAddUsageDescription": "Allow $(PRODUCT_NAME) to save photos and videos to your photo library."
+        "NSCameraUsageDescription": "Allow Flexx to access your camera for video calls and posts.",
+        "NSMicrophoneUsageDescription": "Allow Flexx to access your microphone for video calls and posts.",
+        "NSPhotoLibraryUsageDescription": "Allow Flexx to access your photo library to share photos and videos.",
+        "NSPhotoLibraryAddUsageDescription": "Allow Flexx to save photos and videos to your photo library."
       }
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.time.da.perfectfl",
+      "package": "com.flexx.app",
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
@@ -46,17 +47,12 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "extra": {
-      "eas": {
-        "projectId": "f0744c51-1646-4ca3-91f1-acaf2753f082"
-      }
-    },
     "plugins": [
       "expo-build-properties",
       [
         "expo-av",
         {
-          "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone."
+          "microphonePermission": "Allow Flexx to access your microphone for video posts and calls."
         }
       ],
       [
@@ -69,12 +65,17 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow $(PRODUCT_NAME) to access your photos.",
-          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera.",
-          "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone for video recording."
+          "photosPermission": "Allow Flexx to access your photos to share amazing content.",
+          "cameraPermission": "Allow Flexx to access your camera to capture and share moments.",
+          "microphonePermission": "Allow Flexx to access your microphone for video recording."
         }
       ]
     ],
-    "owner": "time.da"
+    "owner": "time.da",
+    "extra": {
+      "eas": {
+        "projectId": "017b33e7-453f-45db-95db-9ef1c4285c72"
+      }
+    }
   }
 }

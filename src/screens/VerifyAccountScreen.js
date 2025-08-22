@@ -275,7 +275,7 @@ const VerifyAccountScreen = () => {
         description: "Account Verification (1 month)",
         currency: "INR",
         key: RAZORPAY_KEY_ID,
-        amount: 100, // 70 rupees in paise
+        amount: 7000, // 70 rupees in paise
         name: 'Perfect FL',
         prefill: {
           email: profile?.email || user.email || "user@example.com",
