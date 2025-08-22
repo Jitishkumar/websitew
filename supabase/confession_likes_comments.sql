@@ -42,8 +42,8 @@ create table public.confession_comments (
   created_at timestamp with time zone not null default timezone('utc'::text, now()),
   constraint confession_comments_pkey primary key (id),
   constraint confession_comments_confession_id_fkey foreign key (confession_id) references public.confessions(id) on delete cascade,
-  constraint confession_comments_user_id_fkey foreign key (user_id) references auth.users(id) on delete cascade,
-  constraint confession_comments_creator_id_fkey foreign key (creator_id) references auth.users(id) on delete cascade,
+  constraint confession_comments_user_id_fkey foreign key (user_id) references public.profiles(id) on delete cascade,
+  constraint confession_comments_creator_id_fkey foreign key (creator_id) references public.profiles(id) on delete cascade,
   constraint confession_comments_parent_comment_id_fkey foreign key (parent_comment_id) references public.confession_comments(id) on delete cascade
 );
 
