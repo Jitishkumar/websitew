@@ -303,7 +303,8 @@ const ConfessionScreen = () => {
       const response = await fetch(searchUrl, {
         headers: {
           'Accept': 'application/json',
-          'User-Agent': 'FlexxApp/1.0'
+          'User-Agent': 'FlexxApp/1.0',
+          'Accept-Language': 'en' // Request English language results
         }
       });
       
@@ -956,7 +957,12 @@ const ConfessionScreen = () => {
 
       if (error) throw error;
       
-      loadConfessions(selectedLocation.place_id);
+      // Use display_name for reloading confessions after deletion
+      if (selectedLocation?.display_name) {
+        loadConfessions(selectedLocation.display_name, true);
+      } else if (selectedLocation?.place_id) {
+        loadConfessions(selectedLocation.place_id); // Fallback to ID if display_name is not available
+      }
     } catch (error) {
       console.error('Error deleting confession:', error);
       Alert.alert('Error', 'Failed to delete confession. Please try again.');
@@ -1895,17 +1901,18 @@ const styles = StyleSheet.create({
   },
   actionBar: {
     flexDirection: 'row',
+    flexWrap: 'wrap', // Allow items to wrap to the next line
     alignItems: 'center',
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 0, 255, 0.4)',
     paddingTop: 15,
     paddingHorizontal: 5,
-    justifyContent: 'space-between',
+    justifyContent: 'space-around', // Distribute items evenly
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 20,
+    // Removed marginRight to allow flexbox to handle spacing
     paddingVertical: 5,
     paddingHorizontal: 8,
     borderRadius: 20,
