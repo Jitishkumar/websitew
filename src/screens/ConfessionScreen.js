@@ -111,7 +111,7 @@ const ConfessionsHeader = React.memo(({
       </LinearGradient>
 
       {searchResults.length > 0 ? (
-        <View style={styles.searchResultsList}>
+        <ScrollView style={styles.searchResultsList} nestedScrollEnabled={true} showsVerticalScrollIndicator={false}>
           {searchResults.map((item) => (
             <TouchableOpacity 
               key={item.place_id.toString()}
@@ -122,7 +122,7 @@ const ConfessionsHeader = React.memo(({
               <Text style={styles.searchResultText}>{item.display_name}</Text>
             </TouchableOpacity>
           ))}
-        </View>
+        </ScrollView>
       ) : (
         searchQuery.length >= 3 && !searchLoading && (
           <View style={styles.noResultsContainer}>
