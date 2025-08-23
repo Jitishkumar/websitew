@@ -403,7 +403,7 @@ const PostItem = ({ post, onOptionsPress }) => {
   };
 
   const handleComment = () => {
-    setShowCommentModal(true);
+    navigation.navigate('Comment', { postId: post.id }); // Navigate to CommentScreen as a full screen
   };
 
   const handleEdit = async () => {
@@ -439,7 +439,6 @@ const PostItem = ({ post, onOptionsPress }) => {
               }
               // Close any open modals
               setShowLikesModal(false);
-              setShowCommentModal(false);
               setShowEditModal(false);
             } catch (error) {
               console.error('Error deleting post:', error);
@@ -451,10 +450,6 @@ const PostItem = ({ post, onOptionsPress }) => {
     );
   };
   
-  const handleCloseCommentModal = () => {
-    setShowCommentModal(false);
-  };
-
   return (
     <>
       <LinearGradient
@@ -701,13 +696,6 @@ const PostItem = ({ post, onOptionsPress }) => {
           </View>
         </Modal>
       </LinearGradient>
-
-      {/* Comment Modal */}
-      <CommentScreen 
-        visible={showCommentModal} 
-        onClose={handleCloseCommentModal} 
-        postId={post.id} 
-      />
 
       {/* Edit Caption Modal */}
       <Modal

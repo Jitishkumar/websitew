@@ -27,6 +27,15 @@ create policy "Users can update their own notifications"
   on notifications for update
   using (auth.uid() = recipient_id);
 
+-- Policy to allow authenticated users to insert notifications
+CREATE POLICY "Users can insert notifications"
+  ON public.notifications
+  FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    auth.uid() = sender_id OR auth.uid() = recipient_id
+  );
+
 -- Function to update updated_at timestamp
 create or replace function update_updated_at_column()
 returns trigger as $$

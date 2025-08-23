@@ -197,6 +197,106 @@ const NotificationsScreen = () => {
     return date.toLocaleDateString();
   };
 
+  const handleNotificationPress = async (notification) => {
+    await markAsRead(notification.id);
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        navigation.navigate('Login');
+        return;
+      }
+
+      // Handle navigation based on notification type
+      switch (notification.type) {
+        case 'like':
+        case 'comment':
+        case 'mention': {
+          if (!notification.reference_id) {
+            Alert.alert('Error', 'Reference ID not found for this notification.');
+            return;
+          }
+
+          // Determine if it's a post comment or a confession comment
+          const { data: postComment, error: postCommentError } = await supabase
+            .from('post_comments')
+            .select('post_id')
+            .eq('id', notification.reference_id)
+            .maybeSingle();
+          
+          if (postCommentError && postCommentError.code !== 'PGRST116') throw postCommentError;
+
+          if (postComment) {
+            navigation.navigate('Comment', { 
+              postId: postComment.post_id, 
+              highlightCommentId: notification.reference_id 
+            });
+            return;
+          }
+
+          const { data: confessionComment, error: confessionCommentError } = await supabase
+            .from('confession_comments')
+            .select('confession_id')
+            .eq('id', notification.reference_id)
+            .maybeSingle();
+
+          if (confessionCommentError && confessionCommentError.code !== 'PGRST116') throw confessionCommentError;
+
+          if (confessionComment) {
+            navigation.navigate('ConfessionComment', { 
+              confessionId: confessionComment.confession_id, 
+              highlightCommentId: notification.reference_id 
+            });
+            return;
+          }
+
+          Alert.alert('Error', 'Could not find referenced post or confession for this comment/mention.');
+          break;
+        }
+        case 'follow':
+        case 'follow_request':
+        case 'follow_accepted': {
+          // Existing logic for profile navigation
+          // Check if the profile is private and if the current user is following them
+          const { data: settingsData, error: settingsError } = await supabase
+            .from('user_settings')
+            .select('private_account')
+            .eq('user_id', notification.sender_id)
+            .maybeSingle();
+
+          if (settingsError) throw settingsError;
+
+          const isPrivate = settingsData?.private_account ?? false;
+
+          if (isPrivate) {
+            const { data: followData, error: followError } = await supabase
+              .from('follows')
+              .select('*')
+              .eq('follower_id', user.id)
+              .eq('following_id', notification.sender_id)
+              .eq('status', 'accepted')
+              .maybeSingle();
+
+            if (followError) throw followError;
+
+            if (!followData) {
+              navigation.navigate('PrivateProfileScreen', { userId: notification.sender_id });
+              return;
+            }
+          }
+          navigation.navigate('UserProfileScreen', { userId: notification.sender_id });
+          break;
+        }
+        default:
+          Alert.alert('Info', 'This notification type does not have a specific navigation target.');
+      }
+
+    } catch (error) {
+      console.error('Error handling notification press:', error);
+      Alert.alert('Error', 'Failed to navigate. Please try again.');
+    }
+  };
+
   const getNotificationIcon = (type) => {
     switch (type) {
       case 'like':
@@ -358,60 +458,7 @@ const NotificationsScreen = () => {
       <View style={[styles.notificationItem, !item.is_read && styles.unreadItem]}>
         <TouchableOpacity 
           style={styles.avatarContainer}
-          onPress={async () => {
-            markAsRead(item.id);
-            
-            try {
-                  // Get the current user's ID
-                  const { data: { user } } = await supabase.auth.getUser();
-                  if (!user) {
-                    navigation.navigate('Login');
-                    return;
-                  }
-
-                  // Don't check privacy for own profile
-                  if (user.id === item.sender_id) {
-                    navigation.navigate('Profile');
-                    return;
-                  }
-
-                  // Check if the profile is private and if the current user is following them
-                  const { data: settingsData, error: settingsError } = await supabase
-                    .from('user_settings')
-                    .select('private_account')
-                    .eq('user_id', item.sender_id)
-                    .maybeSingle();
-
-                  if (settingsError) throw settingsError;
-
-                  const isPrivate = settingsData?.private_account ?? false;
-
-                  // If account is private, check if the current user is an approved follower
-                  if (isPrivate) {
-                    const { data: followData, error: followError } = await supabase
-                      .from('follows')
-                      .select('*')
-                      .eq('follower_id', user.id)
-                      .eq('following_id', item.sender_id)
-                      .maybeSingle();
-
-                    if (followError) throw followError;
-
-                    // If the user is not an approved follower, navigate to PrivateProfile
-                    if (!followData) {
-                      navigation.navigate('PrivateProfileScreen', { userId: item.sender_id });
-                      return;
-                    }
-                  }
-
-                  // If account is not private or user is an approved follower, navigate to UserProfile
-                  navigation.navigate('UserProfileScreen', { userId: item.sender_id });
-            } catch (error) {
-              console.error('Error checking profile privacy:', error);
-              // Default to UserProfileScreen in case of error
-              navigation.navigate('UserProfileScreen', { userId: item.sender_id });
-            }
-          }}
+          onPress={() => handleNotificationPress(item)} // Use the new handler here
         >
           <Image 
             source={{ uri: item.sender.avatar_url }}
@@ -424,55 +471,7 @@ const NotificationsScreen = () => {
         
         <View style={styles.contentContainer}>
           <TouchableOpacity 
-            onPress={async () => {
-              markAsRead(item.id);
-              
-              try {
-                // Get the current user's ID
-                const { data: { user } } = await supabase.auth.getUser();
-                if (!user) {
-                  navigation.navigate('Login');
-                  return;
-                }
-
-                // Check if the profile is private and if the current user is following them
-                const { data: settingsData, error: settingsError } = await supabase
-                  .from('user_settings')
-                  .select('private_account')
-                  .eq('user_id', item.sender_id)
-                  .maybeSingle();
-
-                if (settingsError) throw settingsError;
-
-                const isPrivate = settingsData?.private_account ?? false;
-
-                // If account is private, check if the current user is an approved follower
-                if (isPrivate) {
-                  const { data: followData, error: followError } = await supabase
-                    .from('follows')
-                    .select('*')
-                    .eq('follower_id', user.id)
-                    .eq('following_id', item.sender_id)
-                    .eq('status', 'accepted')
-                    .maybeSingle();
-
-                  if (followError) throw followError;
-
-                  // If the user is not an approved follower, navigate to PrivateProfile
-                  if (!followData) {
-                    navigation.navigate('PrivateProfileScreen', { userId: item.sender_id });
-                    return;
-                  }
-                }
-
-                // If account is not private or user is an approved follower, navigate to UserProfile
-                navigation.navigate('UserProfileScreen', { userId: item.sender_id });
-              } catch (error) {
-                console.error('Error checking profile privacy:', error);
-                // Default to UserProfileScreen in case of error
-                navigation.navigate('UserProfileScreen', { userId: item.sender_id });
-              }
-            }}
+            onPress={() => handleNotificationPress(item)} // Use the new handler here
           >
             <Text style={styles.username}>@{item.sender.username}</Text>
           </TouchableOpacity>

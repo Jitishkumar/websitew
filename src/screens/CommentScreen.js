@@ -22,16 +22,22 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../lib/supabase';
 import { PostsService } from '../services/PostsService';
 import { sendCommentNotification } from '../utils/notificationService';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { processMentions } from '../utils/mentionService';
 
 const { height } = Dimensions.get('window');
 
-const CommentScreen = ({ visible, onClose, postId }) => {
+const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }) => {
   const navigation = useNavigation();
+  const route = useRoute();
+  const currentPostId = route.params?.postId || postId;
+  const currentHighlightCommentId = route.params?.highlightCommentId || initialHighlightCommentId;
+
   const insets = useSafeAreaInsets();
   const pan = useRef(new Animated.ValueXY()).current;
   const [modalHeight, setModalHeight] = useState(height * 0.8);
+  const flatListRef = useRef(null); // Ref for FlatList
 
   const handleClose = () => {
     // Check if onClose is a function before calling it
@@ -80,11 +86,33 @@ const CommentScreen = ({ visible, onClose, postId }) => {
   
   // Load comments when modal becomes visible
   useEffect(() => {
-    if (visible && postId) {
+    if (currentPostId) {
       loadComments();
       getCurrentUser();
     }
-  }, [visible, postId]);
+  }, [currentPostId]);
+
+  useEffect(() => {
+    if (currentHighlightCommentId && comments.length > 0) {
+      const index = comments.findIndex(comment => comment.id === currentHighlightCommentId);
+      if (index !== -1 && flatListRef.current) {
+        // Ensure the comment and its parent (if it's a reply) are expanded
+        const commentToHighlight = comments[index];
+        if (commentToHighlight.parent_comment_id && !expandedComments.has(commentToHighlight.parent_comment_id)) {
+          setExpandedComments(prev => new Set(prev).add(commentToHighlight.parent_comment_id));
+          // Need to re-find index after potential re-render from expanding parent
+          setTimeout(() => {
+            const newIndex = comments.findIndex(comment => comment.id === currentHighlightCommentId);
+            if (newIndex !== -1) {
+              flatListRef.current.scrollToIndex({ index: newIndex, animated: true, viewPosition: 0.5 });
+            }
+          }, 300); // Small delay to allow layout to update
+        } else {
+          flatListRef.current.scrollToIndex({ index: index, animated: true, viewPosition: 0.5 });
+        }
+      }
+    }
+  }, [currentHighlightCommentId, comments]); // Re-run when highlightCommentId or comments change
   
   // Get current user
   const getCurrentUser = async () => {
@@ -105,7 +133,7 @@ const CommentScreen = ({ visible, onClose, postId }) => {
           *,
           profiles:user_id (username, avatar_url)
         `)
-        .eq('post_id', postId)
+        .eq('post_id', currentPostId)
         .order('created_at', { ascending: true });
       
       if (error) throw error;
@@ -132,7 +160,7 @@ const CommentScreen = ({ visible, onClose, postId }) => {
       const { data, error } = await supabase
         .from('post_comments')
         .insert({
-          post_id: postId,
+          post_id: currentPostId,
           user_id: user.id, // Always store the user ID
           creator_id: user.id, // Always store the actual creator ID
           content: commentText.trim(),
@@ -150,12 +178,16 @@ const CommentScreen = ({ visible, onClose, postId }) => {
       const { data: postData } = await supabase
         .from('posts')
         .select('user_id')
-        .eq('id', postId)
+        .eq('id', currentPostId)
         .single();
       
       if (postData && data) {
         // Send notification to post owner
-        await sendCommentNotification(postId, data.id, user.id, postData.user_id);
+        await sendCommentNotification(currentPostId, data.id, user.id, postData.user_id);
+        
+        // Process mentions in the comment text
+        await processMentions(commentText.trim(), user.id, isAnonymous, data.id, 'post_comment');
+
         // Add new comment to the list
         setComments([...comments, data]);
         setCommentText('');
@@ -183,7 +215,7 @@ const CommentScreen = ({ visible, onClose, postId }) => {
       const { data, error } = await supabase
         .from('post_comments')
         .insert({
-          post_id: postId,
+          post_id: currentPostId,
           user_id: user.id, // Always store the user ID
           creator_id: user.id, // Always store the actual creator ID
           content: commentText.trim(),
@@ -202,11 +234,15 @@ const CommentScreen = ({ visible, onClose, postId }) => {
       const { data: postData } = await supabase
         .from('posts')
         .select('user_id')
-        .eq('id', postId)
+        .eq('id', currentPostId)
         .single();
       
       if (postData && data) {
-        await sendCommentNotification(postId, data.id, user.id, postData.user_id);
+        await sendCommentNotification(currentPostId, data.id, user.id, postData.user_id);
+        
+        // Process mentions in the reply text
+        await processMentions(commentText.trim(), user.id, isAnonymous, data.id, 'post_comment');
+
         setComments([...comments, data]);
         setCommentText('');
         setReplyingTo(null);
@@ -362,108 +398,77 @@ const CommentScreen = ({ visible, onClose, postId }) => {
   };
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={() => {
-        // Check if onClose is a function before calling it
-        if (typeof onClose === 'function') {
-          onClose();
-        } else {
-          // If onClose is not a function, use navigation to go back
-          navigation.goBack();
-        }
-      }}
+    <KeyboardAvoidingView
+      style={[styles.container, { paddingBottom: insets.bottom }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <Animated.View
-        style={[
-          styles.modalContainer,
-          {
-            transform: [{ translateY: pan.y }]
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Ionicons name="chevron-back" size={24} color="#fff" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Comments</Text>
+        <View style={{ width: 24 }} />
+      </View>
+
+      {loading ? (
+        <ActivityIndicator size="large" color="#ff00ff" style={styles.loading} />
+      ) : (
+        <FlatList
+          data={comments.filter(comment => !comment.parent_comment_id)}
+          renderItem={renderComment}
+          keyExtractor={(item) => item.id.toString()}
+          contentContainerStyle={[styles.commentsList, { paddingBottom: insets.bottom }]}
+          ListEmptyComponent={
+            <Text style={styles.emptyText}>No comments yet. Be the first to comment!</Text>
           }
-        ]}
-      >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.modalContainer}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-      >
-        <View style={styles.modalContent}>
-          <LinearGradient
-            colors={['#0a0a2a', '#1a1a3a']}
-            style={[styles.header, { paddingTop: insets.top > 0 ? insets.top : (Platform.OS === 'ios' ? 20 : 15) }]}
-          >
-            <View style={styles.dragHandle} {...panResponder.panHandlers}>
-              <View style={styles.dragIndicator} />
-            </View>
-            <Text style={styles.headerTitle}>Comments</Text>
-            <TouchableOpacity onPress={handleClose}>
-              <Ionicons name="close" size={24} color="#fff" />
-            </TouchableOpacity>
-          </LinearGradient>
+          ref={flatListRef} // Attach ref to FlatList
+        />
+      )}
 
-          {loading ? (
-            <ActivityIndicator size="large" color="#ff00ff" style={styles.loading} />
-          ) : (
-            <FlatList
-              data={comments.filter(comment => !comment.parent_comment_id)}
-              renderItem={renderComment}
-              keyExtractor={(item) => item.id.toString()}
-              contentContainerStyle={[styles.commentsList, { paddingBottom: insets.bottom }]}
-              ListEmptyComponent={
-                <Text style={styles.emptyText}>No comments yet. Be the first to comment!</Text>
-              }
-            />
-          )}
-
-          <LinearGradient
-            colors={['#1a1a3a', '#0d0d2a']}
-            style={[styles.inputContainer, { paddingBottom: insets.bottom > 0 ? insets.bottom : 10 }]}
-          >
-            <View style={styles.modalHeader}>
-              <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-                <Ionicons name="close" size={24} color="#fff" />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.anonymousOption}>
-              <Text style={styles.anonymousText}>Anonymous</Text>
-              <Switch
-                value={isAnonymous}
-                onValueChange={setIsAnonymous}
-                trackColor={{ false: "#767577", true: "#ff00ff" }}
-                thumbColor={isAnonymous ? "#f4f3f4" : "#f4f3f4"}
-              />
-            </View>
-            <View style={styles.inputRow}>
-              <TextInput
-                style={styles.input}
-                placeholder="Add a comment..."
-                placeholderTextColor="#666"
-                value={commentText}
-                onChangeText={setCommentText}
-                multiline
-                maxLength={500}
-                color="#ffffff"
-                autoFocus={false}
-              />
-              <TouchableOpacity
-                style={[styles.sendButton, !commentText.trim() && styles.disabledButton]}
-                onPress={replyingTo ? handleReply : handleAddComment}
-                disabled={!commentText.trim() || submitting}
-              >
-                {submitting ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Ionicons name="send" size={24} color="#fff" />
-                )}
-              </TouchableOpacity>
-            </View>
-          </LinearGradient>
+      <LinearGradient
+        colors={['#1a1a3a', '#0d0d2a']}
+        style={[styles.inputContainer, { paddingBottom: insets.bottom > 0 ? insets.bottom : 10 }]}
+      >
+        <View style={styles.modalHeader}>
+          <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
+            <Ionicons name="close" size={24} color="#fff" />
+          </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
-      </Animated.View>
-    </Modal>
+        <View style={styles.anonymousOption}>
+          <Text style={styles.anonymousText}>Anonymous</Text>
+          <Switch
+            value={isAnonymous}
+            onValueChange={setIsAnonymous}
+            trackColor={{ false: "#767577", true: "#ff00ff" }}
+            thumbColor={isAnonymous ? "#f4f3f4" : "#f4f3f4"}
+          />
+        </View>
+        <View style={styles.inputRow}>
+          <TextInput
+            style={styles.input}
+            placeholder="Add a comment..."
+            placeholderTextColor="#666"
+            value={commentText}
+            onChangeText={setCommentText}
+            multiline
+            maxLength={500}
+            color="#ffffff"
+            autoFocus={false}
+          />
+          <TouchableOpacity
+            style={[styles.sendButton, !commentText.trim() && styles.disabledButton]}
+            onPress={replyingTo ? handleReply : handleAddComment}
+            disabled={!commentText.trim() || submitting}
+          >
+            {submitting ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Ionicons name="send" size={24} color="#fff" />
+            )}
+          </TouchableOpacity>
+        </View>
+      </LinearGradient>
+    </KeyboardAvoidingView>
   );
 };
 

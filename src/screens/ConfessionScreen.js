@@ -459,7 +459,7 @@ const ConfessionScreen = () => {
     }
     
     loadLocationProfile(locationId);
-    loadConfessions(locationId);
+    loadConfessions(location.display_name, true); // Load confessions using location_name
   }, [setSearchResults, setSelectedLocation, setMapRegion, loadLocationProfile, loadConfessions]); // Dependencies for useCallback
 
   const loadLocationProfile = React.useCallback(async (locationId) => {
@@ -529,18 +529,15 @@ const ConfessionScreen = () => {
     }
   };
 
-  const loadConfessions = React.useCallback(async (locationId) => {
+  const loadConfessions = React.useCallback(async (locationIdentifier, useNameForConfessions = false) => {
     setLoading(true);
     try {
-      if (!locationId) {
+      if (!locationIdentifier) {
         Alert.alert('Error', 'Invalid location. Please select a location and try again.');
         setLoading(false);
         return;
       }
       
-      const cleanLocationId = typeof locationId === 'string' && locationId.startsWith('custom_') ? 
-        locationId.replace('custom_', '') : locationId;
-
       let query = supabase
         .from('confessions')
         .select(`
@@ -561,8 +558,12 @@ const ConfessionScreen = () => {
         .order('created_at', { ascending: false })
         .limit(50);
 
-      query = query.or(`location_id.eq.${locationId},location_id.eq.${cleanLocationId}`);
-      
+      if (useNameForConfessions) {
+        query = query.eq('location_name', locationIdentifier);
+      } else {
+        query = query.eq('location_id', locationIdentifier);
+      }
+
       const { data: confessionsData, error: confessionsError } = await query;
 
       if (confessionsError) {
@@ -729,8 +730,37 @@ const ConfessionScreen = () => {
 
       if (error) throw error;
 
-      // Reload verifications
-      await loadReactionsAndVerifications([confessionId]);
+      // Directly update local state for immediate UI feedback
+      setConfessionVerifications(prevVerifications => {
+        const currentVerifications = prevVerifications[confessionId] || { correct: 0, incorrect: 0, userVote: null };
+        let newCorrect = currentVerifications.correct;
+        let newIncorrect = currentVerifications.incorrect;
+
+        // Adjust counts based on previous vote
+        if (currentVerifications.userVote === true) {
+          newCorrect--;
+        } else if (currentVerifications.userVote === false) {
+          newIncorrect--;
+        }
+
+        // Adjust counts based on new vote
+        if (isCorrect) {
+          newCorrect++;
+        } else {
+          newIncorrect++;
+        }
+
+        return {
+          ...prevVerifications,
+          [confessionId]: {
+            correct: newCorrect,
+            incorrect: newIncorrect,
+            userVote: isCorrect,
+          },
+        };
+      });
+
+      // Removed: await loadReactionsAndVerifications([confessionId]); (no longer needed for immediate update)
     } catch (error) {
       console.error('Error adding verification:', error);
       Alert.alert('Error', 'Failed to add verification. Please try again.');
@@ -883,7 +913,13 @@ const ConfessionScreen = () => {
       setNewConfession('');
       setMedia([]);
       setShowNewConfessionModal(false);
-      loadConfessions(selectedLocation.place_id);
+      // After posting, reload confessions for the selected location by its display name
+      if (selectedLocation?.display_name) {
+        loadConfessions(selectedLocation.display_name, true);
+      } else if (selectedLocation?.place_id) {
+        // Fallback to place_id if display_name is not available (though it should be for selectedLocation)
+        loadConfessions(selectedLocation.place_id);
+      }
       
     } catch (error) {
       console.error('Error posting confession:', error);
@@ -928,12 +964,12 @@ const ConfessionScreen = () => {
   };
 
   const refreshConfessions = () => {
-    if (selectedLocation && selectedLocation.place_id) {
-      let locationId = selectedLocation.place_id;
-      if (selectedLocation.is_custom && typeof locationId === 'string' && locationId.startsWith('custom_')) {
-        locationId = locationId.replace('custom_', '');
+    if (selectedLocation) {
+      if (selectedLocation.display_name) {
+        loadConfessions(selectedLocation.display_name, true); // Refresh by name
+      } else if (selectedLocation.place_id) {
+        loadConfessions(selectedLocation.place_id); // Fallback to ID
       }
-      loadConfessions(locationId);
     }
   };
 
@@ -1126,13 +1162,18 @@ const ConfessionScreen = () => {
             <Text style={[styles.actionText, item.is_liked && styles.likedText]}>{item.likes_count || 0}</Text>
           </TouchableOpacity>
           
-          <TouchableOpacity style={styles.actionButton} onPress={() => handleCommentPress(item.id)}>
-            <Ionicons name="chatbubble-outline" size={22} color="#ff00ff" />
-            <Text style={styles.actionText}>{item.comments_count || 0}</Text>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => navigation.navigate('ConfessionComment', { confessionId: item.id })}
+          >
+            <Ionicons name="chatbubble-outline" size={24} color="#e0e0ff" />
+            <Text style={styles.actionText}>
+              {item.comments_count}
+            </Text>
           </TouchableOpacity>
           
           <TouchableOpacity style={styles.actionButton}>
-            <Ionicons name="share-social-outline" size={24} color="#ff00ff" />
+            <Ionicons name="share-social-outline" size={24} color="#e0e0ff" />
           </TouchableOpacity>
 
           {/* Verification Buttons */}
@@ -1180,7 +1221,7 @@ const ConfessionScreen = () => {
         </View>
       </TouchableOpacity>
     );
-  };
+  }; // Dependencies for useCallback
 
   const goToUserLocation = React.useCallback(() => {
     if (userLocation) {
