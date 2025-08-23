@@ -217,7 +217,8 @@ const NotificationsScreen = () => {
             return;
           }
 
-          // Determine if it's a post comment or a confession comment
+          // Determine if it's a post comment, place confession comment, or person confession comment
+          // Check for post comment
           const { data: postComment, error: postCommentError } = await supabase
             .from('post_comments')
             .select('post_id')
@@ -234,20 +235,45 @@ const NotificationsScreen = () => {
             return;
           }
 
-          const { data: confessionComment, error: confessionCommentError } = await supabase
-            .from('confession_comments')
-            .select('confession_id')
-            .eq('id', notification.reference_id)
-            .maybeSingle();
+          // Check for place confession comment
+          const isPlaceConfession = notification.content.includes('place confession comment');
+          const isPersonConfession = notification.content.includes('person confession comment');
 
-          if (confessionCommentError && confessionCommentError.code !== 'PGRST116') throw confessionCommentError;
+          if (isPlaceConfession) {
+            const { data: confessionComment, error: confessionCommentError } = await supabase
+              .from('confession_comments')
+              .select('confession_id')
+              .eq('id', notification.reference_id)
+              .maybeSingle();
 
-          if (confessionComment) {
-            navigation.navigate('ConfessionComment', { 
-              confessionId: confessionComment.confession_id, 
-              highlightCommentId: notification.reference_id 
-            });
-            return;
+            if (confessionCommentError && confessionCommentError.code !== 'PGRST116') throw confessionCommentError;
+
+            if (confessionComment) {
+              navigation.navigate('ConfessionComment', { 
+                confessionId: confessionComment.confession_id, 
+                highlightCommentId: notification.reference_id 
+              });
+              return;
+            }
+          }
+
+          // Check for person confession comment
+          if (isPersonConfession) {
+            const { data: personConfessionComment, error: personConfessionCommentError } = await supabase
+              .from('person_confession_comments')
+              .select('confession_id')
+              .eq('id', notification.reference_id)
+              .maybeSingle();
+
+            if (personConfessionCommentError && personConfessionCommentError.code !== 'PGRST116') throw personConfessionCommentError;
+
+            if (personConfessionComment) {
+              navigation.navigate('ConfessionPersonComment', { 
+                confessionId: personConfessionComment.confession_id, 
+                highlightCommentId: notification.reference_id 
+              });
+              return;
+            }
           }
 
           Alert.alert('Error', 'Could not find referenced post or confession for this comment/mention.');

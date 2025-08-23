@@ -7,8 +7,9 @@ import { supabase } from '../config/supabase';
  * @param {boolean} isAnonymous - Whether the mention sender is anonymous.
  * @param {string} commentId - The ID of the comment where the mention occurred.
  * @param {string} referenceType - The type of item where the mention occurred (e.g., 'confession_comment', 'post_comment').
+ * @param {string} confessionType - The type of confession (e.g., 'place' or 'person').
  */
-export const processMentions = async (text, senderId, isAnonymous, commentId, referenceType) => {
+export const processMentions = async (text, senderId, isAnonymous, commentId, referenceType, confessionType) => {
   const mentionRegex = /@([a-zA-Z0-9_.]+)/g;
   let match;
   const mentions = new Set(); // Use a Set to store unique usernames
@@ -60,7 +61,7 @@ export const processMentions = async (text, senderId, isAnonymous, commentId, re
 
     for (const profile of profiles) {
       if (profile.id !== senderId) { // Don't send notification to self
-        const notificationContent = `${senderDisplayName} mentioned you in a ${referenceType}.`;
+        const notificationContent = `${senderDisplayName} mentioned you in a ${confessionType} confession comment.`; // Updated content
         notificationsToInsert.push({
           recipient_id: profile.id,
           sender_id: senderId,

@@ -214,7 +214,7 @@ const Sidebar = ({ isVisible, onClose }) => {
                 onPress={() => {
                   setShowConfessionInfoModal(false);
                   onClose();
-                  navigation.navigate('Confession');
+                  navigation.navigate('ConfessionButton'); // Navigate to the new ConfessionButtonScreen
                 }}
               >
                 <Text style={styles.modalButtonText}>Continue to Confessions</Text>

@@ -39,6 +39,9 @@ import PhotoTextViewerScreen from '../screens/PhotoTextViewerScreen';
 import MessageSettingsScreen from '../screens/MessageSettingsScreen';
 import BlockedUsersScreen from '../screens/BlockedUsersScreen';
 import ConfessionCommentScreen from '../screens/ConfessionCommentScreen';
+import ConfessionButtonScreen from '../screens/ConfessionButton'; // Import the new screen
+import ConfessionPersonScreen from '../screens/ConfessionPersonScreen'; // Import the new Person Confession screen
+import ConfessionPersonCommentScreen from '../screens/ConfessionPersonCommentScreen'; // Import the new Person Confession Comment screen
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -175,6 +178,7 @@ const AppNavigator = () => {
       <Stack.Screen name="MainApp" component={TabNavigator} />
       <Stack.Screen name="EditProfile" component={EditProfileScreen} />
       <Stack.Screen name="Search" component={SearchScreen} />
+      <Stack.Screen name="ConfessionButton" component={ConfessionButtonScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Confession" component={ConfessionScreen} />
       <Stack.Screen name="UserProfileScreen" component={UserProfileScreen} />
       <Stack.Screen name="PrivateProfileScreen" component={PrivateProfileScreen} />
@@ -197,6 +201,8 @@ const AppNavigator = () => {
       <Stack.Screen name="MessageSettings" component={MessageSettingsScreen} options={{ headerShown: false }} />
       <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} options={{ headerShown: false }} />
       <Stack.Screen name="ConfessionComment" component={ConfessionCommentScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="ConfessionPerson" component={ConfessionPersonScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="ConfessionPersonComment" component={ConfessionPersonCommentScreen} options={{ headerShown: false }} />
     </Stack.Navigator>
   );
 };
