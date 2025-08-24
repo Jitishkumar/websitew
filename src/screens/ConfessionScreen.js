@@ -275,6 +275,7 @@ const ConfessionScreen = () => {
         .select('private_account')
         .eq('user_id', userId)
         .single();
+      console.log('getProfilePrivacy data:', data, 'error:', error); // Added debug log
       if (error && error.code !== 'PGRST116') { // PGRST116 means no rows found
         throw error;
       }

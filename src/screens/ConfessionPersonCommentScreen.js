@@ -71,25 +71,9 @@ const ConfessionPersonCommentScreen = ({ onCommentPosted }) => {
     }
   };
 
-  const getProfilePrivacy = async (userId) => {
-    try {
-      const { data, error } = await supabase
-        .from('user_settings')
-        .select('private_account')
-        .eq('user_id', userId)
-        .single();
-      if (error && error.code !== 'PGRST116') { // PGRST116 means no rows found
-        throw error;
-      }
-      return data?.private_account || false;
-    } catch (error) {
-      console.error('Error fetching profile privacy:', error);
-      return false; // Default to public if error
-    }
-  };
-
   const handleMentionPress = async (username) => {
     try {
+      // First, get the profile data for the mentioned user
       const { data: profile, error } = await supabase
         .from('profiles')
         .select('id')
@@ -101,15 +85,76 @@ const ConfessionPersonCommentScreen = ({ onCommentPosted }) => {
         return;
       }
 
-      const isPrivate = await getProfilePrivacy(profile.id);
-
-      if (isPrivate) {
-        navigation.navigate('PrivateProfileScreen', { userId: profile.id });
-      } else {
-        navigation.navigate('UserProfileScreen', { userId: profile.id });
+      // Get the current user
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) {
+        Alert.alert('Error', 'You must be logged in to view profiles.');
+        return;
       }
+
+      // If the mentioned user is the current user, navigate to their own profile
+      if (currentUser.id === profile.id) {
+        navigation.navigate('Profile');
+        return;
+      }
+
+      console.log(`Privacy check: Checking if user ${profile.id} has a private account`);
+      
+      // Use the same privacy check logic as SearchScreen
+      const { data: settingsData, error: settingsError } = await supabase
+        .rpc('get_user_privacy', { target_user_id: profile.id })
+        .maybeSingle();
+
+      if (settingsError) {
+        console.log('Privacy check: Error fetching user settings:', settingsError);
+        throw settingsError;
+      }
+
+      console.log('Privacy check: User settings data:', settingsData);
+      
+      // If no settings data is found, assume the account is not private
+      if (!settingsData) {
+        console.log('Privacy check: No user settings found, assuming account is not private');
+        console.log('Privacy check: Navigating to UserProfileScreen');
+        navigation.navigate('UserProfileScreen', { userId: profile.id });
+        return;
+      }
+
+      const isPrivate = settingsData.private_account ?? false;
+      console.log(`Privacy check: Is account private? ${isPrivate}`);
+
+      // If account is private, check if the current user is an approved follower
+      if (isPrivate) {
+        console.log(`Privacy check: Account is private, checking if user ${currentUser.id} follows ${profile.id}`);
+        const { data: followData, error: followError } = await supabase
+          .from('follows')
+          .select('*')
+          .eq('follower_id', currentUser.id)
+          .eq('following_id', profile.id)
+          .maybeSingle();
+
+        if (followError) {
+          console.log('Privacy check: Error checking follow status:', followError);
+          throw followError;
+        }
+
+        console.log('Privacy check: Follow data:', followData);
+        
+        // If the user is not an approved follower, navigate to PrivateProfile
+        if (!followData) {
+          console.log(`Privacy check: User ${currentUser.id} is not following private account ${profile.id}, navigating to PrivateProfileScreen`);
+          navigation.navigate('PrivateProfileScreen', { userId: profile.id });
+          return;
+        }
+        console.log(`Privacy check: User ${currentUser.id} is following private account ${profile.id}, can view profile`);
+      }
+
+      // If account is not private or user is an approved follower, navigate to UserProfile
+      console.log(`Privacy check: Navigating to UserProfileScreen for user ${profile.id}`);
+      navigation.navigate('UserProfileScreen', { userId: profile.id });
     } catch (error) {
       console.error('Error navigating to mentioned user profile:', error);
+      console.log(`Privacy check: Error occurred, defaulting to UserProfileScreen`);
       Alert.alert('Error', 'Could not open user profile.');
     }
   };
@@ -329,10 +374,81 @@ const ConfessionPersonCommentScreen = ({ onCommentPosted }) => {
     }
   };
 
-  const navigateToUserProfile = (userId) => {
-    // This function will primarily be used for non-mentioned usernames (e.g., clicking on avatar)
-    // For mentions, handleMentionPress will be used directly.
-    navigation.navigate('UserProfileScreen', { userId });
+  const navigateToUserProfile = async (userId) => {
+    try {
+      // Get the current user
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) {
+        Alert.alert('Error', 'You must be logged in to view profiles.');
+        return;
+      }
+
+      // If it's the current user's profile, navigate to their own profile
+      if (currentUser.id === userId) {
+        navigation.navigate('Profile');
+        return;
+      }
+
+      console.log(`Privacy check: Checking if user ${userId} has a private account`);
+      
+      // Use the same privacy check logic as SearchScreen
+      const { data: settingsData, error: settingsError } = await supabase
+        .rpc('get_user_privacy', { target_user_id: userId })
+        .maybeSingle();
+
+      if (settingsError) {
+        console.log('Privacy check: Error fetching user settings:', settingsError);
+        throw settingsError;
+      }
+
+      console.log('Privacy check: User settings data:', settingsData);
+      
+      // If no settings data is found, assume the account is not private
+      if (!settingsData) {
+        console.log('Privacy check: No user settings found, assuming account is not private');
+        console.log('Privacy check: Navigating to UserProfileScreen');
+        navigation.navigate('UserProfileScreen', { userId });
+        return;
+      }
+
+      const isPrivate = settingsData.private_account ?? false;
+      console.log(`Privacy check: Is account private? ${isPrivate}`);
+
+      // If account is private, check if the current user is an approved follower
+      if (isPrivate) {
+        console.log(`Privacy check: Account is private, checking if user ${currentUser.id} follows ${userId}`);
+        const { data: followData, error: followError } = await supabase
+          .from('follows')
+          .select('*')
+          .eq('follower_id', currentUser.id)
+          .eq('following_id', userId)
+          .maybeSingle();
+
+        if (followError) {
+          console.log('Privacy check: Error checking follow status:', followError);
+          throw followError;
+        }
+
+        console.log('Privacy check: Follow data:', followData);
+        
+        // If the user is not an approved follower, navigate to PrivateProfile
+        if (!followData) {
+          console.log(`Privacy check: User ${currentUser.id} is not following private account ${userId}, navigating to PrivateProfileScreen`);
+          navigation.navigate('PrivateProfileScreen', { userId });
+          return;
+        }
+        console.log(`Privacy check: User ${currentUser.id} is following private account ${userId}, can view profile`);
+      }
+
+      // If account is not private or user is an approved follower, navigate to UserProfile
+      console.log(`Privacy check: Navigating to UserProfileScreen for user ${userId}`);
+      navigation.navigate('UserProfileScreen', { userId });
+    } catch (error) {
+      console.error('Error checking profile privacy:', error);
+      console.log(`Privacy check: Error occurred, defaulting to UserProfileScreen for user ${userId}`);
+      // Default to UserProfileScreen in case of error
+      navigation.navigate('UserProfileScreen', { userId });
+    }
   };
 
   const renderComment = ({ item }) => {
