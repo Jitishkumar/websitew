@@ -11,64 +11,25 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
-  // Removed Modal as this will be a full screen
-  // Modal,
   Dimensions,
   Switch,
-  // Removed PanResponder, Animated as this will be a full screen
-  // PanResponder,
-  // Animated
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../lib/supabase';
-import { processMentions } from '../utils/mentionService'; 
-import { useNavigation, useRoute } from '@react-navigation/native'; // Added useRoute
+import { processMentions } from '../utils/mentionService';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { height } = Dimensions.get('window');
 
-const ConfessionPersonCommentScreen = ({ onCommentPosted }) => { // Removed visible, onClose
+const ConfessionPersonCommentScreen = ({ onCommentPosted }) => {
   const navigation = useNavigation();
-  const route = useRoute(); // Use useRoute to get params
-  const { confessionId, highlightCommentId } = route.params; // Get confessionId and highlightCommentId from route params
+  const route = useRoute();
+  const { confessionId, highlightCommentId } = route.params;
   const insets = useSafeAreaInsets();
-  // Removed pan and modalHeight
-  // const pan = useRef(new Animated.ValueXY()).current;
-  // const [modalHeight, setModalHeight] = useState(height * 0.8);
 
-  const handleClose = () => {
-    // Removed onClose check
-    navigation.goBack();
-  };
-  
-  // Removed panResponder
-  // const panResponder = useRef(
-  //   PanResponder.create({
-  //     onStartShouldSetPanResponder: () => true,
-  //     onPanResponderMove: (_, gesture) => {
-  //       if (gesture.dy > 0) {
-  //         pan.y.setValue(gesture.dy);
-  //       }
-  //     },
-  //     onPanResponderRelease: (_, gesture) => {
-  //       if (gesture.dy > height * 0.2) {
-  //         if (typeof onClose === 'function') {
-  //           onClose();
-  //         } else {
-  //           navigation.goBack();
-  //         }
-  //       } else {
-  //         Animated.spring(pan.y, {
-  //           toValue: 0,
-  //           useNativeDriver: true,
-  //         }).start();
-  //       }
-  //     },
-  //   })
-  // ).current;
-
-  const flatListRef = useRef(null); // Ref for FlatList to scroll to comment
+  const flatListRef = useRef(null);
 
   const [comments, setComments] = useState([]);
   const [commentText, setCommentText] = useState('');
@@ -78,30 +39,29 @@ const ConfessionPersonCommentScreen = ({ onCommentPosted }) => { // Removed visi
   const [expandedComments, setExpandedComments] = useState(new Set());
   const [currentUser, setCurrentUser] = useState(null);
   const [isAnonymous, setIsAnonymous] = useState(false);
-  
+
   useEffect(() => {
-    if (confessionId) { // Check only for confessionId, not visible
+    if (confessionId) {
       loadComments();
       getCurrentUser();
     }
-  }, [confessionId]); // Dependency array for useEffect
+  }, [confessionId]);
 
   useEffect(() => {
     if (highlightCommentId && comments.length > 0 && flatListRef.current) {
       const commentIndex = comments.findIndex(c => c.id === highlightCommentId);
       if (commentIndex !== -1) {
-        // Need to ensure the parent comment is visible if it's a reply
         const parentComment = comments.find(c => c.id === comments[commentIndex].parent_comment_id);
         if (parentComment && !expandedComments.has(parentComment.id)) {
           setExpandedComments(prev => new Set(prev).add(parentComment.id));
         }
         setTimeout(() => {
           flatListRef.current.scrollToIndex({ index: commentIndex, animated: true, viewPosition: 0.5 });
-        }, 500); // Give time for layout to update
+        }, 500);
       }
     }
   }, [highlightCommentId, comments, expandedComments]);
-  
+
   const getCurrentUser = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -110,19 +70,94 @@ const ConfessionPersonCommentScreen = ({ onCommentPosted }) => { // Removed visi
       console.error('Error getting current user:', error);
     }
   };
-  
+
+  const getProfilePrivacy = async (userId) => {
+    try {
+      const { data, error } = await supabase
+        .from('user_settings')
+        .select('private_account')
+        .eq('user_id', userId)
+        .single();
+      if (error && error.code !== 'PGRST116') { // PGRST116 means no rows found
+        throw error;
+      }
+      return data?.private_account || false;
+    } catch (error) {
+      console.error('Error fetching profile privacy:', error);
+      return false; // Default to public if error
+    }
+  };
+
+  const handleMentionPress = async (username) => {
+    try {
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('username', username)
+        .single();
+
+      if (error || !profile) {
+        Alert.alert('Error', `User @${username} not found.`);
+        return;
+      }
+
+      const isPrivate = await getProfilePrivacy(profile.id);
+
+      if (isPrivate) {
+        navigation.navigate('PrivateProfileScreen', { userId: profile.id });
+      } else {
+        navigation.navigate('UserProfileScreen', { userId: profile.id });
+      }
+    } catch (error) {
+      console.error('Error navigating to mentioned user profile:', error);
+      Alert.alert('Error', 'Could not open user profile.');
+    }
+  };
+
+  const renderCommentContentWithMentions = (content) => {
+    if (!content) return null;
+
+    const parts = [];
+    let lastIndex = 0;
+    const mentionRegex = /@([a-zA-Z0-9_]+)/g;
+
+    content.replace(mentionRegex, (match, username, offset) => {
+      if (offset > lastIndex) {
+        parts.push(<Text key={`text-${lastIndex}`}>{content.substring(lastIndex, offset)}</Text>);
+      }
+      parts.push(
+        <TouchableOpacity key={`mention-${offset}`} onPress={() => handleMentionPress(username)}>
+          <Text style={styles.mentionText}>@{username}</Text>
+        </TouchableOpacity>
+      );
+      lastIndex = offset + match.length;
+      return match;
+    });
+
+    if (lastIndex < content.length) {
+      parts.push(<Text key={`text-${lastIndex}`}>{content.substring(lastIndex)}</Text>);
+    }
+    return <Text style={styles.commentText}>{parts}</Text>;
+  };
+
+  const handleClose = () => {
+    navigation.goBack();
+  };
+
   const loadComments = async () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from('person_confession_comments') // Changed to person_confession_comments
-        .select(`
+        .from('person_confession_comments')
+        .select(
+          `
           *,
           profiles:user_id (username, avatar_url)
-        `)
+        `
+        )
         .eq('confession_id', confessionId)
         .order('created_at', { ascending: true });
-      
+
       if (error) throw error;
       setComments(data || []);
     } catch (error) {
@@ -135,7 +170,7 @@ const ConfessionPersonCommentScreen = ({ onCommentPosted }) => { // Removed visi
 
   const handleAddComment = async () => {
     if (!commentText.trim()) return;
-    
+
     try {
       setSubmitting(true);
       const { data: { user } } = await supabase.auth.getUser();
@@ -143,34 +178,33 @@ const ConfessionPersonCommentScreen = ({ onCommentPosted }) => { // Removed visi
         Alert.alert('Error', 'Please login to comment');
         return;
       }
-      
+
       const { data, error } = await supabase
-        .from('person_confession_comments') // Changed to person_confession_comments
+        .from('person_confession_comments')
         .insert({
           confession_id: confessionId,
-          user_id: user.id, // Always store the user ID
-          creator_id: user.id, // Always store the actual creator ID
+          user_id: user.id,
+          creator_id: user.id,
           content: commentText.trim(),
-          is_anonymous: isAnonymous // Use this flag to control comment display
+          is_anonymous: isAnonymous
         })
-        .select(`
+        .select(
+          `
           *,
           profiles:user_id (username, avatar_url)
-        `)
+        `
+        )
         .single();
-      
+
       if (error) throw error;
-      
-      // Get confession owner to send notification (if applicable)
+
       const { data: confessionData } = await supabase
-        .from('person_confessions') // Changed to person_confessions
+        .from('person_confessions')
         .select('user_id')
         .eq('id', confessionId)
         .single();
-      
+
       if (confessionData && data) {
-        // Assuming a similar notification service is desired, update it to handle confession comments
-        // await sendCommentNotification(confessionId, data.id, user.id, confessionData.user_id);
         await processMentions(commentText.trim(), user.id, isAnonymous, data.id, 'person_confession_comment', 'person');
         setComments([...comments, data]);
         setCommentText('');
@@ -187,7 +221,7 @@ const ConfessionPersonCommentScreen = ({ onCommentPosted }) => { // Removed visi
 
   const handleReply = async () => {
     if (!commentText.trim()) return;
-    
+
     try {
       setSubmitting(true);
       const { data: { user } } = await supabase.auth.getUser();
@@ -195,9 +229,9 @@ const ConfessionPersonCommentScreen = ({ onCommentPosted }) => { // Removed visi
         Alert.alert('Error', 'Please login to comment');
         return;
       }
-      
+
       const { data, error } = await supabase
-        .from('person_confession_comments') // Changed to person_confession_comments
+        .from('person_confession_comments')
         .insert({
           confession_id: confessionId,
           user_id: user.id,
@@ -206,22 +240,23 @@ const ConfessionPersonCommentScreen = ({ onCommentPosted }) => { // Removed visi
           parent_comment_id: replyingTo,
           is_anonymous: isAnonymous
         })
-        .select(`
+        .select(
+          `
           *,
           profiles:user_id (username, avatar_url)
-        `)
+        `
+        )
         .single();
-      
+
       if (error) throw error;
-      
+
       const { data: confessionData } = await supabase
-        .from('person_confessions') // Changed to person_confessions
+        .from('person_confessions')
         .select('user_id')
         .eq('id', confessionId)
         .single();
-      
+
       if (confessionData && data) {
-        // await sendCommentNotification(confessionId, data.id, user.id, confessionData.user_id);
         await processMentions(commentText.trim(), user.id, isAnonymous, data.id, 'person_confession_comment', 'person');
         setComments([...comments, data]);
         setCommentText('');
@@ -253,14 +288,14 @@ const ConfessionPersonCommentScreen = ({ onCommentPosted }) => { // Removed visi
     const now = new Date();
     const commentDate = new Date(timestamp);
     const diffInSeconds = Math.floor((now - commentDate) / 1000);
-  
+
     if (diffInSeconds < 60) return 'just now';
     if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m`;
     if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h`;
     if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}d`;
     return commentDate.toLocaleDateString();
   };
-  
+
   const handleDeleteComment = async (commentId) => {
     try {
       Alert.alert(
@@ -268,18 +303,18 @@ const ConfessionPersonCommentScreen = ({ onCommentPosted }) => { // Removed visi
         "Are you sure you want to delete this comment?",
         [
           { text: "Cancel", style: "cancel" },
-          { 
-            text: "Delete", 
+          {
+            text: "Delete",
             style: "destructive",
             onPress: async () => {
               const { error } = await supabase
-                .from('person_confession_comments') // Changed to person_confession_comments
+                .from('person_confession_comments')
                 .delete()
                 .eq('id', commentId);
-              
+
               if (error) throw error;
-              
-              const updatedComments = comments.filter(c => 
+
+              const updatedComments = comments.filter(c =>
                 c.id !== commentId && c.parent_comment_id !== commentId
               );
               setComments(updatedComments);
@@ -293,8 +328,10 @@ const ConfessionPersonCommentScreen = ({ onCommentPosted }) => { // Removed visi
       Alert.alert('Error', 'Failed to delete comment');
     }
   };
-  
+
   const navigateToUserProfile = (userId) => {
+    // This function will primarily be used for non-mentioned usernames (e.g., clicking on avatar)
+    // For mentions, handleMentionPress will be used directly.
     navigation.navigate('UserProfileScreen', { userId });
   };
 
@@ -303,13 +340,13 @@ const ConfessionPersonCommentScreen = ({ onCommentPosted }) => { // Removed visi
     const replies = comments.filter(c => c.parent_comment_id === item.id);
     const hasReplies = replies.length > 0;
     const isCurrentUserComment = currentUser && (
-      (item.user_id === currentUser.id) || 
+      (item.user_id === currentUser.id) ||
       (item.is_anonymous && item.creator_id === currentUser.id)
     );
-    
+
     const isAnonymousComment = item.is_anonymous;
     const defaultAvatar = 'https://via.placeholder.com/40';
-  
+
     return (
       <View style={[styles.commentContainer, item.parent_comment_id && styles.replyContainer]}>
         <TouchableOpacity onPress={() => !isAnonymousComment && navigateToUserProfile(item.user_id)}>
@@ -329,10 +366,10 @@ const ConfessionPersonCommentScreen = ({ onCommentPosted }) => { // Removed visi
               {isAnonymousComment ? 'Anonymous' : (item.profiles?.username || 'User')}
             </Text>
           </TouchableOpacity>
-          <Text style={styles.commentText}>{item.content}</Text>
+          {renderCommentContentWithMentions(item.content)}
           <View style={styles.commentActions}>
             <Text style={styles.timestamp}>{formatTimestamp(item.created_at)}</Text>
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={() => {
                 setReplyingTo(item.id);
                 setCommentText(`@${isAnonymousComment ? 'Anonymous' : (item.profiles?.username || 'User')} `);
@@ -342,7 +379,7 @@ const ConfessionPersonCommentScreen = ({ onCommentPosted }) => { // Removed visi
               <Text style={styles.replyButtonText}>Reply</Text>
             </TouchableOpacity>
             {hasReplies && (
-              <TouchableOpacity 
+              <TouchableOpacity
                 onPress={() => toggleExpanded(item.id)}
                 style={styles.toggleRepliesButton}
               >
@@ -352,7 +389,7 @@ const ConfessionPersonCommentScreen = ({ onCommentPosted }) => { // Removed visi
               </TouchableOpacity>
             )}
             {isCurrentUserComment && (
-              <TouchableOpacity 
+              <TouchableOpacity
                 onPress={() => handleDeleteComment(item.id)}
                 style={styles.deleteButton}
               >
@@ -375,29 +412,27 @@ const ConfessionPersonCommentScreen = ({ onCommentPosted }) => { // Removed visi
   };
 
   return (
-    // Removed Modal and Animated.View
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container} // Changed to styles.container for full screen
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0} // Adjusted offset
+      style={styles.container}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
       <LinearGradient
         colors={['#0a0a2a', '#1a1a3a']}
         style={[styles.header, { paddingTop: insets.top > 0 ? insets.top : (Platform.OS === 'ios' ? 20 : 15) }]}
       >
-        {/* Removed dragHandle */}
         <TouchableOpacity onPress={handleClose}>
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Person Comments</Text> {/* Changed title */}
-        <View style={{ width: 24 }} /> {/* Spacer for symmetry */}
+        <Text style={styles.headerTitle}>Person Comments</Text>
+        <View style={{ width: 24 }} />
       </LinearGradient>
 
       {loading ? (
         <ActivityIndicator size="large" color="#ff00ff" style={styles.loading} />
       ) : (
         <FlatList
-          ref={flatListRef} // Attach ref
+          ref={flatListRef}
           data={comments.filter(comment => !comment.parent_comment_id)}
           renderItem={renderComment}
           keyExtractor={(item) => item.id.toString()}
@@ -451,17 +486,7 @@ const ConfessionPersonCommentScreen = ({ onCommentPosted }) => { // Removed visi
 };
 
 const styles = StyleSheet.create({
-  // Removed dragIndicator
-  // dragIndicator: {
-  //   width: 40,
-  //   height: 5,
-  //   backgroundColor: '#ffffff',
-  //   borderRadius: 3,
-  //   alignSelf: 'center',
-  //   marginVertical: 10,
-  //   zIndex: 2,
-  // },
-  container: { // Added for full screen
+  container: {
     flex: 1,
     backgroundColor: '#050520',
   },
@@ -488,22 +513,6 @@ const styles = StyleSheet.create({
     position: 'relative',
     zIndex: 2,
   },
-  // Removed dragHandle
-  // dragHandle: {
-  //   width: '100%',
-  //   alignItems: 'center',
-  //   padding: 10,
-  //   position: 'absolute',
-  //   top: 0,
-  //   left: 0,
-  //   right: 0,
-  //   zIndex: 3,
-  //   ...Platform.select({
-  //     ios: {
-  //       paddingTop: 10,
-  //     },
-  //   }),
-  // },
   headerTitle: {
     color: '#fff',
     fontSize: 18,
@@ -551,6 +560,10 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     lineHeight: 20,
+  },
+  mentionText: {
+    color: '#00ffff',
+    fontWeight: 'bold',
   },
   timestamp: {
     color: '#666',

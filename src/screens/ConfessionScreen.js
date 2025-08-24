@@ -268,6 +268,102 @@ const ConfessionScreen = () => {
     };
   }, []); // Empty dependency array ensures this runs only once on mount
 
+  const getProfilePrivacy = async (userId) => {
+    try {
+      const { data, error } = await supabase
+        .from('user_settings')
+        .select('private_account')
+        .eq('user_id', userId)
+        .single();
+      if (error && error.code !== 'PGRST116') { // PGRST116 means no rows found
+        throw error;
+      }
+      return data?.private_account || false;
+    } catch (error) {
+      console.error('Error fetching profile privacy:', error);
+      return false; // Default to public if error
+    }
+  };
+
+  const handleMentionPress = async (username) => {
+    try {
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('username', username)
+        .single();
+
+      if (error || !profile) {
+        Alert.alert('Error', `User @${username} not found.`);
+        return;
+      }
+
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) {
+        Alert.alert('Error', 'You must be logged in to view profiles.');
+        return;
+      }
+
+      // If the mentioned user is the current user, navigate to their own profile
+      if (currentUser.id === profile.id) {
+        navigation.navigate('UserProfileScreen', { userId: currentUser.id });
+        return;
+      }
+
+      const isPrivate = await getProfilePrivacy(profile.id);
+
+      if (isPrivate) {
+        const { data: followData, error: followError } = await supabase
+          .from('follows')
+          .select('*')
+          .eq('follower_id', currentUser.id)
+          .eq('following_id', profile.id)
+          .maybeSingle();
+
+        if (followError) {
+          console.error('Error checking follow status:', followError);
+          throw followError;
+        }
+
+        if (!followData) {
+          navigation.navigate('PrivateProfileScreen', { userId: profile.id });
+          return;
+        }
+      }
+
+      navigation.navigate('UserProfileScreen', { userId: profile.id });
+    } catch (error) {
+      console.error('Error navigating to mentioned user profile:', error);
+      Alert.alert('Error', 'Could not open user profile.');
+    }
+  };
+
+  const renderConfessionContentWithMentions = (content) => {
+    if (!content) return null;
+
+    const parts = [];
+    let lastIndex = 0;
+    const mentionRegex = /@([a-zA-Z0-9_]+)/g;
+
+    content.replace(mentionRegex, (match, username, offset) => {
+      if (offset > lastIndex) {
+        parts.push(<Text key={`text-${lastIndex}`} style={styles.confessionContent}>{content.substring(lastIndex, offset)}</Text>);
+      }
+      parts.push(
+        <TouchableOpacity key={`mention-${offset}`} onPress={() => handleMentionPress(username)}>
+          <Text style={styles.mentionText}>@{username}</Text>
+        </TouchableOpacity>
+      );
+      lastIndex = offset + match.length;
+      return match;
+    });
+
+    if (lastIndex < content.length) {
+      parts.push(<Text key={`text-${lastIndex}`} style={styles.confessionContent}>{content.substring(lastIndex)}</Text>);
+    }
+    return <Text style={styles.confessionContent}>{parts}</Text>;
+  };
+
   const getMapUrl = React.useCallback(({ mapRegion, selectedLocation, userLocation }) => {
     const lat = mapRegion.latitude;
     const lon = mapRegion.longitude;
@@ -1103,7 +1199,7 @@ const ConfessionScreen = () => {
           )}
         </View>
         
-        <Text style={styles.confessionContent}>{item.content}</Text>
+        <Text style={styles.confessionContent}>{renderConfessionContentWithMentions(item.content)}</Text>
         
         {item.media && item.media.length > 0 && (
           <ScrollView horizontal style={styles.mediaContainer} showsHorizontalScrollIndicator={false}>
@@ -1170,7 +1266,7 @@ const ConfessionScreen = () => {
           
           <TouchableOpacity
             style={styles.actionButton}
-            onPress={() => navigation.navigate('ConfessionComment', { confessionId: item.id })}
+            onPress={() => handleCommentPress(item.id)}
           >
             <Ionicons name="chatbubble-outline" size={24} color="#e0e0ff" />
             <Text style={styles.actionText}>
@@ -1561,12 +1657,19 @@ const ConfessionScreen = () => {
           </View>
         </TouchableOpacity>
       </Modal>
-      <ConfessionCommentScreen 
-        visible={showCommentModal} 
-        onClose={() => setShowCommentModal(false)} 
-        confessionId={selectedConfessionForReaction} 
-        onCommentPosted={refreshConfessions} // Refresh confessions when a comment is posted
-      />
+      <Modal
+        visible={showCommentModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowCommentModal(false)}
+      >
+        <ConfessionCommentScreen
+          visible={showCommentModal}
+          onClose={() => setShowCommentModal(false)}
+          confessionId={selectedConfessionForReaction}
+          onCommentPosted={refreshConfessions} // Refresh confessions when a comment is posted
+        />
+      </Modal>
     </View>
   );
 };
@@ -2421,6 +2524,10 @@ const styles = StyleSheet.create({
   },
   scrollViewContent: {
     padding: 20,
+  },
+  mentionText: {
+    color: '#00ffff',
+    fontWeight: 'bold',
   },
 });
 

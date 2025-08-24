@@ -125,7 +125,7 @@ const SearchScreen = () => {
         navigation.navigate('UserProfileScreen', { userId });
         return;
       }
-      const isPrivate = settingsData.private_account ?? false; // Default to false if private_account is null
+      const isPrivate = settingsData.private_account ?? false;
       console.log(`Privacy check: Is account private? ${isPrivate}`);
 
       // If account is private, check if the current user is an approved follower

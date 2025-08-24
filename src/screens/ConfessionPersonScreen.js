@@ -33,22 +33,10 @@ import { uploadToCloudinary, deleteFromCloudinary } from '../config/cloudinary';
 
 const { width: screenWidth } = Dimensions.get('window');
 
+
 // New PersonConfessionsHeader component (adapted from ConfessionsHeader)
-const PersonConfessionsHeader = React.memo(({
-  navigation,
-  searchQuery,
-  setSearchQuery,
-  searchTimeoutRef,
-  searchPersons, // Changed from searchLocations
-  searchResults, // Now searchResults for persons
-  selectPerson, // Changed from selectLocation
-  searchLoading,
-  selectedPerson, // Changed from selectedLocation
-  renderPersonProfile, // Changed from renderLocationProfile
-  setShowAddPersonModal, // Changed from setShowAddPlaceModal
-  searchError,
-  loading,
-}) => {
+const PersonConfessionsHeader = React.memo(function PersonConfessionsHeaderComponent(props) {
+
   return (
     <View>
       <LinearGradient
@@ -58,12 +46,12 @@ const PersonConfessionsHeader = React.memo(({
         style={styles.header}
       >
         <TouchableOpacity 
-          onPress={() => navigation.goBack()}
+          onPress={() => props.navigation.goBack()}
           style={styles.backButton}
         >
           <Ionicons name="arrow-back" size={24} color="#ff00ff" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Person Confessions</Text> {/* Changed title */}
+        <Text style={styles.headerTitle}>Person Confessions</Text>
       </LinearGradient>
 
       <LinearGradient
@@ -74,112 +62,72 @@ const PersonConfessionsHeader = React.memo(({
       >
         <TextInput
           style={styles.searchInput}
-          placeholder="Search for a person..." // Changed placeholder
+          placeholder="Search for a person..."
           placeholderTextColor="#999"
-          value={searchQuery}
+          value={props.searchQuery}
           onChangeText={(text) => {
-            setSearchQuery(text);
+            props.setSearchQuery(text);
             
-            if (searchTimeoutRef.current) {
-              clearTimeout(searchTimeoutRef.current);
+            if (props.searchTimeoutRef.current) {
+              clearTimeout(props.searchTimeoutRef.current);
             }
             
             if (text.length < 3) {
               return;
             }
             
-            searchTimeoutRef.current = setTimeout(() => {
-              searchPersons(text); // Call searchPersons
+            props.searchTimeoutRef.current = setTimeout(() => {
+              props.searchPersons(text);
             }, 500);
           }}
         />
-        {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchQuery('')}>
+        {props.searchQuery.length > 0 && (
+          <TouchableOpacity onPress={() => props.setSearchQuery('')}>
             <Ionicons name="close-circle" size={20} color="#999" />
           </TouchableOpacity>
         )}
-        {/* Removed map button */}
-        {/* <TouchableOpacity 
-          style={styles.mapButton}
-          onPress={() => setShowMap(!showMap)}
-        >
-          <Ionicons name={showMap ? "map" : "map-outline"} size={20} color="#ff00ff" />
-        </TouchableOpacity> */}
       </LinearGradient>
 
-      {searchResults.length > 0 ? (
+      {props.searchResults.length > 0 ? (
         <ScrollView style={styles.searchResultsList} nestedScrollEnabled={true} showsVerticalScrollIndicator={false}>
-          {searchResults.map((item) => (
+          {props.searchResults.map((item) => (
             <TouchableOpacity 
-              key={item.id.toString()} // Key by person ID
+              key={item.id.toString()}
               style={styles.searchResultItem}
-              onPress={() => selectPerson(item)} // Call selectPerson
+              onPress={() => props.selectPerson(item)}
             >
-              <Ionicons name="person" size={20} color="#ff00ff" /> {/* Changed icon */}
-              <Text style={styles.searchResultText}>{item.name}</Text> {/* Display person name */}
+              <Ionicons name="person" size={20} color="#ff00ff" />
+              <Text style={styles.searchResultText}>{item.name}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
       ) : (
-        searchQuery.length >= 3 && !searchLoading && (
+        props.searchQuery.length >= 3 && !props.searchLoading && (
           <View style={styles.noResultsContainer}>
-            <Text style={styles.noResultsText}>No persons found</Text> {/* Changed text */}
+            <Text style={styles.noResultsText}>No persons found</Text>
             <TouchableOpacity 
-              style={styles.addPlaceButton} // Keep style name for now, but semantically 'Add Person'
-              onPress={() => setShowAddPersonModal(true)} // Call setShowAddPersonModal
+              style={styles.addPlaceButton}
+              onPress={() => props.setShowAddPersonModal(true)}
             >
-              <Text style={styles.addPlaceButtonText}>Add New Person</Text> {/* Changed text */}
+              <Text style={styles.addPlaceButtonText}>Add New Person</Text>
             </TouchableOpacity>
           </View>
         )
       )}
 
-      {searchError && (
+      {props.searchError && (
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>
-            {searchError.includes('Network request failed') 
+            {props.searchError.includes('Network request failed') 
               ? 'Network error. Check your connection.' 
               : 'Error searching persons. Try again.'}
           </Text>
         </View>
       )}
       
-      {/* Removed map functionality */}
-      {/* {showMap && (
-        <View style={styles.mapContainer}>
-          <WebView
-            style={styles.map}
-            source={{ uri: getMapUrl({ mapRegion: { latitude: selectedLocation?.lat || userLocation?.coords.latitude, longitude: selectedLocation?.lon || userLocation?.coords.longitude }, selectedLocation, userLocation }) }}
-            javaScriptEnabled={true}
-            domStorageEnabled={true}
-            onError={(e) => console.error('WebView error:', e.nativeEvent)}
-            renderLoading={() => (
-              <View style={[styles.loadingContainer, StyleSheet.absoluteFill]}>
-                <ActivityIndicator size="large" color="#ff00ff" />
-              </View>
-            )}
-            startInLoadingState={true}
-          />
-          <View style={styles.mapControls}>
-            <TouchableOpacity 
-              style={styles.closeMapButton}
-              onPress={() => setShowMap(false)}
-            >
-              <Ionicons name="close-circle" size={30} color="#ff00ff" />
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.locationButton}
-              onPress={goToUserLocation}
-            >
-              <Ionicons name="locate" size={24} color="#ff00ff" />
-            </TouchableOpacity>
-          </View>
-        </View>
-      )} */}
-      
-      {selectedPerson && renderPersonProfile()}
+      {props.selectedPerson && props.renderPersonProfile()}
 
-      {searchLoading && ( // Display search-specific loading indicator
+      {props.searchLoading && (
         <View style={styles.searchOverlayLoading}>
           <ActivityIndicator size="small" color="#ff00ff" />
           <Text style={styles.searchOverlayLoadingText}>Searching...</Text>
@@ -188,6 +136,11 @@ const PersonConfessionsHeader = React.memo(({
     </View>
   );
 });
+
+
+
+
+
 
 const ConfessionPersonScreen = () => {
   const navigation = useNavigation();
@@ -263,20 +216,7 @@ const ConfessionPersonScreen = () => {
     };
   }, []); 
 
-  // Removed getMapUrl
-  // const getMapUrl = React.useCallback(({ mapRegion, selectedLocation, userLocation }) => {
-  //   const lat = mapRegion.latitude;
-  //   const lon = mapRegion.longitude;
-  //   let url = `https://www.openstreetmap.org/export/embed.html?bbox=${lon-0.05},${lat-0.05},${lon+0.05},${lat+0.05}&layer=mapnik`;
-    
-  //   if (selectedLocation) {
-  //     url += `&marker=${selectedLocation.lat},${selectedLocation.lon}`;
-  //   }
-  //   if (userLocation) {
-  //     url += `&marker=${userLocation.coords.latitude},${userLocation.coords.longitude}`;
-  //   }
-  //   return url;
-  // }, [mapRegion, selectedLocation, userLocation]); 
+ 
 
   const searchPersons = React.useCallback(async (query) => { // Changed from searchLocations
     if (query.length < 3) {
@@ -449,7 +389,9 @@ const ConfessionPersonScreen = () => {
     }
   };
 
-  const loadPersonConfessions = React.useCallback(async (personIdentifier, useNameForConfessions = false) => { // Changed from loadConfessions
+
+
+  const loadPersonConfessions = React.useCallback(async (personIdentifier, useNameForConfessions = false) => {
     setLoading(true);
     try {
       if (!personIdentifier) {
@@ -459,7 +401,7 @@ const ConfessionPersonScreen = () => {
       }
       
       let query = supabase
-        .from('person_confessions') // From person_confessions table
+        .from('person_confessions')
         .select(`
           id,
           user_id,
@@ -479,9 +421,9 @@ const ConfessionPersonScreen = () => {
         .limit(50);
 
       if (useNameForConfessions) {
-        query = query.eq('person_name', personIdentifier); // Query by person_name
+        query = query.eq('person_name', personIdentifier);
       } else {
-        query = query.eq('person_id', personIdentifier); // Query by person_id
+        query = query.eq('person_id', personIdentifier);
       }
 
       const { data: confessionsData, error: confessionsError } = await query;
@@ -522,23 +464,34 @@ const ConfessionPersonScreen = () => {
             return null;
           }).filter(Boolean) : [];
 
-        // Fetch likes separately to ensure `is_liked` is accurate for current user
-        const { data: userLikeData, error: userLikeError } = await supabase
-          .from('person_confession_likes')
-          .select('id')
-          .eq('confession_id', confession.id)
-          .eq('user_id', currentUser?.id);
+        // Only fetch likes if currentUser exists and has an ID
+        let is_liked = false;
+        if (currentUser && currentUser.id) {
+          try {
+            const { data: userLikeData, error: userLikeError } = await supabase
+              .from('person_confession_likes')
+              .select('id')
+              .eq('confession_id', confession.id)
+              .eq('user_id', currentUser.id);
 
-        if (userLikeError) console.error("Error fetching user like for person confession:", userLikeError);
+            if (userLikeError) {
+              console.error("Error fetching user like for person confession:", userLikeError);
+            } else {
+              is_liked = userLikeData && userLikeData.length > 0;
+            }
+          } catch (error) {
+            console.error("Error in like check:", error);
+          }
+        }
 
         return {
           ...confession,
           media: validatedMedia,
-          username: confession.confession_creator?.username || 'User', // Get username from joined creator profile
-          avatar_url: confession.confession_creator?.avatar_url, // Get avatar from joined creator profile
-          is_liked: userLikeData && userLikeData.length > 0,
-          confessedPersonName: confession.confessed_person?.name, // Add confessed person's name
-          confessedPersonProfileImage: confession.confessed_person?.profile_image // Add confessed person's profile image
+          username: confession.confession_creator?.username || 'User',
+          avatar_url: confession.confession_creator?.avatar_url,
+          is_liked: is_liked,
+          confessedPersonName: confession.confessed_person?.name,
+          confessedPersonProfileImage: confession.confessed_person?.profile_image
         };
       }));
 
@@ -553,7 +506,9 @@ const ConfessionPersonScreen = () => {
     } finally {
       setLoading(false);
     }
-  }, [setLoading, setConfessions, loadReactionsAndVerifications, currentUser]); // Dependencies for useCallback
+  }, [setLoading, setConfessions, loadReactionsAndVerifications, currentUser]);
+
+
 
   const loadReactionsAndVerifications = async (confessionIds) => {
     try {
@@ -682,8 +637,9 @@ const ConfessionPersonScreen = () => {
     }
   };
 
+
   const handleLike = async (confessionId) => {
-    if (!currentUser) {
+    if (!currentUser || !currentUser.id) {
       Alert.alert('Error', 'You must be logged in to like a confession');
       return;
     }
@@ -691,7 +647,7 @@ const ConfessionPersonScreen = () => {
     try {
       // Check if already liked
       const { data: existingLike, error: fetchError } = await supabase
-        .from('person_confession_likes') // From person_confession_likes
+        .from('person_confession_likes')
         .select('id')
         .eq('confession_id', confessionId)
         .eq('user_id', currentUser.id)
@@ -704,7 +660,7 @@ const ConfessionPersonScreen = () => {
       if (existingLike) {
         // Unlike
         const { error: deleteError } = await supabase
-          .from('person_confession_likes') // Delete from person_confession_likes
+          .from('person_confession_likes')
           .delete()
           .eq('id', existingLike.id);
 
@@ -719,7 +675,7 @@ const ConfessionPersonScreen = () => {
       } else {
         // Like
         const { error: insertError } = await supabase
-          .from('person_confession_likes') // Insert into person_confession_likes
+          .from('person_confession_likes')
           .insert([{
             confession_id: confessionId,
             user_id: currentUser.id,
@@ -739,6 +695,11 @@ const ConfessionPersonScreen = () => {
       Alert.alert('Error', 'Failed to update like. Please try again.');
     }
   };
+
+
+
+
+
 
   const handleCommentPress = (confessionId) => {
     // Navigate to the ConfessionPersonCommentScreen, passing confessionId as a route parameter

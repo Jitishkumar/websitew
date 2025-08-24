@@ -11,11 +11,8 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
-  Modal,
   Dimensions,
   Switch,
-  PanResponder,
-  Animated
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -35,46 +32,12 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
   const currentHighlightCommentId = route.params?.highlightCommentId || initialHighlightCommentId;
 
   const insets = useSafeAreaInsets();
-  const pan = useRef(new Animated.ValueXY()).current;
-  const [modalHeight, setModalHeight] = useState(height * 0.8);
-  const flatListRef = useRef(null); // Ref for FlatList
+  const flatListRef = useRef(null);
 
   const handleClose = () => {
-    // Check if onClose is a function before calling it
-    if (typeof onClose === 'function') {
-      onClose();
-    } else {
-      // If onClose is not a function, use navigation to go back
-      navigation.goBack();
-    }
+    navigation.goBack();
   };
   
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onPanResponderMove: (_, gesture) => {
-        if (gesture.dy > 0) { // Only allow dragging down
-          pan.y.setValue(gesture.dy);
-        }
-      },
-      onPanResponderRelease: (_, gesture) => {
-        if (gesture.dy > height * 0.2) { // If dragged down more than 20% of screen height
-          // Check if onClose is a function before calling it
-          if (typeof onClose === 'function') {
-            onClose();
-          } else {
-            // If onClose is not a function, use navigation to go back
-            navigation.goBack();
-          }
-        } else {
-          Animated.spring(pan.y, {
-            toValue: 0,
-            useNativeDriver: true,
-          }).start();
-        }
-      },
-    })
-  ).current;
   const [comments, setComments] = useState([]);
   const [commentText, setCommentText] = useState('');
   const [loading, setLoading] = useState(true);
@@ -96,11 +59,9 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
     if (currentHighlightCommentId && comments.length > 0) {
       const index = comments.findIndex(comment => comment.id === currentHighlightCommentId);
       if (index !== -1 && flatListRef.current) {
-        // Ensure the comment and its parent (if it's a reply) are expanded
         const commentToHighlight = comments[index];
         if (commentToHighlight.parent_comment_id && !expandedComments.has(commentToHighlight.parent_comment_id)) {
           setExpandedComments(prev => new Set(prev).add(commentToHighlight.parent_comment_id));
-          // Need to re-find index after potential re-render from expanding parent
           setTimeout(() => {
             const newIndex = comments.findIndex(comment => comment.id === currentHighlightCommentId);
             if (newIndex !== -1) {
@@ -122,6 +83,102 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
     } catch (error) {
       console.error('Error getting current user:', error);
     }
+  };
+  
+  const getProfilePrivacy = async (userId) => {
+    try {
+      const { data, error } = await supabase
+        .from('user_settings')
+        .select('private_account')
+        .eq('user_id', userId)
+        .single();
+      if (error && error.code !== 'PGRST116') { // PGRST116 means no rows found
+        throw error;
+      }
+      return data?.private_account || false;
+    } catch (error) {
+      console.error('Error fetching profile privacy:', error);
+      return false; // Default to public if error
+    }
+  };
+
+  const handleMentionPress = async (username) => {
+    try {
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('username', username)
+        .single();
+
+      if (error || !profile) {
+        Alert.alert('Error', `User @${username} not found.`);
+        return;
+      }
+
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) {
+        Alert.alert('Error', 'You must be logged in to view profiles.');
+        return;
+      }
+
+      // If the mentioned user is the current user, navigate to their own profile
+      if (currentUser.id === profile.id) {
+        navigation.navigate('UserProfileScreen', { userId: currentUser.id });
+        return;
+      }
+
+      const isPrivate = await getProfilePrivacy(profile.id);
+
+      if (isPrivate) {
+        const { data: followData, error: followError } = await supabase
+          .from('follows')
+          .select('*')
+          .eq('follower_id', currentUser.id)
+          .eq('following_id', profile.id)
+          .maybeSingle();
+
+        if (followError) {
+          console.error('Error checking follow status:', followError);
+          throw followError;
+        }
+
+        if (!followData) {
+          navigation.navigate('PrivateProfileScreen', { userId: profile.id });
+          return;
+        }
+      }
+
+      navigation.navigate('UserProfileScreen', { userId: profile.id });
+    } catch (error) {
+      console.error('Error navigating to mentioned user profile:', error);
+      Alert.alert('Error', 'Could not open user profile.');
+    }
+  };
+
+  const renderCommentContentWithMentions = (content) => {
+    if (!content) return null;
+
+    const parts = [];
+    let lastIndex = 0;
+    const mentionRegex = /@([a-zA-Z0-9_]+)/g;
+
+    content.replace(mentionRegex, (match, username, offset) => {
+      if (offset > lastIndex) {
+        parts.push(<Text key={`text-${lastIndex}`}>{content.substring(lastIndex, offset)}</Text>);
+      }
+      parts.push(
+        <TouchableOpacity key={`mention-${offset}`} onPress={() => handleMentionPress(username)}>
+          <Text style={styles.mentionText}>@{username}</Text>
+        </TouchableOpacity>
+      );
+      lastIndex = offset + match.length;
+      return match;
+    });
+
+    if (lastIndex < content.length) {
+      parts.push(<Text key={`text-${lastIndex}`}>{content.substring(lastIndex)}</Text>);
+    }
+    return <Text style={styles.commentText}>{parts}</Text>;
   };
   
   const loadComments = async () => {
@@ -289,8 +346,8 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
         "Are you sure you want to delete this comment?",
         [
           { text: "Cancel", style: "cancel" },
-          { 
-            text: "Delete", 
+          {
+            text: "Delete",
             style: "destructive",
             onPress: async () => {
               const { error } = await supabase
@@ -352,44 +409,55 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
               {isAnonymousComment ? 'Anonymous' : (item.profiles?.username || 'User')}
             </Text>
           </TouchableOpacity>
-          <Text style={styles.commentText}>{item.content}</Text>
+          {renderCommentContentWithMentions(item.content)}
+          <Text style={styles.timestamp}>
+            {formatTimestamp(item.created_at)}
+          </Text>
+          
           <View style={styles.commentActions}>
-            <Text style={styles.timestamp}>{formatTimestamp(item.created_at)}</Text>
             <TouchableOpacity 
+              style={styles.replyButton}
               onPress={() => {
                 setReplyingTo(item.id);
                 setCommentText(`@${isAnonymousComment ? 'Anonymous' : (item.profiles?.username || 'User')} `);
               }}
-              style={styles.replyButton}
             >
               <Text style={styles.replyButtonText}>Reply</Text>
             </TouchableOpacity>
+            
             {hasReplies && (
               <TouchableOpacity 
-                onPress={() => toggleExpanded(item.id)}
                 style={styles.toggleRepliesButton}
+                onPress={() => toggleExpanded(item.id)}
               >
                 <Text style={styles.toggleRepliesText}>
-                  {isExpanded ? 'Hide Replies' : `Show ${replies.length} ${replies.length === 1 ? 'Reply' : 'Replies'}`}
+                  {isExpanded ? 'Hide Replies' : `View ${replies.length} ${replies.length === 1 ? 'Reply' : 'Replies'}`}
                 </Text>
               </TouchableOpacity>
             )}
+            
             {isCurrentUserComment && (
               <TouchableOpacity 
-                onPress={() => handleDeleteComment(item.id)}
                 style={styles.deleteButton}
+                onPress={() => {
+                  Alert.alert(
+                    'Delete Comment',
+                    'Are you sure you want to delete this comment?',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Delete', style: 'destructive', onPress: () => handleDeleteComment(item.id) }
+                    ]
+                  );
+                }}
               >
                 <Text style={styles.deleteButtonText}>Delete</Text>
               </TouchableOpacity>
             )}
           </View>
+          
           {isExpanded && hasReplies && (
             <View style={styles.repliesContainer}>
-              {replies.map(reply => (
-                <React.Fragment key={reply.id}>
-                  {renderComment({ item: reply })}
-                </React.Fragment>
-              ))}
+              {replies.map(reply => renderComment({ item: reply }))}
             </View>
           )}
         </View>
@@ -399,7 +467,7 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
 
   return (
     <KeyboardAvoidingView
-      style={[styles.container, { paddingBottom: insets.bottom }]}
+      style={[styles.container, { paddingBottom: insets.bottom }]} // Changed to styles.container for full screen
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <View style={styles.header}>
@@ -414,10 +482,10 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
         <ActivityIndicator size="large" color="#ff00ff" style={styles.loading} />
       ) : (
         <FlatList
-          data={comments.filter(comment => !comment.parent_comment_id)}
-          renderItem={renderComment}
+          data={comments.filter(c => !c.parent_comment_id)} // Only show top-level comments
           keyExtractor={(item) => item.id.toString()}
-          contentContainerStyle={[styles.commentsList, { paddingBottom: insets.bottom }]}
+          renderItem={renderComment}
+          style={styles.commentsList}
           ListEmptyComponent={
             <Text style={styles.emptyText}>No comments yet. Be the first to comment!</Text>
           }
@@ -427,22 +495,27 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
 
       <LinearGradient
         colors={['#1a1a3a', '#0d0d2a']}
-        style={[styles.inputContainer, { paddingBottom: insets.bottom > 0 ? insets.bottom : 10 }]}
+        style={[styles.inputContainer, { paddingBottom: insets.bottom > 0 ? insets.bottom : 10 }]} // Adjusted padding
       >
-        <View style={styles.modalHeader}>
-          <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-            <Ionicons name="close" size={24} color="#fff" />
-          </TouchableOpacity>
-        </View>
+        {replyingTo && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+            <Text style={{ color: '#00ffff' }}>Replying to {replyingTo.is_anonymous ? 'Anonymous' : replyingTo.profiles?.username}</Text>
+            <TouchableOpacity onPress={() => setReplyingTo(null)} style={{ marginLeft: 10 }}>
+              <Ionicons name="close-circle" size={16} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        )}
+        
         <View style={styles.anonymousOption}>
-          <Text style={styles.anonymousText}>Anonymous</Text>
+          <Text style={styles.anonymousText}>Post anonymously</Text>
           <Switch
             value={isAnonymous}
             onValueChange={setIsAnonymous}
-            trackColor={{ false: "#767577", true: "#ff00ff" }}
-            thumbColor={isAnonymous ? "#f4f3f4" : "#f4f3f4"}
+            trackColor={{ false: '#333', true: '#ff00ff' }}
+            thumbColor={isAnonymous ? '#00ffff' : '#f4f3f4'}
           />
         </View>
+        
         <View style={styles.inputRow}>
           <TextInput
             style={styles.input}
@@ -452,8 +525,7 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
             onChangeText={setCommentText}
             multiline
             maxLength={500}
-            color="#ffffff"
-            autoFocus={false}
+            color="#fff"
           />
           <TouchableOpacity
             style={[styles.sendButton, !commentText.trim() && styles.disabledButton]}
@@ -473,28 +545,9 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
 };
 
 const styles = StyleSheet.create({
-  dragIndicator: {
-    width: 40,
-    height: 5,
-    backgroundColor: '#ffffff',
-    borderRadius: 3,
-    alignSelf: 'center',
-    marginVertical: 10,
-    zIndex: 2,
-  },
-  modalContainer: {
+  container: {
     flex: 1,
-    backgroundColor: 'transparent',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
     backgroundColor: '#050520',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    height: height * 0.8,
-    overflow: 'hidden',
-    position: 'relative',
-    zIndex: 1,
   },
   header: {
     flexDirection: 'row',
@@ -504,21 +557,6 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'ios' ? 20 : 15,
     position: 'relative',
     zIndex: 2,
-  },
-  dragHandle: {
-    width: '100%',
-    alignItems: 'center',
-    padding: 10,
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 3,
-    ...Platform.select({
-      ios: {
-        paddingTop: 10,
-      },
-    }),
   },
   headerTitle: {
     color: '#fff',
@@ -567,6 +605,10 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     lineHeight: 20,
+  },
+  mentionText: {
+    color: '#00ffff',
+    fontWeight: 'bold',
   },
   timestamp: {
     color: '#666',

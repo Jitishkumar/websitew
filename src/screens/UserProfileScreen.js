@@ -132,6 +132,104 @@ const UserProfileScreen = () => {
   const [isBlocked, setIsBlocked] = useState(false);
   const [blockReason, setBlockReason] = useState('');
 
+  const getProfilePrivacy = async (userId) => {
+    try {
+      const { data, error } = await supabase
+        .from('user_settings')
+        .select('private_account')
+        .eq('user_id', userId)
+        .single();
+      if (error && error.code !== 'PGRST116') { // PGRST116 means no rows found
+        throw error;
+      }
+      return data?.private_account || false;
+    } catch (error) {
+      console.error('Error fetching profile privacy:', error);
+      return false; // Default to public if error
+    }
+  };
+
+  const handleMentionPress = async (username) => {
+    try {
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('username', username)
+        .single();
+
+      if (error || !profile) {
+        Alert.alert('Error', `User @${username} not found.`);
+        return;
+      }
+
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) {
+        Alert.alert('Error', 'You must be logged in to view profiles.');
+        return;
+      }
+
+      // If the mentioned user is the current user, navigate to their own profile
+      if (currentUser.id === profile.id) {
+        navigation.navigate('UserProfileScreen', { userId: currentUser.id });
+        return;
+      }
+
+      const isPrivate = await getProfilePrivacy(profile.id);
+
+      if (isPrivate) {
+        const { data: followData, error: followError } = await supabase
+          .from('follows')
+          .select('*')
+          .eq('follower_id', currentUser.id)
+          .eq('following_id', profile.id)
+          .maybeSingle();
+
+        if (followError) {
+          console.error('Error checking follow status:', followError);
+          throw followError;
+        }
+
+        if (!followData) {
+          navigation.navigate('PrivateProfileScreen', { userId: profile.id });
+          return;
+        }
+      }
+
+      navigation.navigate('UserProfileScreen', { userId: profile.id });
+    } catch (error) {
+      console.error('Error navigating to mentioned user profile:', error);
+      Alert.alert('Error', 'Could not open user profile.');
+    }
+  };
+
+  const renderMentionedContent = (content, shouldTruncate) => {
+    if (!content) return null;
+
+    const parts = [];
+    let lastIndex = 0;
+    const mentionRegex = /@([a-zA-Z0-9_]+)/g;
+
+    const textToRender = shouldTruncate ? content.substring(0, 50) : content;
+
+    textToRender.replace(mentionRegex, (match, username, offset) => {
+      if (offset > lastIndex) {
+        parts.push(<Text key={`text-${lastIndex}`} style={styles.bioText}>{textToRender.substring(lastIndex, offset)}</Text>);
+      }
+      parts.push(
+        <TouchableOpacity key={`mention-${offset}`} onPress={() => handleMentionPress(username)}>
+          <Text style={styles.mentionText}>@{username}</Text>
+        </TouchableOpacity>
+      );
+      lastIndex = offset + match.length;
+      return match;
+    });
+
+    if (lastIndex < textToRender.length) {
+      parts.push(<Text key={`text-${lastIndex}`} style={styles.bioText}>{textToRender.substring(lastIndex)}</Text>);
+    }
+    return <Text style={styles.bioText}>{parts}</Text>;
+  };
+
   const loadUserProfile = async () => {
     try {
       setLoading(true);
@@ -304,18 +402,16 @@ const UserProfileScreen = () => {
       : userProfile.bio;
 
     return (
-      <View style={styles.container}>
-        <View style={styles.bioContainer}>
-          <Text style={styles.bioText}>
-            {displayBio}
-            {shouldTruncate && (
-              <Text 
-                style={styles.moreText}
-                onPress={() => setShowFullBio(true)}
-              > more</Text>
-            )}
-          </Text>
-        </View>
+      <View style={styles.bioContainer}>
+        <Text style={styles.bioText}>
+          {renderMentionedContent(userProfile.bio, shouldTruncate)}
+          {shouldTruncate && (
+            <Text 
+              style={styles.moreText}
+              onPress={() => setShowFullBio(true)}
+            > more</Text>
+          )}
+        </Text>
       </View>
     );
   };
@@ -1400,6 +1496,10 @@ const styles = StyleSheet.create({
     color: '#ff00ff',
     fontWeight: '600',
   },
+  mentionText: {
+    color: '#00ffff',
+    fontWeight: 'bold',
+  },
   buttonContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -1521,6 +1621,10 @@ const styles = StyleSheet.create({
   },
   readMoreText: {
     color: '#ff00ff',
+    fontWeight: 'bold',
+  },
+  mentionText: {
+    color: '#1DA1F2', // Example color for mentions
     fontWeight: 'bold',
   },
 });

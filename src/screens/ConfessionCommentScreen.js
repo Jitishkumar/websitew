@@ -11,16 +11,14 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
-  Modal,
   Dimensions,
   Switch,
-  PanResponder,
-  Animated
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../lib/supabase';
-import { sendCommentNotification } from '../utils/notificationService'; // Assuming a similar notification service is desired
+import { sendCommentNotification } from '../utils/notificationService';
+import { processMentions } from '../utils/mentionService';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -29,8 +27,6 @@ const { height } = Dimensions.get('window');
 const ConfessionCommentScreen = ({ visible, onClose, confessionId, onCommentPosted }) => {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const pan = useRef(new Animated.ValueXY()).current;
-  const [modalHeight, setModalHeight] = useState(height * 0.8);
 
   const handleClose = () => {
     if (typeof onClose === 'function') {
@@ -39,31 +35,6 @@ const ConfessionCommentScreen = ({ visible, onClose, confessionId, onCommentPost
       navigation.goBack();
     }
   };
-  
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onPanResponderMove: (_, gesture) => {
-        if (gesture.dy > 0) {
-          pan.y.setValue(gesture.dy);
-        }
-      },
-      onPanResponderRelease: (_, gesture) => {
-        if (gesture.dy > height * 0.2) {
-          if (typeof onClose === 'function') {
-            onClose();
-          } else {
-            navigation.goBack();
-          }
-        } else {
-          Animated.spring(pan.y, {
-            toValue: 0,
-            useNativeDriver: true,
-          }).start();
-        }
-      },
-    })
-  ).current;
 
   const [comments, setComments] = useState([]);
   const [commentText, setCommentText] = useState('');
@@ -88,6 +59,102 @@ const ConfessionCommentScreen = ({ visible, onClose, confessionId, onCommentPost
     } catch (error) {
       console.error('Error getting current user:', error);
     }
+  };
+  
+  const getProfilePrivacy = async (userId) => {
+    try {
+      const { data, error } = await supabase
+        .from('user_settings')
+        .select('private_account')
+        .eq('user_id', userId)
+        .single();
+      if (error && error.code !== 'PGRST116') { // PGRST116 means no rows found
+        throw error;
+      }
+      return data?.private_account || false;
+    } catch (error) {
+      console.error('Error fetching profile privacy:', error);
+      return false; // Default to public if error
+    }
+  };
+
+  const handleMentionPress = async (username) => {
+    try {
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('username', username)
+        .single();
+
+      if (error || !profile) {
+        Alert.alert('Error', `User @${username} not found.`);
+        return;
+      }
+
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) {
+        Alert.alert('Error', 'You must be logged in to view profiles.');
+        return;
+      }
+
+      // If the mentioned user is the current user, navigate to their own profile
+      if (currentUser.id === profile.id) {
+        navigation.navigate('UserProfileScreen', { userId: currentUser.id });
+        return;
+      }
+
+      const isPrivate = await getProfilePrivacy(profile.id);
+
+      if (isPrivate) {
+        const { data: followData, error: followError } = await supabase
+          .from('follows')
+          .select('*')
+          .eq('follower_id', currentUser.id)
+          .eq('following_id', profile.id)
+          .maybeSingle();
+
+        if (followError) {
+          console.error('Error checking follow status:', followError);
+          throw followError;
+        }
+
+        if (!followData) {
+          navigation.navigate('PrivateProfileScreen', { userId: profile.id });
+          return;
+        }
+      }
+
+      navigation.navigate('UserProfileScreen', { userId: profile.id });
+    } catch (error) {
+      console.error('Error navigating to mentioned user profile:', error);
+      Alert.alert('Error', 'Could not open user profile.');
+    }
+  };
+
+  const renderCommentContentWithMentions = (content) => {
+    if (!content) return null;
+
+    const parts = [];
+    let lastIndex = 0;
+    const mentionRegex = /@([a-zA-Z0-9_]+)/g;
+
+    content.replace(mentionRegex, (match, username, offset) => {
+      if (offset > lastIndex) {
+        parts.push(<Text key={`text-${lastIndex}`}>{content.substring(lastIndex, offset)}</Text>);
+      }
+      parts.push(
+        <TouchableOpacity key={`mention-${offset}`} onPress={() => handleMentionPress(username)}>
+          <Text style={styles.mentionText}>@{username}</Text>
+        </TouchableOpacity>
+      );
+      lastIndex = offset + match.length;
+      return match;
+    });
+
+    if (lastIndex < content.length) {
+      parts.push(<Text key={`text-${lastIndex}`}>{content.substring(lastIndex)}</Text>);
+    }
+    return <Text style={styles.commentText}>{parts}</Text>;
   };
   
   const loadComments = async () => {
@@ -149,7 +216,7 @@ const ConfessionCommentScreen = ({ visible, onClose, confessionId, onCommentPost
       
       if (confessionData && data) {
         // Assuming a similar notification service is desired, update it to handle confession comments
-        // await sendCommentNotification(confessionId, data.id, user.id, confessionData.user_id);
+        await sendCommentNotification(confessionId, data.id, user.id, confessionData.user_id);
         // Call processMentions for new comment
         await processMentions(commentText.trim(), user.id, isAnonymous, data.id, 'confession_comment', 'place');
         setComments([...comments, data]);
@@ -201,7 +268,7 @@ const ConfessionCommentScreen = ({ visible, onClose, confessionId, onCommentPost
         .single();
       
       if (confessionData && data) {
-        // await sendCommentNotification(confessionId, data.id, user.id, confessionData.user_id);
+        await sendCommentNotification(confessionId, data.id, user.id, confessionData.user_id);
         // Call processMentions for reply
         await processMentions(commentText.trim(), user.id, isAnonymous, data.id, 'confession_comment', 'place');
         setComments([...comments, data]);
@@ -310,7 +377,7 @@ const ConfessionCommentScreen = ({ visible, onClose, confessionId, onCommentPost
               {isAnonymousComment ? 'Anonymous' : (item.profiles?.username || 'User')}
             </Text>
           </TouchableOpacity>
-          <Text style={styles.commentText}>{item.content}</Text>
+          {renderCommentContentWithMentions(item.content)}
           <View style={styles.commentActions}>
             <Text style={styles.timestamp}>{formatTimestamp(item.created_at)}</Text>
             <TouchableOpacity 
@@ -356,145 +423,91 @@ const ConfessionCommentScreen = ({ visible, onClose, confessionId, onCommentPost
   };
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={handleClose}
-    >
-      <Animated.View
-        style={[
-          styles.modalContainer,
-          {
-            transform: [{ translateY: pan.y }]
-          }
-        ]}
+    <View style={styles.container}>
+      <LinearGradient
+        colors={['#0a0a2a', '#1a1a3a']}
+        style={[styles.header, { paddingTop: insets.top || 15 }]}
       >
+        <Text style={styles.headerTitle}>Comments</Text>
+        <TouchableOpacity onPress={handleClose}>
+          <Ionicons name="close" size={24} color="#fff" />
+        </TouchableOpacity>
+      </LinearGradient>
+
+      {loading ? (
+        <ActivityIndicator size="large" color="#ff00ff" style={styles.loading} />
+      ) : (
+        <FlatList
+          data={comments.filter(comment => !comment.parent_comment_id)}
+          renderItem={renderComment}
+          keyExtractor={(item) => item.id.toString()}
+          contentContainerStyle={[styles.commentsList, { paddingBottom: insets.bottom }]}
+          ListEmptyComponent={
+            <Text style={styles.emptyText}>No comments yet. Be the first to comment!</Text>
+          }
+        />
+      )}
+
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.modalContainer}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        style={styles.inputContainer}
+        keyboardVerticalOffset={0}
       >
-        <View style={styles.modalContent}>
-          <LinearGradient
-            colors={['#0a0a2a', '#1a1a3a']}
-            style={[styles.header, { paddingTop: insets.top > 0 ? insets.top : (Platform.OS === 'ios' ? 20 : 15) }]}
-          >
-            <View style={styles.dragHandle} {...panResponder.panHandlers}>
-              <View style={styles.dragIndicator} />
-            </View>
-            <Text style={styles.headerTitle}>Comments</Text>
-            <TouchableOpacity onPress={handleClose}>
-              <Ionicons name="close" size={24} color="#fff" />
-            </TouchableOpacity>
-          </LinearGradient>
-
-          {loading ? (
-            <ActivityIndicator size="large" color="#ff00ff" style={styles.loading} />
-          ) : (
-            <FlatList
-              data={comments.filter(comment => !comment.parent_comment_id)}
-              renderItem={renderComment}
-              keyExtractor={(item) => item.id.toString()}
-              contentContainerStyle={[styles.commentsList, { paddingBottom: insets.bottom }]}
-              ListEmptyComponent={
-                <Text style={styles.emptyText}>No comments yet. Be the first to comment!</Text>
-              }
+        <LinearGradient
+          colors={['#1a1a3a', '#0d0d2a']}
+          style={[styles.inputContainerGradient, { paddingBottom: insets.bottom > 0 ? insets.bottom : 10 }]}
+        >
+          <View style={styles.anonymousOption}>
+            <Text style={styles.anonymousText}>Anonymous</Text>
+            <Switch
+              value={isAnonymous}
+              onValueChange={setIsAnonymous}
+              trackColor={{ false: "#767577", true: "#ff00ff" }}
+              thumbColor={isAnonymous ? "#f4f3f4" : "#f4f3f4"}
             />
-          )}
-
-          <LinearGradient
-            colors={['#1a1a3a', '#0d0d2a']}
-            style={[styles.inputContainer, { paddingBottom: insets.bottom > 0 ? insets.bottom : 10 }]}
-          >
-            <View style={styles.anonymousOption}>
-              <Text style={styles.anonymousText}>Anonymous</Text>
-              <Switch
-                value={isAnonymous}
-                onValueChange={setIsAnonymous}
-                trackColor={{ false: "#767577", true: "#ff00ff" }}
-                thumbColor={isAnonymous ? "#f4f3f4" : "#f4f3f4"}
-              />
-            </View>
-            <View style={styles.inputRow}>
-              <TextInput
-                style={styles.input}
-                placeholder="Add a comment..."
-                placeholderTextColor="#666"
-                value={commentText}
-                onChangeText={setCommentText}
-                multiline
-                maxLength={500}
-                color="#ffffff"
-                autoFocus={false}
-              />
-              <TouchableOpacity
-                style={[styles.sendButton, !commentText.trim() && styles.disabledButton]}
-                onPress={replyingTo ? handleReply : handleAddComment}
-                disabled={!commentText.trim() || submitting}
-              >
-                {submitting ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Ionicons name="send" size={24} color="#fff" />
-                )}
-              </TouchableOpacity>
-            </View>
-          </LinearGradient>
-        </View>
+          </View>
+          <View style={styles.inputRow}>
+            <TextInput
+              style={styles.input}
+              placeholder="Add a comment..."
+              placeholderTextColor="#666"
+              value={commentText}
+              onChangeText={setCommentText}
+              multiline
+              maxLength={500}
+              color="#ffffff"
+              autoFocus={false}
+            />
+            <TouchableOpacity
+              style={[styles.sendButton, !commentText.trim() && styles.disabledButton]}
+              onPress={replyingTo ? handleReply : handleAddComment}
+              disabled={!commentText.trim() || submitting}
+            >
+              {submitting ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Ionicons name="send" size={24} color="#fff" />
+              )}
+            </TouchableOpacity>
+          </View>
+        </LinearGradient>
       </KeyboardAvoidingView>
-      </Animated.View>
-    </Modal>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  dragIndicator: {
-    width: 40,
-    height: 5,
-    backgroundColor: '#ffffff',
-    borderRadius: 3,
-    alignSelf: 'center',
-    marginVertical: 10,
-    zIndex: 2,
-  },
-  modalContainer: {
+  container: {
     flex: 1,
-    backgroundColor: 'transparent',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
     backgroundColor: '#050520',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    height: height * 0.8,
-    overflow: 'hidden',
-    position: 'relative',
-    zIndex: 1,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 15,
-    paddingTop: Platform.OS === 'ios' ? 20 : 15,
     position: 'relative',
     zIndex: 2,
-  },
-  dragHandle: {
-    width: '100%',
-    alignItems: 'center',
-    padding: 10,
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 3,
-    ...Platform.select({
-      ios: {
-        paddingTop: 10,
-      },
-    }),
   },
   headerTitle: {
     color: '#fff',
@@ -544,12 +557,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
+  mentionText: {
+    color: '#00ffff',
+    fontWeight: 'bold',
+  },
   timestamp: {
     color: '#666',
     fontSize: 12,
     marginTop: 5,
   },
   inputContainer: {
+    width: '100%', // Ensure it takes full width when wrapped by KeyboardAvoidingView
+    backgroundColor: 'transparent', // Make transparent to allow gradient to show
+  },
+  inputContainerGradient: { // New style for the LinearGradient
     flexDirection: 'column',
     padding: 10,
     borderTopWidth: 1,
