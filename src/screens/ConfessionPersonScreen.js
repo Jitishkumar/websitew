@@ -873,7 +873,7 @@ const ConfessionPersonScreen = () => {
       // Check if already liked
       const { data: existingLike, error: fetchError } = await supabase
         .from('person_confession_likes')
-        .select('id')
+        .select('confession_id') // Select any column to check for existence, e.g., confession_id
         .eq('confession_id', confessionId)
         .eq('user_id', currentUser.id)
         .single();
@@ -887,7 +887,8 @@ const ConfessionPersonScreen = () => {
         const { error: deleteError } = await supabase
           .from('person_confession_likes')
           .delete()
-          .eq('id', existingLike.id);
+          .eq('confession_id', confessionId) // Delete using both parts of the composite key
+          .eq('user_id', currentUser.id);
 
         if (deleteError) throw deleteError;
 
