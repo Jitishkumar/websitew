@@ -17,16 +17,21 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../lib/supabase';
+import { sendCommentNotification } from '../utils/notificationService';
 import { processMentions } from '../utils/mentionService';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { height } = Dimensions.get('window');
 
-const ConfessionPersonCommentScreen = ({ onCommentPosted }) => {
+const ConfessionPersonCommentScreen = ({ visible, onClose, confessionId: propConfessionId, onCommentPosted, cameFromNotifications }) => {
   const navigation = useNavigation();
   const route = useRoute();
-  const { confessionId, highlightCommentId } = route.params;
+
+  // Get confessionId from either props or route params
+  const confessionId = propConfessionId || route?.params?.confessionId;
+  const highlightCommentId = route?.params?.highlightCommentId;
+
   const insets = useSafeAreaInsets();
 
   const flatListRef = useRef(null);
@@ -38,6 +43,7 @@ const ConfessionPersonCommentScreen = ({ onCommentPosted }) => {
   const [replyingTo, setReplyingTo] = useState(null);
   const [expandedComments, setExpandedComments] = useState(new Set());
   const [currentUser, setCurrentUser] = useState(null);
+  const [currentUserUsername, setCurrentUserUsername] = useState(null); // New state for current user's username
   const [isAnonymous, setIsAnonymous] = useState(false);
 
   useEffect(() => {
@@ -62,10 +68,28 @@ const ConfessionPersonCommentScreen = ({ onCommentPosted }) => {
     }
   }, [highlightCommentId, comments, expandedComments]);
 
+  const handleClose = () => {
+    if (typeof onClose === 'function') {
+      onClose();
+    } else {
+      navigation.goBack();
+    }
+  };
+
   const getCurrentUser = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       setCurrentUser(user);
+      if (user) {
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('username')
+          .eq('id', user.id)
+          .single();
+        if (!error && profile) {
+          setCurrentUserUsername(profile.username);
+        }
+      }
     } catch (error) {
       console.error('Error getting current user:', error);
     }
@@ -185,13 +209,17 @@ const ConfessionPersonCommentScreen = ({ onCommentPosted }) => {
     return <Text style={styles.commentText}>{parts}</Text>;
   };
 
-  const handleClose = () => {
-    navigation.goBack();
-  };
-
   const loadComments = async () => {
     try {
       setLoading(true);
+      
+      // Make sure we have a confessionId
+      if (!confessionId) {
+        console.error('No confessionId provided');
+        Alert.alert('Error', 'Confession ID not found');
+        return;
+      }
+
       const { data, error } = await supabase
         .from('person_confession_comments')
         .select(
@@ -204,7 +232,12 @@ const ConfessionPersonCommentScreen = ({ onCommentPosted }) => {
         .order('created_at', { ascending: true });
 
       if (error) throw error;
-      setComments(data || []);
+      
+      const processedComments = (data || []).map(comment => {
+        const isTagged = currentUserUsername && comment.content.includes(`@${currentUserUsername}`);
+        return { ...comment, is_tagged: isTagged };
+      });
+      setComments(processedComments);
     } catch (error) {
       console.error('Error loading comments:', error);
       Alert.alert('Error', 'Failed to load comments');
@@ -243,6 +276,7 @@ const ConfessionPersonCommentScreen = ({ onCommentPosted }) => {
 
       if (error) throw error;
 
+      // Get confession owner to send notification (if applicable)
       const { data: confessionData } = await supabase
         .from('person_confessions')
         .select('user_id')
@@ -250,7 +284,9 @@ const ConfessionPersonCommentScreen = ({ onCommentPosted }) => {
         .single();
 
       if (confessionData && data) {
-        await processMentions(commentText.trim(), user.id, isAnonymous, data.id, 'person_confession_comment', 'person');
+        // Assuming a similar notification service is desired, update it to handle confession comments
+        // await sendCommentNotification(confessionId, data.id, user.id, confessionData.user_id); // Removed, as sendCommentNotification takes place in processMentions now
+        await processMentions(commentText.trim(), user.id, isAnonymous, data.id, 'person_confession_comment', confessionData.user_id); // Use person_confession_comment type and pass confession owner id
         setComments([...comments, data]);
         setCommentText('');
         setIsAnonymous(false);
@@ -302,7 +338,8 @@ const ConfessionPersonCommentScreen = ({ onCommentPosted }) => {
         .single();
 
       if (confessionData && data) {
-        await processMentions(commentText.trim(), user.id, isAnonymous, data.id, 'person_confession_comment', 'person');
+        // await sendCommentNotification(confessionId, data.id, user.id, confessionData.user_id); // Removed
+        await processMentions(commentText.trim(), user.id, isAnonymous, data.id, 'person_confession_comment', confessionData.user_id); // Use person_confession_comment type and pass confession owner id
         setComments([...comments, data]);
         setCommentText('');
         setReplyingTo(null);
@@ -535,13 +572,17 @@ const ConfessionPersonCommentScreen = ({ onCommentPosted }) => {
     >
       <LinearGradient
         colors={['#0a0a2a', '#1a1a3a']}
-        style={[styles.header, { paddingTop: insets.top > 0 ? insets.top : (Platform.OS === 'ios' ? 20 : 15) }]}
-      >
-        <TouchableOpacity onPress={handleClose}>
-          <Ionicons name="arrow-back" size={24} color="#fff" />
-        </TouchableOpacity>
+        style={[styles.header, { paddingTop: insets.top + 10 }]}>
+        {cameFromNotifications && (
+          <TouchableOpacity onPress={() => navigation.navigate('ConfessionPerson', { selectedConfessionId: confessionId })} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#fff" />
+          </TouchableOpacity>
+        )}
         <Text style={styles.headerTitle}>Person Comments</Text>
-        <View style={{ width: 24 }} />
+        <TouchableOpacity onPress={handleClose}>
+          <Ionicons name="close" size={24} color="#fff" />
+        </TouchableOpacity>
+        {!cameFromNotifications && <View style={{ width: 24 }} />} {/* Add this to balance spacing if no back button */}
       </LinearGradient>
 
       {loading ? (
@@ -769,6 +810,11 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     marginRight: 10,
+  },
+  backButton: {
+    position: 'absolute',
+    left: 10,
+    zIndex: 1,
   }
 });
 

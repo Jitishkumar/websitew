@@ -19,7 +19,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 // Removed WebView for map as it's not needed for person confessions
 // import { WebView } from 'react-native-webview'; 
@@ -29,7 +29,7 @@ import { supabase } from '../config/supabase';
 // import * as Location from 'expo-location'; 
 import * as FileSystem from 'expo-file-system';
 import { uploadToCloudinary, deleteFromCloudinary } from '../config/cloudinary';
-// import ConfessionPersonCommentScreen from './ConfessionPersonCommentScreen'; // New import for person-specific comment screen
+import ConfessionPersonCommentScreen from './ConfessionPersonCommentScreen'; // New import for person-specific comment screen
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -144,6 +144,7 @@ const PersonConfessionsHeader = React.memo(function PersonConfessionsHeaderCompo
 
 const ConfessionPersonScreen = () => {
   const navigation = useNavigation();
+  const route = useRoute(); // Add useRoute hook
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [selectedPerson, setSelectedPerson] = useState(null); // Changed from selectedLocation
@@ -172,9 +173,12 @@ const ConfessionPersonScreen = () => {
   const [confessionReactions, setConfessionReactions] = useState({});
   const [confessionVerifications, setConfessionVerifications] = useState({});
   const [currentUser, setCurrentUser] = useState(null);
+  const [currentUserUsername, setCurrentUserUsername] = useState(null); // New state for current user's username
   const [confessionLikes, setConfessionLikes] = useState({});
   const [confessionComments, setConfessionComments] = useState({});
+  const [showCommentModal, setShowCommentModal] = useState(false); // Added state for CommentScreen modal
   const searchTimeoutRef = useRef(null); 
+  const confessionsListRef = useRef(null); // Ref for FlatList to scroll to a specific confession
   const [showAddPersonModal, setShowAddPersonModal] = useState(false); // Changed from showAddPlaceModal
   const [newPerson, setNewPerson] = useState({ // Changed from newPlace
     name: '',
@@ -204,19 +208,199 @@ const ConfessionPersonScreen = () => {
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
       setCurrentUser(user);
+      if (user) {
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('username')
+          .eq('id', user.id)
+          .single();
+        if (!error && profile) {
+          setCurrentUserUsername(profile.username);
+        }
+      }
     };
     
     setupInitialData();
 
+    if (route.params?.selectedConfessionId && !selectedPerson) {
+      // If navigated from a comment notification, load the specific confession
+      const { selectedConfessionId } = route.params;
+      const fetchAndSetConfession = async () => {
+        try {
+          setLoading(true);
+          const { data: confessionData, error } = await supabase
+            .from('person_confessions')
+            .select(`
+              id,
+              user_id,
+              creator_id,
+              person_id,
+              person_name,
+              content,
+              media,
+              is_anonymous,
+              likes_count,
+              comments_count,
+              created_at,
+              confession_creator:creator_id(username, avatar_url),
+              confessed_person:person_id(name, profile_image)
+            `)
+            .eq('id', selectedConfessionId)
+            .single();
+          
+          if (error) throw error;
+          
+          if (confessionData) {
+            let personDetails = null;
+            if (confessionData.person_id) {
+              const { data: profileData, error: profileError } = await supabase
+                .from('person_profiles')
+                .select('*')
+                .eq('id', confessionData.person_id)
+                .single();
+              
+              if (profileError && profileError.code !== 'PGRST116') {
+                console.error('Error fetching person details for confession:', profileError);
+              } else if (profileData) {
+                personDetails = {
+                  id: profileData.id,
+                  name: profileData.name,
+                  profile_image: profileData.profile_image,
+                  bio: profileData.bio,
+                };
+              }
+            }
+            
+            if (!personDetails && confessionData.person_name) {
+              personDetails = {
+                id: confessionData.person_name, // Using name as ID if actual ID not found
+                name: confessionData.person_name,
+                profile_image: null,
+                bio: null,
+              };
+            }
+            
+            if (personDetails) {
+              setSelectedPerson(personDetails);
+              loadPersonConfessions(personDetails.id); // Load confessions using person ID
+            } else {
+              Alert.alert('Error', 'Could not retrieve person for the confession.');
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching specific person confession:', error);
+          Alert.alert('Error', 'Failed to load specific person confession.');
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchAndSetConfession();
+    }
+    
     // Cleanup function for search timeout (runs on unmount)
     return () => {
       if (searchTimeoutRef.current) {
         clearTimeout(searchTimeoutRef.current);
       }
     };
-  }, []); 
+  }, [route.params?.selectedConfessionId, selectedPerson, setSearchResults, setSearchLoading, setSearchError, setLoading, setConfessions, loadReactionsAndVerifications, currentUser, currentUserUsername, navigation]); // Added navigation to dependencies
 
- 
+  const getProfilePrivacy = async (userId) => {
+    try {
+      const { data, error } = await supabase
+        .from('user_settings')
+        .select('private_account')
+        .eq('user_id', userId)
+        .single();
+      console.log('getProfilePrivacy data:', data, 'error:', error); // Added debug log
+      if (error && error.code !== 'PGRST116') { // PGRST116 means no rows found
+        throw error;
+      }
+      return data?.private_account || false;
+    } catch (error) {
+      console.error('Error fetching profile privacy:', error);
+      return false; // Default to public if error
+    }
+  };
+
+  const handleMentionPress = async (username) => {
+    try {
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('username', username)
+        .single();
+
+      if (error || !profile) {
+        Alert.alert('Error', `User @${username} not found.`);
+        return;
+      }
+
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) {
+        Alert.alert('Error', 'You must be logged in to view profiles.');
+        return;
+      }
+
+      // If the mentioned user is the current user, navigate to their own profile
+      if (currentUser.id === profile.id) {
+        navigation.navigate('UserProfileScreen', { userId: currentUser.id });
+        return;
+      }
+
+      const isPrivate = await getProfilePrivacy(profile.id);
+
+      if (isPrivate) {
+        const { data: followData, error: followError } = await supabase
+          .from('follows')
+          .select('*')
+          .eq('follower_id', currentUser.id)
+          .eq('following_id', profile.id)
+          .maybeSingle();
+
+        if (followError) {
+          console.error('Error checking follow status:', followError);
+          throw followError;
+        }
+
+        if (!followData) {
+          navigation.navigate('PrivateProfileScreen', { userId: profile.id });
+          return;
+        }
+      }
+
+      navigation.navigate('UserProfileScreen', { userId: profile.id });
+    } catch (error) {
+      console.error('Error navigating to mentioned user profile:', error);
+      Alert.alert('Error', 'Could not open user profile.');
+    }
+  };
+
+  const renderConfessionContentWithMentions = (content) => {
+    if (!content) return null;
+
+    const parts = [];
+    let lastIndex = 0;
+    const mentionRegex = /@([a-zA-Z0-9_]+)/g;
+
+    content.replace(mentionRegex, (match, username, offset) => {
+      if (offset > lastIndex) {
+        parts.push(<Text key={`text-${lastIndex}`} style={styles.confessionContent}>{content.substring(lastIndex, offset)}</Text>);
+      }
+      parts.push(
+        <TouchableOpacity key={`mention-${offset}`} onPress={() => handleMentionPress(username)}>
+          <Text style={styles.mentionText}>@{username}</Text>
+        </TouchableOpacity>
+      );
+      lastIndex = offset + match.length;
+      return match;
+    });
+
+    if (lastIndex < content.length) {
+      parts.push(<Text key={`text-${lastIndex}`} style={styles.confessionContent}>{content.substring(lastIndex)}</Text>);
+    }
+    return <Text style={styles.confessionContent}>{parts}</Text>;
+  };
 
   const searchPersons = React.useCallback(async (query) => { // Changed from searchLocations
     if (query.length < 3) {
@@ -228,9 +412,9 @@ const ConfessionPersonScreen = () => {
     setSearchError(null);
     try {
       const { data: personsData, error: personsError } = await supabase
-        .from('person_profiles') // Query person_profiles table
-        .select('*')
-        .ilike('name', `%${query}%`) // Search by person name
+        .from('profiles') // Query profiles table for existing users
+        .select('id, username, avatar_url, full_name') // Select relevant fields for a person
+        .or(`username.ilike.%${query}%,full_name.ilike.%${query}%`) // Search by username or full name
         .limit(20);
       
       if (personsError) {
@@ -238,7 +422,13 @@ const ConfessionPersonScreen = () => {
         throw personsError;
       }
       
-      setSearchResults(personsData);
+      const formattedPersons = personsData.map(person => ({
+        id: person.id,
+        name: person.username || person.full_name || 'Unknown User',
+        profile_image: person.avatar_url,
+        bio: null, // We don't have a bio for a general profile search here, will load from person_profiles later
+      }));
+      setSearchResults(formattedPersons);
     } catch (error) {
       console.error('Error searching persons:', error);
       setSearchError(error.message);
@@ -262,36 +452,69 @@ const ConfessionPersonScreen = () => {
         return;
       }
       
-      const personData = {
-        name: newPerson.name,
-        bio: newPerson.bio || null,
-        created_at: new Date().toISOString(),
-        created_by: user.id
-      };
-      
-      const { data, error } = await supabase
-        .from('person_profiles') // Insert into person_profiles
-        .insert([personData])
-        .select()
+      // Check if a profile with this name already exists
+      const { data: existingProfile, error: existingProfileError } = await supabase
+        .from('profiles')
+        .select('id, username, full_name, avatar_url')
+        .or(`username.ilike.%${newPerson.name}%,full_name.ilike.%${newPerson.name}%`)
         .single();
+      
+      if (existingProfileError && existingProfileError.code !== 'PGRST116') {
+        throw existingProfileError;
+      }
 
-      if (error) throw error;
+      let targetPersonId = existingProfile?.id;
 
-      setShowAddPersonModal(false); // Changed modal state
-      setNewPerson({ // Reset newPerson state
+      if (!targetPersonId) {
+        // If no existing profile, create a "placeholder" profile in `person_profiles`
+        // Note: This is a simplified approach. In a real app, you might want a more robust way to handle "adding a new person" who isn't a user yet.
+        const { data: insertedPerson, error: insertError } = await supabase
+          .from('person_profiles') 
+          .insert({
+            name: newPerson.name,
+            bio: newPerson.bio || null,
+            created_at: new Date().toISOString(),
+            created_by: user.id
+          })
+          .select()
+          .single();
+
+        if (insertError) throw insertError;
+        targetPersonId = insertedPerson.id;
+      } else {
+        // If profile exists, also try to create/update an entry in `person_profiles` for additional info
+        const { error: upsertPersonProfileError } = await supabase
+          .from('person_profiles')
+          .upsert({
+            id: targetPersonId,
+            name: newPerson.name,
+            bio: newPerson.bio || null,
+            created_at: new Date().toISOString(),
+            created_by: user.id
+          }, { onConflict: 'id' });
+        
+        if (upsertPersonProfileError) {
+          console.error('Error upserting person_profiles for existing user:', upsertPersonProfileError);
+          // Don't throw, just log and continue, as the main profile exists
+        }
+      }
+
+      setShowAddPersonModal(false); 
+      setNewPerson({ 
         name: '',
         bio: ''
       });
 
-      const newPersonResult = { // Format for search results
-        id: data.id,
-        name: data.name,
-        profile_image: data.profile_image,
-        bio: data.bio
+      // Construct a result object to select
+      const newPersonResult = { 
+        id: targetPersonId,
+        name: newPerson.name,
+        profile_image: existingProfile?.avatar_url || null, // Use existing avatar if available
+        bio: newPerson.bio
       };
       
       setSearchResults(prevResults => [...prevResults, newPersonResult]);
-      selectPerson(newPersonResult); // Select the newly added person
+      selectPerson(newPersonResult); 
       
       Alert.alert('Success', 'Person added successfully');
     } catch (error) {
@@ -300,53 +523,45 @@ const ConfessionPersonScreen = () => {
     }
   };
 
-  const selectPerson = React.useCallback((person) => { // Changed from selectLocation
+  const selectPerson = React.useCallback((person) => { 
     if (!person) {
       console.error('Error: Attempted to select undefined person');
       return;
     }
     
-    setSelectedPerson(person); // Changed from setSelectedLocation
+    setSelectedPerson(person); 
     setSearchResults([]);
     
-    // Removed map region setting
-    // if (person.lat && person.lon) {
-    //   setMapRegion({
-    //     latitude: parseFloat(person.lat),
-    //     longitude: parseFloat(person.lon),
-    //   });
-    // }
-    
-    if (!person.id) { // Check for person ID
+    if (!person.id) { 
       console.error('Error: Selected person has no ID');
       Alert.alert('Error', 'Invalid person data. Please try selecting a different person.');
       return;
     }
     
-    loadPersonProfile(person.id); // Load person profile
-    loadPersonConfessions(person.name, true); // Load confessions using person_name
-  }, [setSearchResults, setSelectedPerson, loadPersonProfile, loadPersonConfessions]); // Dependencies for useCallback
+    loadPersonProfile(person.id); 
+    loadPersonConfessions(person.id); // Load confessions using person ID
+  }, [setSearchResults, setSelectedPerson, loadPersonProfile, loadPersonConfessions]); 
 
-  const loadPersonProfile = React.useCallback(async (personId) => { // Changed from loadLocationProfile
+  const loadPersonProfile = React.useCallback(async (personId) => { 
     try {
       const { data, error } = await supabase
-        .from('person_profiles') // From person_profiles
+        .from('person_profiles') 
         .select('*')
-        .eq('id', personId) // Query by person ID
+        .eq('id', personId) 
         .single();
       
-      if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows found"
+      if (error && error.code !== 'PGRST116') { 
         throw error;
       }
       
-      setPersonProfile(data || null); // Set person profile
+      setPersonProfile(data || null); 
     } catch (error) {
       console.error('Error loading person profile:', error);
       setPersonProfile(null);
     }
-  }, [setPersonProfile]); // Dependencies for useCallback
+  }, [setPersonProfile]); 
 
-  const savePersonProfile = async () => { // Changed from saveLocationProfile
+  const savePersonProfile = async () => { 
     if (!selectedPerson) return;
     
     try {
@@ -363,7 +578,7 @@ const ConfessionPersonScreen = () => {
       }
       
       const profileData = {
-        id: selectedPerson.id, // Update by person ID
+        id: selectedPerson.id, 
         name: selectedPerson.name,
         profile_image: imageUrl || (personProfile?.profile_image || null),
         bio: profileBio || (personProfile?.bio || null),
@@ -372,13 +587,13 @@ const ConfessionPersonScreen = () => {
       };
 
       const { error } = await supabase
-        .from('person_profiles') // Upsert into person_profiles
-        .upsert([profileData], { onConflict: 'id' }); // Conflict on ID
+        .from('person_profiles') 
+        .upsert([profileData], { onConflict: 'id' }); 
 
       if (error) throw error;
 
-      loadPersonProfile(selectedPerson.id); // Reload person profile
-      setShowPersonProfileModal(false); // Close person profile modal
+      loadPersonProfile(selectedPerson.id); 
+      setShowPersonProfileModal(false); 
       setProfileImage(null);
       setProfileBio('');
       
@@ -391,7 +606,7 @@ const ConfessionPersonScreen = () => {
 
 
 
-  const loadPersonConfessions = React.useCallback(async (personIdentifier, useNameForConfessions = false) => {
+  const loadPersonConfessions = React.useCallback(async (personIdentifier) => { // Removed useNameForConfessions, use ID
     setLoading(true);
     try {
       if (!personIdentifier) {
@@ -417,14 +632,9 @@ const ConfessionPersonScreen = () => {
           confession_creator:creator_id(username, avatar_url),
           confessed_person:person_id(name, profile_image)
         `)
+        .eq('person_id', personIdentifier) // Always query by person_id
         .order('created_at', { ascending: false })
         .limit(50);
-
-      if (useNameForConfessions) {
-        query = query.eq('person_name', personIdentifier);
-      } else {
-        query = query.eq('person_id', personIdentifier);
-      }
 
       const { data: confessionsData, error: confessionsError } = await query;
 
@@ -472,12 +682,13 @@ const ConfessionPersonScreen = () => {
               .from('person_confession_likes')
               .select('id')
               .eq('confession_id', confession.id)
-              .eq('user_id', currentUser.id);
-
-            if (userLikeError) {
+              .eq('user_id', currentUser.id)
+              .single(); // Use single to check for existence
+             
+            if (userLikeError && userLikeError.code !== 'PGRST116') {
               console.error("Error fetching user like for person confession:", userLikeError);
             } else {
-              is_liked = userLikeData && userLikeData.length > 0;
+              is_liked = !!userLikeData; // Check if userLikeData is not null
             }
           } catch (error) {
             console.error("Error in like check:", error);
@@ -491,7 +702,9 @@ const ConfessionPersonScreen = () => {
           avatar_url: confession.confession_creator?.avatar_url,
           is_liked: is_liked,
           confessedPersonName: confession.confessed_person?.name,
-          confessedPersonProfileImage: confession.confessed_person?.profile_image
+          confessedPersonProfileImage: confession.confessed_person?.profile_image,
+          is_tagged_in_content: currentUserUsername && confession.content.includes(`@${currentUserUsername}`),
+          // is_tagged_in_comment is handled in the comment screen, not here
         };
       }));
 
@@ -499,6 +712,19 @@ const ConfessionPersonScreen = () => {
       
       // Load reactions and verifications for person confessions
       await loadReactionsAndVerifications(processedConfessions.map(c => c.id));
+
+      // If a specific confession was requested, scroll to it
+      if (route.params?.selectedConfessionId) {
+        const index = processedConfessions.findIndex(c => c.id === route.params.selectedConfessionId);
+        if (index !== -1) { // Removed check for confessionsListRef.current, assume it exists or handle error later
+          // Use a timeout to ensure FlatList has rendered its items
+          setTimeout(() => {
+            // confessionsListRef.current.scrollToIndex({ animated: true, index, viewPosition: 0.5 });
+            // Clear the param after scrolling to prevent re-scrolling on future renders
+            navigation.setParams({ selectedConfessionId: undefined }); 
+          }, 500); // Adjust delay as needed
+        }
+      }
     } catch (error) {
       console.error('Error loading person confessions:', error);
       Alert.alert('Error', 'Failed to load person confessions. Please try again.');
@@ -506,8 +732,7 @@ const ConfessionPersonScreen = () => {
     } finally {
       setLoading(false);
     }
-  }, [setLoading, setConfessions, loadReactionsAndVerifications, currentUser]);
-
+  }, [setLoading, setConfessions, loadReactionsAndVerifications, currentUser, currentUserUsername, route.params?.selectedConfessionId, navigation]);
 
 
   const loadReactionsAndVerifications = async (confessionIds) => {
@@ -699,11 +924,9 @@ const ConfessionPersonScreen = () => {
 
 
 
-
-
   const handleCommentPress = (confessionId) => {
-    // Navigate to the ConfessionPersonCommentScreen, passing confessionId as a route parameter
-    navigation.navigate('ConfessionPersonComment', { confessionId: confessionId });
+    setSelectedConfessionForReaction(confessionId); // Set the confession ID for the comment modal
+    setShowCommentModal(true); // Show the comment modal
   };
 
   const pickImage = async (isProfile = false) => {
@@ -790,10 +1013,8 @@ const ConfessionPersonScreen = () => {
       setMedia([]);
       setShowNewConfessionModal(false);
       // After posting, reload confessions for the selected person by name
-      if (selectedPerson?.name) {
-        loadPersonConfessions(selectedPerson.name, true);
-      } else if (selectedPerson?.id) {
-        loadPersonConfessions(selectedPerson.id.toString());
+      if (selectedPerson?.id) { // Reload by ID
+        loadPersonConfessions(selectedPerson.id);
       }
       
     } catch (error) {
@@ -831,11 +1052,9 @@ const ConfessionPersonScreen = () => {
 
       if (error) throw error;
       
-      // Use person_name for reloading confessions after deletion
-      if (selectedPerson?.name) {
-        loadPersonConfessions(selectedPerson.name, true);
-      } else if (selectedPerson?.id) {
-        loadPersonConfessions(selectedPerson.id.toString());
+      // Use person_id for reloading confessions after deletion
+      if (selectedPerson?.id) {
+        loadPersonConfessions(selectedPerson.id);
       }
     } catch (error) {
       console.error('Error deleting person confession:', error);
@@ -844,12 +1063,8 @@ const ConfessionPersonScreen = () => {
   };
 
   const refreshConfessions = () => {
-    if (selectedPerson) {
-      if (selectedPerson.name) {
-        loadPersonConfessions(selectedPerson.name, true); 
-      } else if (selectedPerson.id) {
-        loadPersonConfessions(selectedPerson.id.toString());
-      }
+    if (selectedPerson?.id) { // Refresh by ID
+      loadPersonConfessions(selectedPerson.id); 
     }
   };
 
@@ -939,8 +1154,26 @@ const ConfessionPersonScreen = () => {
                 {item.is_anonymous ? 'Anonymous' : (item.username || 'User')}
               </Text>
             </TouchableOpacity>
+            {/* Display confessed person's name and profile image if available */}
+            {item.confessedPersonName && (
+              <View style={styles.confessedPersonContainer}>
+                <Image
+                  source={{ uri: item.confessedPersonProfileImage || 'https://via.placeholder.com/20x20?text=P' }}
+                  style={styles.confessedPersonImage}
+                />
+                <Text style={styles.confessedPersonText}>Confessing about: {item.confessedPersonName}</Text>
+              </View>
+            )}
           </View>
-          <Text style={styles.dateText}>{formattedDate}</Text>
+          <View style={styles.dateAndTagContainer}>
+            <Text style={styles.dateText}>{formattedDate}</Text>
+            {item.is_tagged_in_content && (
+              <View style={styles.taggedBadge}>
+                <Ionicons name="pricetag" size={12} color="#fff" />
+                <Text style={styles.taggedText}>Tagged you</Text>
+              </View>
+            )}
+          </View>
           {isCurrentUserConfession && (
             <TouchableOpacity
               style={styles.menuButton}
@@ -977,7 +1210,7 @@ const ConfessionPersonScreen = () => {
           )}
         </View>
         
-        <Text style={styles.confessionContent}>{item.content}</Text>
+        <Text style={styles.confessionContent}>{renderConfessionContentWithMentions(item.content)}</Text>
         
         {item.media && item.media.length > 0 && (
           <ScrollView horizontal style={styles.mediaContainer} showsHorizontalScrollIndicator={false}>
@@ -1099,23 +1332,11 @@ const ConfessionPersonScreen = () => {
             </TouchableOpacity>
           </View>
         </View>
+
+        {/* Removed is_tagged_in_comment here, will handle in comment screen */}
       </TouchableOpacity>
     );
   }; 
-
-  // Removed goToUserLocation, setShowMapCallback
-  // const goToUserLocation = React.useCallback(() => {
-  //   if (userLocation) {
-  //     setMapRegion({
-  //       latitude: userLocation.coords.latitude,
-  //       longitude: userLocation.coords.longitude,
-  //     });
-  //   }
-  // }, [userLocation, setMapRegion]); 
-
-  // const setShowMapCallback = React.useCallback((value) => {
-  //   setShowMap(value);
-  // }, [setShowMap]); 
 
   const setShowAddPersonModalCallback = React.useCallback((value) => { // Changed from setShowAddPlaceModalCallback
     setShowAddPersonModal(value);
@@ -1126,6 +1347,8 @@ const ConfessionPersonScreen = () => {
       <FlatList
         data={confessions}
         keyExtractor={(item) => item.id.toString()}
+        // Add ref for scrolling
+        ref={confessionsListRef}
         renderItem={renderConfessionItem}
         ListHeaderComponent={
           <PersonConfessionsHeader // Use new header component
@@ -1196,7 +1419,7 @@ const ConfessionPersonScreen = () => {
             
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollViewContent}>
               {/* Removed Type selector */}
-              {/* <View style={styles.formGroup}>
+              {/* <View style={styles.formGroup>
                 <Text style={styles.label}>Type</Text>
                 <View style={styles.typeSelector}>
                   {['institute', 'office', 'place', 'building'].map((type) => (
@@ -1452,6 +1675,19 @@ const ConfessionPersonScreen = () => {
             </View>
           </View>
         </TouchableOpacity>
+      </Modal>
+      <Modal
+        visible={showCommentModal} // New state for CommentScreen modal
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowCommentModal(false)}
+      >
+        <ConfessionPersonCommentScreen // Use the person-specific comment screen
+          visible={showCommentModal}
+          onClose={() => setShowCommentModal(false)}
+          confessionId={selectedConfessionForReaction}
+          onCommentPosted={refreshConfessions} // Refresh confessions when a comment is posted
+        />
       </Modal>
     </View>
   );
@@ -1710,6 +1946,10 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 6,
   },
+  dateAndTagContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   dateText: {
     color: '#b0b0ff',
     fontSize: 11,
@@ -1717,6 +1957,21 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0, 0, 0, 0.5)',
     textShadowOffset: { width: -1, height: 1 },
     textShadowRadius: 3,
+  },
+  taggedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#00ffff',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    marginLeft: 10,
+  },
+  taggedText: {
+    color: '#0a0a2a',
+    fontSize: 10,
+    fontWeight: 'bold',
+    marginLeft: 3,
   },
   menuButton: {
     padding: 8,
@@ -2309,6 +2564,26 @@ const styles = StyleSheet.create({
   scrollViewContent: {
     padding: 20,
   },
+  mentionText: {
+    color: '#00ffff',
+    fontWeight: 'bold',
+  },
+  confessedPersonContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 5,
+  },
+  confessedPersonImage: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    marginRight: 5,
+  },
+  confessedPersonText: {
+    color: '#00ffff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  }
 });
 
 export default ConfessionPersonScreen;
