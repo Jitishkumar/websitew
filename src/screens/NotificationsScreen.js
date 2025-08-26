@@ -236,44 +236,40 @@ const NotificationsScreen = () => {
           }
 
           // Check for place confession comment
-          const isPlaceConfession = notification.content.includes('place confession comment');
-          const isPersonConfession = notification.content.includes('person confession comment');
+          const { data: confessionComment, error: confessionCommentError } = await supabase
+            .from('confession_comments')
+            .select('confession_id')
+            .eq('id', notification.reference_id)
+            .maybeSingle();
+          
+          if (confessionCommentError && confessionCommentError.code !== 'PGRST116') throw confessionCommentError;
 
-          if (isPlaceConfession) {
-            const { data: confessionComment, error: confessionCommentError } = await supabase
-              .from('confession_comments')
-              .select('confession_id')
-              .eq('id', notification.reference_id)
-              .maybeSingle();
-
-            if (confessionCommentError && confessionCommentError.code !== 'PGRST116') throw confessionCommentError;
-
-            if (confessionComment) {
-              navigation.navigate('ConfessionComment', { 
-                confessionId: confessionComment.confession_id, 
-                highlightCommentId: notification.reference_id 
-              });
-              return;
-            }
+          if (confessionComment) {
+            navigation.navigate('ConfessionComment', { 
+              confessionId: confessionComment.confession_id, 
+              highlightCommentId: notification.reference_id,
+              cameFromNotifications: true,
+            });
+            return;
           }
 
           // Check for person confession comment
-          if (isPersonConfession) {
-            const { data: personConfessionComment, error: personConfessionCommentError } = await supabase
-              .from('person_confession_comments')
-              .select('confession_id')
-              .eq('id', notification.reference_id)
-              .maybeSingle();
+          const { data: personConfessionComment, error: personConfessionCommentError } = await supabase
+            .from('person_confession_comments')
+            .select('confession_id')
+            .eq('id', notification.reference_id)
+            .maybeSingle();
 
-            if (personConfessionCommentError && personConfessionCommentError.code !== 'PGRST116') throw personConfessionCommentError;
+          if (personConfessionCommentError && personConfessionCommentError.code !== 'PGRST116') throw personConfessionCommentError;
 
-            if (personConfessionComment) {
-              navigation.navigate('ConfessionPersonComment', { 
-                confessionId: personConfessionComment.confession_id, 
-                highlightCommentId: notification.reference_id 
-              });
-              return;
-            }
+          if (personConfessionComment) {
+            navigation.navigate('ConfessionPersonComment', { 
+              confessionId: personConfessionComment.confession_id, 
+              highlightCommentId: notification.reference_id,
+              cameFromNotifications: true,
+              selectedConfessionId: personConfessionComment.confession_id,
+            });
+            return;
           }
 
           Alert.alert('Error', 'Could not find referenced post or confession for this comment/mention.');

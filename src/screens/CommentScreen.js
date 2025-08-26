@@ -45,6 +45,7 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
   const [replyingTo, setReplyingTo] = useState(null);
   const [expandedComments, setExpandedComments] = useState(new Set());
   const [currentUser, setCurrentUser] = useState(null);
+  const [currentUserUsername, setCurrentUserUsername] = useState(null); // New state for current user's username
   const [isAnonymous, setIsAnonymous] = useState(false);
   
   // Load comments when modal becomes visible
@@ -53,7 +54,7 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
       loadComments();
       getCurrentUser();
     }
-  }, [currentPostId]);
+  }, [currentPostId, currentUserUsername]); // Added currentUserUsername to dependencies for loadComments
 
   useEffect(() => {
     if (currentHighlightCommentId && comments.length > 0) {
@@ -80,6 +81,16 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
     try {
       const { data: { user } } = await supabase.auth.getUser();
       setCurrentUser(user);
+      if (user) {
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('username')
+          .eq('id', user.id)
+          .single();
+        if (!error && profile) {
+          setCurrentUserUsername(profile.username);
+        }
+      }
     } catch (error) {
       console.error('Error getting current user:', error);
     }
@@ -194,7 +205,12 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
         .order('created_at', { ascending: true });
       
       if (error) throw error;
-      setComments(data || []);
+      
+      const processedComments = (data || []).map(comment => {
+        const isTagged = currentUserUsername && comment.content.includes(`@${currentUserUsername}`);
+        return { ...comment, is_tagged: isTagged };
+      });
+      setComments(processedComments);
     } catch (error) {
       console.error('Error loading comments:', error);
       Alert.alert('Error', 'Failed to load comments');
@@ -460,6 +476,12 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
               {replies.map(reply => renderComment({ item: reply }))}
             </View>
           )}
+          {item.is_tagged && (
+            <View style={styles.taggedBadge}>
+              <Ionicons name="pricetag" size={12} color="#fff" />
+              <Text style={styles.taggedText}>Tagged you</Text>
+            </View>
+          )}
         </View>
       </View>
     );
@@ -554,7 +576,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 15,
-    paddingTop: Platform.OS === 'ios' ? 20 : 15,
+    paddingTop: Platform.OS === 'ios' ? insets.top + 10 : 15, // Adjusted to use insets.top
     position: 'relative',
     zIndex: 2,
   },
@@ -614,6 +636,23 @@ const styles = StyleSheet.create({
     color: '#666',
     fontSize: 12,
     marginTop: 5,
+  },
+  taggedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#00ffff',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    marginLeft: 10,
+    marginTop: 5,
+    alignSelf: 'flex-start',
+  },
+  taggedText: {
+    color: '#0a0a2a',
+    fontSize: 10,
+    fontWeight: 'bold',
+    marginLeft: 3,
   },
   inputContainer: {
     flexDirection: 'column',

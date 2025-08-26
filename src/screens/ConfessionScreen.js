@@ -20,7 +20,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { WebView } from 'react-native-webview';
 import { decode } from 'base64-arraybuffer';
@@ -193,6 +193,7 @@ const ConfessionsHeader = React.memo(({
 
 const ConfessionScreen = () => {
   const navigation = useNavigation();
+  const route = useRoute(); // Import useRoute hook
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [selectedLocation, setSelectedLocation] = useState(null);
@@ -219,11 +220,13 @@ const ConfessionScreen = () => {
   const [confessionReactions, setConfessionReactions] = useState({});
   const [confessionVerifications, setConfessionVerifications] = useState({});
   const [currentUser, setCurrentUser] = useState(null);
+  const [currentUserUsername, setCurrentUserUsername] = useState(null); // New state for current user's username
   const [confessionLikes, setConfessionLikes] = useState({});
   const [confessionComments, setConfessionComments] = useState({});
   const [showCommentModal, setShowCommentModal] = useState(false); // Added state for CommentScreen modal
   const [searchTimeout, setSearchTimeout] = useState(null);
   const searchTimeoutRef = useRef(null); // Added
+  const confessionsListRef = useRef(null); // Ref for FlatList to scroll to a specific confession
   const [showAddPlaceModal, setShowAddPlaceModal] = useState(false);
   const [newPlace, setNewPlace] = useState({
     type: 'institute',
@@ -256,9 +259,101 @@ const ConfessionScreen = () => {
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
       setCurrentUser(user);
+      if (user) {
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('username')
+          .eq('id', user.id)
+          .single();
+        if (!error && profile) {
+          setCurrentUserUsername(profile.username);
+        }
+      }
     };
     
     setupInitialData();
+
+    if (route.params?.selectedConfessionId && !selectedLocation) {
+      // If navigated from a comment notification, load the specific confession
+      const { selectedConfessionId } = route.params;
+      const fetchAndSetConfession = async () => {
+        try {
+          setLoading(true);
+          const { data: confessionData, error } = await supabase
+            .from('confessions')
+            .select(`
+              id,
+              user_id,
+              creator_id,
+              location_id,
+              location_name,
+              content,
+              media,
+              is_anonymous,
+              likes_count,
+              comments_count,
+              created_at,
+              username,
+              confession_likes!left(user_id),
+              confession_comments(content)
+            `)
+            .eq('id', selectedConfessionId)
+            .single();
+          
+          if (error) throw error;
+          
+          if (confessionData) {
+            // We need to fetch the location details to set selectedLocation properly
+            // This is crucial for the header and other components that rely on selectedLocation
+            let locationDetails = null;
+            if (confessionData.location_id) {
+              const { data: placeData, error: placeError } = await supabase
+                .from('places')
+                .select('*')
+                .eq('id', confessionData.location_id)
+                .single();
+              
+              if (placeError && placeError.code !== 'PGRST116') {
+                console.error('Error fetching place details for confession:', placeError);
+              } else if (placeData) {
+                locationDetails = {
+                  place_id: placeData.id,
+                  display_name: `${placeData.name}, ${placeData.city}${placeData.district ? ', ' + placeData.district : ''}, ${placeData.state}, ${placeData.country}`,
+                  lat: placeData.latitude ? placeData.latitude.toString() : '0',
+                  lon: placeData.longitude ? placeData.longitude.toString() : '0',
+                  is_custom: true // Assuming custom places for now, can be refined if needed
+                };
+              }
+            }
+            
+            // If location details are still null, use location_name from confession
+            if (!locationDetails && confessionData.location_name) {
+              locationDetails = {
+                place_id: confessionData.location_name, // Using name as ID if actual ID not found
+                display_name: confessionData.location_name,
+                lat: userLocation?.coords.latitude.toString() || '0',
+                lon: userLocation?.coords.longitude.toString() || '0',
+                is_custom: false,
+              };
+            }
+            
+            if (locationDetails) {
+              setSelectedLocation(locationDetails);
+              // Load all confessions for this location (including the selected one)
+              loadConfessions(locationDetails.display_name, true);
+            } else {
+              Alert.alert('Error', 'Could not retrieve location for the confession.');
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching specific confession:', error);
+          Alert.alert('Error', 'Failed to load specific confession.');
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchAndSetConfession();
+    }
 
     // Cleanup function for search timeout (runs on unmount)
     return () => {
@@ -266,7 +361,7 @@ const ConfessionScreen = () => {
         clearTimeout(searchTimeoutRef.current);
       }
     };
-  }, []); // Empty dependency array ensures this runs only once on mount
+  }, [route.params?.selectedConfessionId, selectedLocation, userLocation, setSearchResults, setSearchLoading, setSearchError, setLoading, setConfessions, loadReactionsAndVerifications, currentUser, currentUserUsername]); // Empty dependency array ensures this runs only once on mount
 
   const getProfilePrivacy = async (userId) => {
     try {
@@ -651,7 +746,8 @@ const ConfessionScreen = () => {
           comments_count,
           created_at,
           username,
-          confession_likes!left(user_id)
+          confession_likes!left(user_id),
+          confession_comments(content)
         `)
         .order('created_at', { ascending: false })
         .limit(50);
@@ -720,7 +816,9 @@ const ConfessionScreen = () => {
           ...confession,
           media: validatedMedia,
           ...(userProfile && { username: userProfile.username, avatar_url: userProfile.avatar_url }),
-          is_liked: !!confession.confession_likes.find(like => like.user_id === currentUser?.id)
+          is_liked: !!confession.confession_likes.find(like => like.user_id === currentUser?.id),
+          is_tagged_in_content: currentUserUsername && confession.content.includes(`@${currentUserUsername}`),
+          is_tagged_in_comment: currentUserUsername && confession.confession_comments.some(comment => comment.content.includes(`@${currentUserUsername}`)),
         };
       }));
 
@@ -728,6 +826,19 @@ const ConfessionScreen = () => {
       
       // Load reactions and verifications
       await loadReactionsAndVerifications(processedConfessions.map(c => c.id));
+      
+      // If a specific confession was requested, scroll to it
+      if (route.params?.selectedConfessionId) {
+        const index = processedConfessions.findIndex(c => c.id === route.params.selectedConfessionId);
+        if (index !== -1 && confessionsListRef.current) {
+          // Use a timeout to ensure FlatList has rendered its items
+          setTimeout(() => {
+            confessionsListRef.current.scrollToIndex({ animated: true, index, viewPosition: 0.5 });
+            // Clear the param after scrolling to prevent re-scrolling on future renders
+            navigation.setParams({ selectedConfessionId: undefined }); 
+          }, 500); // Adjust delay as needed
+        }
+      }
     } catch (error) {
       console.error('Error loading confessions:', error);
       Alert.alert('Error', 'Failed to load confessions. Please try again.');
@@ -735,7 +846,7 @@ const ConfessionScreen = () => {
     } finally {
       setLoading(false);
     }
-  }, [setLoading, setConfessions, loadReactionsAndVerifications, currentUser]); // Dependencies for useCallback
+  }, [setLoading, setConfessions, loadReactionsAndVerifications, currentUser, currentUserUsername, route.params?.selectedConfessionId, navigation]); // Added currentUserUsername to dependencies
 
   const loadReactionsAndVerifications = async (confessionIds) => {
     try {
@@ -1163,7 +1274,15 @@ const ConfessionScreen = () => {
               </Text>
             </TouchableOpacity>
           </View>
-          <Text style={styles.dateText}>{formattedDate}</Text>
+          <View style={styles.dateAndTagContainer}>
+            <Text style={styles.dateText}>{formattedDate}</Text>
+            {item.is_tagged_in_content && (
+              <View style={styles.taggedBadge}>
+                <Ionicons name="pricetag" size={12} color="#fff" />
+                <Text style={styles.taggedText}>Tagged you</Text>
+              </View>
+            )}
+          </View>
           {isCurrentUserConfession && (
             <TouchableOpacity
               style={styles.menuButton}
@@ -1322,6 +1441,13 @@ const ConfessionScreen = () => {
             </TouchableOpacity>
           </View>
         </View>
+
+        {item.is_tagged_in_comment && (
+          <View style={styles.taggedInCommentContainer}>
+            <Ionicons name="at" size={14} color="#ff9900" />
+            <Text style={styles.taggedInCommentTextBelow}>Tagged you in comment</Text>
+          </View>
+        )}
       </TouchableOpacity>
     );
   }; // Dependencies for useCallback
@@ -1348,6 +1474,7 @@ const ConfessionScreen = () => {
       <FlatList
         data={confessions}
         keyExtractor={(item) => item.id.toString()}
+        ref={confessionsListRef} // Attach ref to FlatList
         renderItem={renderConfessionItem}
         ListHeaderComponent={
           <ConfessionsHeader
@@ -1926,6 +2053,10 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 6,
   },
+  dateAndTagContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   dateText: {
     color: '#b0b0ff',
     fontSize: 11,
@@ -1933,6 +2064,21 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0, 0, 0, 0.5)',
     textShadowOffset: { width: -1, height: 1 },
     textShadowRadius: 3,
+  },
+  taggedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#00ffff',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    marginLeft: 10,
+  },
+  taggedText: {
+    color: '#0a0a2a',
+    fontSize: 10,
+    fontWeight: 'bold',
+    marginLeft: 3,
   },
   menuButton: {
     padding: 8,
@@ -2023,6 +2169,33 @@ const styles = StyleSheet.create({
   },
   actionText: {
     color: '#ff00ff',
+    marginLeft: 5,
+  },
+  taggedInCommentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ff9900',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    marginLeft: 10,
+  },
+  taggedInCommentText: {
+    color: '#0a0a2a',
+    fontSize: 10,
+    fontWeight: 'bold',
+    marginLeft: 3,
+  },
+  taggedInCommentContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+    paddingHorizontal: 5,
+  },
+  taggedInCommentTextBelow: {
+    color: '#ff9900',
+    fontSize: 12,
+    fontWeight: 'bold',
     marginLeft: 5,
   },
   likedText: {

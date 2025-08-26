@@ -24,9 +24,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { height } = Dimensions.get('window');
 
-const ConfessionCommentScreen = ({ visible, onClose, confessionId, onCommentPosted }) => {
+const ConfessionCommentScreen = ({ route, visible, onClose, confessionId: propConfessionId, onCommentPosted }) => {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+
+  // Get confessionId from either props or route params
+  const confessionId = propConfessionId || route?.params?.confessionId;
+  const highlightCommentId = route?.params?.highlightCommentId;
+  const cameFromNotifications = route?.params?.cameFromNotifications; // New prop
 
   const handleClose = () => {
     if (typeof onClose === 'function') {
@@ -43,19 +48,31 @@ const ConfessionCommentScreen = ({ visible, onClose, confessionId, onCommentPost
   const [replyingTo, setReplyingTo] = useState(null);
   const [expandedComments, setExpandedComments] = useState(new Set());
   const [currentUser, setCurrentUser] = useState(null);
+  const [currentUserUsername, setCurrentUserUsername] = useState(null); // New state for current user's username
   const [isAnonymous, setIsAnonymous] = useState(false);
   
   useEffect(() => {
-    if (visible && confessionId) {
+    // Check if we have confessionId from either props or route params
+    if ((visible || route?.params) && confessionId) {
       loadComments();
       getCurrentUser();
     }
-  }, [visible, confessionId]);
+  }, [visible, confessionId, route?.params, currentUserUsername]); // Added currentUserUsername to dependencies
   
   const getCurrentUser = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       setCurrentUser(user);
+      if (user) {
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('username')
+          .eq('id', user.id)
+          .single();
+        if (!error && profile) {
+          setCurrentUserUsername(profile.username);
+        }
+      }
     } catch (error) {
       console.error('Error getting current user:', error);
     }
@@ -178,6 +195,14 @@ const ConfessionCommentScreen = ({ visible, onClose, confessionId, onCommentPost
   const loadComments = async () => {
     try {
       setLoading(true);
+      
+      // Make sure we have a confessionId
+      if (!confessionId) {
+        console.error('No confessionId provided');
+        Alert.alert('Error', 'Confession ID not found');
+        return;
+      }
+
       const { data, error } = await supabase
         .from('confession_comments')
         .select(`
@@ -188,7 +213,12 @@ const ConfessionCommentScreen = ({ visible, onClose, confessionId, onCommentPost
         .order('created_at', { ascending: true });
       
       if (error) throw error;
-      setComments(data || []);
+      
+      const processedComments = (data || []).map(comment => {
+        const isTagged = currentUserUsername && comment.content.includes(`@${currentUserUsername}`);
+        return { ...comment, is_tagged: isTagged };
+      });
+      setComments(processedComments);
     } catch (error) {
       console.error('Error loading comments:', error);
       Alert.alert('Error', 'Failed to load comments');
@@ -498,6 +528,12 @@ const ConfessionCommentScreen = ({ visible, onClose, confessionId, onCommentPost
                 <Text style={styles.deleteButtonText}>Delete</Text>
               </TouchableOpacity>
             )}
+            {item.is_tagged && (
+              <View style={styles.taggedBadge}>
+                <Ionicons name="pricetag" size={12} color="#fff" />
+                <Text style={styles.taggedText}>Tagged you</Text>
+              </View>
+            )}
           </View>
           {isExpanded && hasReplies && (
             <View style={styles.repliesContainer}>
@@ -517,14 +553,23 @@ const ConfessionCommentScreen = ({ visible, onClose, confessionId, onCommentPost
     <View style={styles.container}>
       <LinearGradient
         colors={['#0a0a2a', '#1a1a3a']}
-        style={[styles.header, { paddingTop: insets.top || 15 }]}>
+        style={[styles.header, { paddingTop: insets.top + 10 }]}>
+        {cameFromNotifications && (
+          <TouchableOpacity onPress={() => navigation.navigate('Confession', { selectedConfessionId: confessionId })} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#fff" />
+          </TouchableOpacity>
+        )}
         <Text style={styles.headerTitle}>Comments</Text>
         <TouchableOpacity onPress={handleClose}>
           <Ionicons name="close" size={24} color="#fff" />
         </TouchableOpacity>
       </LinearGradient>
 
-      {loading ? (
+      {!confessionId ? (
+        <View style={styles.loading}>
+          <Text style={styles.emptyText}>Confession not found</Text>
+        </View>
+      ) : loading ? (
         <ActivityIndicator size="large" color="#ff00ff" style={styles.loading} />
       ) : (
         <FlatList
@@ -538,47 +583,49 @@ const ConfessionCommentScreen = ({ visible, onClose, confessionId, onCommentPost
         />
       )}
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.inputContainer}
-        keyboardVerticalOffset={0}>
-        <LinearGradient
-          colors={['#1a1a3a', '#0d0d2a']}
-          style={[styles.inputContainerGradient, { paddingBottom: insets.bottom > 0 ? insets.bottom : 10 }]}>
-          <View style={styles.anonymousOption}>
-            <Text style={styles.anonymousText}>Anonymous</Text>
-            <Switch
-              value={isAnonymous}
-              onValueChange={setIsAnonymous}
-              trackColor={{ false: "#767577", true: "#ff00ff" }}
-              thumbColor={isAnonymous ? "#f4f3f4" : "#f4f3f4"}
-            />
-          </View>
-          <View style={styles.inputRow}>
-            <TextInput
-              style={styles.input}
-              placeholder="Add a comment..."
-              placeholderTextColor="#666"
-              value={commentText}
-              onChangeText={setCommentText}
-              multiline
-              maxLength={500}
-              color="#ffffff"
-              autoFocus={false}
-            />
-            <TouchableOpacity
-              style={[styles.sendButton, !commentText.trim() && styles.disabledButton]}
-              onPress={replyingTo ? handleReply : handleAddComment}
-              disabled={!commentText.trim() || submitting}>
-              {submitting ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Ionicons name="send" size={24} color="#fff" />
-              )}
-            </TouchableOpacity>
-          </View>
-        </LinearGradient>
-      </KeyboardAvoidingView>
+      {confessionId && (
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.inputContainer}
+          keyboardVerticalOffset={0}>
+          <LinearGradient
+            colors={['#1a1a3a', '#0d0d2a']}
+            style={[styles.inputContainerGradient, { paddingBottom: insets.bottom > 0 ? insets.bottom + 10 : 20 }]}>
+            <View style={styles.anonymousOption}>
+              <Text style={styles.anonymousText}>Anonymous</Text>
+              <Switch
+                value={isAnonymous}
+                onValueChange={setIsAnonymous}
+                trackColor={{ false: "#767577", true: "#ff00ff" }}
+                thumbColor={isAnonymous ? "#f4f3f4" : "#f4f3f4"}
+              />
+            </View>
+            <View style={styles.inputRow}>
+              <TextInput
+                style={styles.input}
+                placeholder="Add a comment..."
+                placeholderTextColor="#666"
+                value={commentText}
+                onChangeText={setCommentText}
+                multiline
+                maxLength={500}
+                color="#ffffff"
+                autoFocus={false}
+              />
+              <TouchableOpacity
+                style={[styles.sendButton, !commentText.trim() && styles.disabledButton]}
+                onPress={replyingTo ? handleReply : handleAddComment}
+                disabled={!commentText.trim() || submitting}>
+                {submitting ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Ionicons name="send" size={24} color="#fff" />
+                )}
+              </TouchableOpacity>
+            </View>
+          </LinearGradient>
+        </KeyboardAvoidingView>
+      )}
     </View>
   );
 };
@@ -592,9 +639,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 15,
-    position: 'relative',
-    zIndex: 2,
+    paddingHorizontal: 15,
+    paddingBottom: 15,
+  },
+  backButton: {
+    marginRight: 10,
+    // You might want to adjust the position or add more styling if needed
   },
   headerTitle: {
     color: '#fff',
@@ -654,12 +704,12 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
   inputContainer: {
-    width: '100%', // Ensure it takes full width when wrapped by KeyboardAvoidingView
-    backgroundColor: 'transparent', // Make transparent to allow gradient to show
+    backgroundColor: 'transparent',
   },
-  inputContainerGradient: { // New style for the LinearGradient
+  inputContainerGradient: {
     flexDirection: 'column',
-    padding: 10,
+    paddingHorizontal: 15,
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 0, 255, 0.2)',
   },
@@ -740,7 +790,24 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     marginRight: 10,
-  }
+  },
+  taggedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#00ffff',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    marginLeft: 10,
+    marginTop: 5,
+    alignSelf: 'flex-start',
+  },
+  taggedText: {
+    color: '#0a0a2a',
+    fontSize: 10,
+    fontWeight: 'bold',
+    marginLeft: 3,
+  },
 });
 
 export default ConfessionCommentScreen;
