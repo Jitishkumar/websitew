@@ -7,7 +7,7 @@ import {
 } from '@zegocloud/zego-uikit-prebuilt-call-rn';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
-
+//nn
 function CallPage(props) {
     console.log(props.route.params);
     const name = props.route.params.data;

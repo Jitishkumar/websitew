@@ -24,7 +24,7 @@ import * as ImagePicker from 'expo-image-picker';
 // Removed WebView for map as it's not needed for person confessions
 // import { WebView } from 'react-native-webview'; 
 import { decode } from 'base64-arraybuffer';
-import { supabase } from '../config/supabase';
+import { supabase } from '../lib/supabase';
 // Removed expo-location as it's not needed for person confessions
 // import * as Location from 'expo-location'; 
 import * as FileSystem from 'expo-file-system';
@@ -60,26 +60,14 @@ const PersonConfessionsHeader = React.memo(function PersonConfessionsHeaderCompo
         end={{x: 1, y: 1}}
         style={styles.searchContainer}
       >
+        <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
           placeholder="Search for a person..."
           placeholderTextColor="#999"
           value={props.searchQuery}
-          onChangeText={(text) => {
-            props.setSearchQuery(text);
-            
-            if (props.searchTimeoutRef.current) {
-              clearTimeout(props.searchTimeoutRef.current);
-            }
-            
-            if (text.length < 3) {
-              return;
-            }
-            
-            props.searchTimeoutRef.current = setTimeout(() => {
-              props.searchPersons(text);
-            }, 500);
-          }}
+          onChangeText={props.setSearchQuery}
+          autoCapitalize="none"
         />
         {props.searchQuery.length > 0 && (
           <TouchableOpacity onPress={() => props.setSearchQuery('')}>
@@ -90,19 +78,29 @@ const PersonConfessionsHeader = React.memo(function PersonConfessionsHeaderCompo
 
       {props.searchResults.length > 0 ? (
         <ScrollView style={styles.searchResultsList} nestedScrollEnabled={true} showsVerticalScrollIndicator={false}>
-          {props.searchResults.map((item) => (
-            <TouchableOpacity 
-              key={item.id.toString()}
-              style={styles.searchResultItem}
-              onPress={() => props.selectPerson(item)}
-            >
-              <Ionicons name="person" size={20} color="#ff00ff" />
-              <Text style={styles.searchResultText}>{item.name}</Text>
-            </TouchableOpacity>
-          ))}
+         {props.searchResults.map((item) => (
+  <TouchableOpacity 
+    key={item.id.toString()}
+    style={styles.searchResultItem}
+    onPress={() => props.selectPerson(item)}
+  >
+    <Image 
+      source={{ uri: item.profile_image || 'https://via.placeholder.com/40x40?text=User' }}
+      style={styles.searchUserAvatar}
+    />
+    <View style={styles.searchUserInfo}>
+      <View style={styles.searchUsernameContainer}>
+        <Text style={styles.searchResultText}>{item.name}</Text>
+        {item.isVerified && (
+          <Ionicons name="checkmark-circle" size={16} color="#ff0000" style={styles.verifiedBadge} />
+        )}
+      </View>
+    </View>
+  </TouchableOpacity>
+))}
         </ScrollView>
       ) : (
-        props.searchQuery.length >= 3 && !props.searchLoading && (
+        props.searchQuery.trim().length > 0 && !props.searchLoading && (
           <View style={styles.noResultsContainer}>
             <Text style={styles.noResultsText}>No persons found</Text>
             <TouchableOpacity 
@@ -296,15 +294,33 @@ const ConfessionPersonScreen = () => {
       };
       fetchAndSetConfession();
     }
-    
-    // Cleanup function for search timeout (runs on unmount)
+  
     return () => {
       if (searchTimeoutRef.current) {
         clearTimeout(searchTimeoutRef.current);
       }
     };
-  }, [route.params?.selectedConfessionId, selectedPerson, setSearchResults, setSearchLoading, setSearchError, setLoading, setConfessions, loadReactionsAndVerifications, currentUser, currentUserUsername, navigation]); // Added navigation to dependencies
+  }, [route.params?.selectedConfessionId, selectedPerson]);
 
+  // Debounce search input
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    const trimmed = searchQuery.trim();
+    if (trimmed.length === 0) {
+      setSearchResults([]);
+      return;
+    }
+    searchTimeoutRef.current = setTimeout(() => {
+      searchPersons(trimmed);
+    }, 500);
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchQuery, searchPersons]);
   const getProfilePrivacy = async (userId) => {
     try {
       const { data, error } = await supabase
@@ -401,34 +417,57 @@ const ConfessionPersonScreen = () => {
     }
     return <Text style={styles.confessionContent}>{parts}</Text>;
   };
-
-  const searchPersons = React.useCallback(async (query) => { // Changed from searchLocations
-    if (query.length < 3) {
+  const searchPersons = React.useCallback(async (query) => {
+    if (query.length < 1) {
       setSearchResults([]);
       return;
     }
     
     setSearchLoading(true);
     setSearchError(null);
+    
     try {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      
       const { data: personsData, error: personsError } = await supabase
-        .from('profiles') // Query profiles table for existing users
-        .select('id, username, avatar_url, full_name') // Select relevant fields for a person
-        .or(`username.ilike.%${query}%,full_name.ilike.%${query}%`) // Search by username or full name
+        .from('profiles')
+        .select('id, username, full_name, avatar_url')
+        .ilike('username', `%${query}%`)
+        .order('username')
         .limit(20);
       
-      if (personsError) {
-        console.error('Error searching persons:', personsError);
-        throw personsError;
-      }
+      if (personsError) throw personsError;
       
-      const formattedPersons = personsData.map(person => ({
-        id: person.id,
-        name: person.username || person.full_name || 'Unknown User',
-        profile_image: person.avatar_url,
-        bio: null, // We don't have a bio for a general profile search here, will load from person_profiles later
+      // Filter out current user
+      const filteredData = currentUser ? personsData.filter(user => user.id !== currentUser.id) : personsData;
+      
+      // Check for blocked status and verification
+      const usersWithStatus = await Promise.all(filteredData.map(async (user) => {
+        if (!currentUser) return user;
+        
+        const { data: isBlocked, error: isBlockedError } = await supabase.rpc('is_blocked', {
+          user_id_1: currentUser.id,
+          user_id_2: user.id
+        });
+  
+        if (isBlockedError || isBlocked) return null;
+  
+        const { data: verifiedData } = await supabase
+          .from('verified_accounts')
+          .select('verified')
+          .eq('id', user.id)
+          .maybeSingle();
+          
+        return {
+          id: user.id,
+          name: user.username || user.full_name || 'Unknown User',
+          profile_image: user.avatar_url,
+          bio: null,
+          isVerified: verifiedData?.verified || false
+        };
       }));
-      setSearchResults(formattedPersons);
+      
+      setSearchResults(usersWithStatus.filter(Boolean) || []);
     } catch (error) {
       console.error('Error searching persons:', error);
       setSearchError(error.message);
@@ -436,7 +475,7 @@ const ConfessionPersonScreen = () => {
     } finally {
       setSearchLoading(false);
     }
-  }, [setSearchResults, setSearchLoading, setSearchError]); // Dependencies for useCallback
+  }, []);
 
   const handleAddPerson = async () => { // Changed from handleAddPlace
     if (!newPerson.name) {
@@ -680,7 +719,7 @@ const ConfessionPersonScreen = () => {
           try {
             const { data: userLikeData, error: userLikeError } = await supabase
               .from('person_confession_likes')
-              .select('id')
+              .select('confession_id')
               .eq('confession_id', confession.id)
               .eq('user_id', currentUser.id)
               .single(); // Use single to check for existence
@@ -735,7 +774,7 @@ const ConfessionPersonScreen = () => {
   }, [setLoading, setConfessions, loadReactionsAndVerifications, currentUser, currentUserUsername, route.params?.selectedConfessionId, navigation]);
 
 
-  const loadReactionsAndVerifications = async (confessionIds) => {
+  const loadReactionsAndVerifications = React.useCallback(async (confessionIds) => {
     try {
       // Load reactions
       const { data: reactionsData, error: reactionsError } = await supabase
@@ -780,7 +819,7 @@ const ConfessionPersonScreen = () => {
     } catch (error) {
       console.error('Error loading reactions and verifications for person confessions:', error);
     }
-  };
+  }, [currentUser]);
 
   const handleReaction = async (confessionId, emoji) => {
     if (!currentUser) {
@@ -1162,7 +1201,7 @@ const ConfessionPersonScreen = () => {
                   source={{ uri: item.confessedPersonProfileImage || 'https://via.placeholder.com/20x20?text=P' }}
                   style={styles.confessedPersonImage}
                 />
-                <Text style={styles.confessedPersonText}>Confessing about: {item.confessedPersonName}</Text>
+              
               </View>
             )}
           </View>
@@ -1845,6 +1884,25 @@ const styles = StyleSheet.create({
   //   borderRadius: 20,
   //   padding: 8,
   // },
+  searchIcon: {
+    marginRight: 10,
+  },
+  searchUserAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 15,
+  },
+  searchUserInfo: {
+    flex: 1,
+  },
+  searchUsernameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  verifiedBadge: {
+    marginLeft: 5,
+  },
   locationProfileContainer: { // Keep name for now, but semantically "Person Profile Container"
     backgroundColor: '#1a1a3a',
     padding: 20,
