@@ -29,21 +29,31 @@ export class StoriesService {
 
       const followingIds = followingList?.map(f => f.following_id) || [];
 
-      // Get all stories with proper visibility rules
+      // Get all users with rank = 1 (global stories visible to everyone)
+      const { data: rank1Profiles } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('rank', 1);
+      const rank1Ids = (rank1Profiles || []).map(p => p.id);
+
+      // Get all stories with proper visibility rules (own + following + rank1)
+      const allowedUserIds = Array.from(new Set([user.id, ...followingIds, ...rank1Ids]));
       const { data, error } = await supabase
         .from('stories')
-        .select(`
-          *,
-          user:user_id (id, username, avatar_url)
-        `)
+        .select('*')
         .gte('created_at', twentyFourHoursAgo)
-        .or(
-          `user_id.eq.${user.id},` + // User's own stories
-          (followingIds.length > 0 ? `user_id.in.(${followingIds.join(',')})` : 'id.is.null') // Stories from followed users
-        )
+        .in('user_id', allowedUserIds)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
+
+      // Fetch user profiles for the returned stories (avoid embedded join which may be blocked by RLS)
+      const uniqueUserIds = Array.from(new Set((data || []).map(s => s.user_id)));
+      const { data: usersMapRows } = await supabase
+        .from('profiles')
+        .select('id, username, avatar_url')
+        .in('id', uniqueUserIds);
+      const usersMap = new Map((usersMapRows || []).map(u => [u.id, u]));
 
       // Get viewed stories for the current user
       const { data: viewedStories, error: viewedError } = await supabase
@@ -59,7 +69,8 @@ export class StoriesService {
       // Add viewed status to each story
       const storiesWithViewedStatus = data.map(story => ({
         ...story,
-        is_viewed: viewedStoryIds.has(story.id)
+        is_viewed: viewedStoryIds.has(story.id),
+        user: usersMap.get(story.user_id) || null
       }));
       
       // Group stories by user
@@ -275,16 +286,41 @@ export class StoriesService {
         return [];
       }
 
-      // If not following, return empty array
-      if (!followData) return [];
+      // If not following, allow if target user has rank = 1 (global visibility)
+      if (!followData) {
+        const { data: targetProfile } = await supabase
+          .from('profiles')
+          .select('rank')
+          .eq('id', userId)
+          .maybeSingle();
+        if (targetProfile?.rank !== 1) {
+          return [];
+        }
+        // Fetch rank-1 user's stories (RLS should allow via policy)
+        const { data, error } = await supabase
+          .from('stories')
+          .select('*')
+          .eq('user_id', userId)
+          .gte('created_at', twentyFourHoursAgo)
+          .order('created_at', { ascending: true });
+        if (error) {
+          console.error('Error fetching rank-1 user stories:', error);
+          return [];
+        }
+        // attach user profiles
+        const uniqueUserIds = Array.from(new Set((data || []).map(s => s.user_id)));
+        const { data: usersMapRows } = await supabase
+          .from('profiles')
+          .select('id, username, avatar_url')
+          .in('id', uniqueUserIds);
+        const usersMap = new Map((usersMapRows || []).map(u => [u.id, u]));
+        return (data || []).map(s => ({ ...s, user: usersMap.get(s.user_id) || null }));
+      }
 
       // Get stories if following
       const { data, error } = await supabase
         .from('stories')
-        .select(`
-          *,
-          user:user_id (id, username, avatar_url)
-        `)
+        .select('*')
         .eq('user_id', userId)
         .gte('created_at', twentyFourHoursAgo)
         .order('created_at', { ascending: true });
@@ -293,7 +329,14 @@ export class StoriesService {
         console.error('Error fetching followed user stories:', error);
         return [];
       }
-      return data || [];
+      // attach user profiles
+      const uniqueUserIds = Array.from(new Set((data || []).map(s => s.user_id)));
+      const { data: usersMapRows } = await supabase
+        .from('profiles')
+        .select('id, username, avatar_url')
+        .in('id', uniqueUserIds);
+      const usersMap = new Map((usersMapRows || []).map(u => [u.id, u]));
+      return (data || []).map(s => ({ ...s, user: usersMap.get(s.user_id) || null }));
       
     } catch (error) {
       console.error('Error fetching user stories:', error);

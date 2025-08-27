@@ -77,9 +77,23 @@ const StoriesScreen = () => {
       
       // Get stories for the specific user/group
       const data = await StoriesService.getUserStories(userId);
+      // Fetch user's rank to apply special visibility/ordering rules for rank 1
+      const { data: ownerProfile } = await supabase
+        .from('profiles')
+        .select('rank')
+        .eq('id', userId)
+        .maybeSingle();
       
       if (data && data.length > 0) {
-        setStories(data);
+        // If user is rank 1, make sure the first story is the designated first story
+        // (client-side ordering safeguard; actual visibility is handled by RLS)
+        const sortedStories = ownerProfile?.rank === 1
+          ? [...data].sort((a, b) => {
+              if (a.is_first_story === b.is_first_story) return 0;
+              return a.is_first_story ? -1 : 1;
+            })
+          : data;
+        setStories(sortedStories);
         setUserInfo(data[0].user);
       } else {
         // No stories found, go back

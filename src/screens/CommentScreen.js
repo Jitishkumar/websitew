@@ -20,7 +20,7 @@ import { supabase } from '../lib/supabase';
 import { PostsService } from '../services/PostsService';
 import { sendCommentNotification } from '../utils/notificationService';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { processMentions } from '../utils/mentionService';
 
 const { height } = Dimensions.get('window');
@@ -488,11 +488,15 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
   };
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { paddingBottom: insets.bottom }]} // Changed to styles.container for full screen
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <View style={styles.header}>
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView
+        style={{ flex: 1, paddingBottom: insets.bottom }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+      <View style={[
+        styles.header,
+        { paddingTop: Platform.OS === 'ios' ? insets.top : 0 }
+      ]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="chevron-back" size={24} color="#fff" />
         </TouchableOpacity>
@@ -562,7 +566,8 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
           </TouchableOpacity>
         </View>
       </LinearGradient>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 
