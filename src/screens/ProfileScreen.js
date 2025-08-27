@@ -817,7 +817,8 @@ const ProfileScreen = () => {
             avatar_url
           )
         `)
-        .eq('following_id', user.id);
+        .eq('following_id', user.id)
+        .not('follower_id', 'in', `(SELECT blocked_id FROM blocked_users WHERE blocker_id = '${user.id}')`);
 
       if (error) {
         console.error('Error fetching followers:', error);
@@ -871,7 +872,8 @@ const ProfileScreen = () => {
             avatar_url
           )
         `)
-        .eq('follower_id', user.id);
+        .eq('follower_id', user.id)
+        .not('following_id', 'in', `(SELECT blocked_id FROM blocked_users WHERE blocker_id = '${user.id}')`);
 
       if (error) {
         console.error('Error fetching following:', error);
