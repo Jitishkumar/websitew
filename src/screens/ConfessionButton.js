@@ -60,7 +60,7 @@ const ConfessionButtonScreen = () => {
           confession_likes!left(user_id)
         `)
         .order('created_at', { ascending: false })
-        .limit(10);
+        .limit(4);
 
       if (placeError) throw placeError;
 
@@ -81,7 +81,7 @@ const ConfessionButtonScreen = () => {
           creator_profile:creator_id(username, avatar_url)
         `)
         .order('created_at', { ascending: false })
-        .limit(10);
+        .limit(4);
 
       if (personError) throw personError;
 
@@ -97,72 +97,14 @@ const ConfessionButtonScreen = () => {
         }))
       ];
 
-      // Shuffle array and take first 15 items
-      const shuffled = allConfessions.sort(() => 0.5 - Math.random()).slice(0, 15);
-      
-      // Process confessions to add user profiles and like status
-      const processedConfessions = await Promise.all(shuffled.map(async confession => {
-        let processedMedia = confession.media;
-        
-        if (typeof confession.media === 'string') {
-          try {
-            processedMedia = JSON.parse(confession.media);
-          } catch (e) {
-            processedMedia = [];
-          }
-        }
-        
-        if (!processedMedia) {
-          processedMedia = [];
-        }
-        
-        const validatedMedia = Array.isArray(processedMedia) ?
-          processedMedia.map(item => {
-            if (item && typeof item === 'object' && item.url) {
-              return item;
-            }
-            if (typeof item === 'string') {
-              return { url: item, type: 'image' };
-            }
-            return null;
-          }).filter(Boolean) : [];
+      // Shuffle the combined confessions
+      for (let i = allConfessions.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [allConfessions[i], allConfessions[j]] = [allConfessions[j], allConfessions[i]];
+      }
 
-        // For 'place' type, get the userProfile from the confession.user_id
-        // For 'person' type, username and avatar_url are already set during the initial mapping from creator_profile
-        let userProfile = { username: confession.username, avatar_url: confession.avatar_url };
-        if (confession.type === 'place' && !confession.is_anonymous && confession.user_id) {
-          const { data: profileData } = await supabase
-            .from('profiles')
-            .select('username, full_name, avatar_url')
-            .eq('id', confession.user_id)
-            .single();
-
-          if (profileData) {
-            userProfile = {
-              username: profileData.username || profileData.full_name,
-              avatar_url: profileData.avatar_url
-            };
-          }
-        }
-
-        // Check if current user has liked this confession
-        const likesArray = confession.type === 'place' 
-          ? confession.confession_likes 
-          : confession.person_confession_likes;
-        
-        const isLiked = currentUser && likesArray 
-          ? !!likesArray.find(like => like.user_id === currentUser.id)
-          : false;
-
-        return {
-          ...confession,
-          media: validatedMedia,
-          ...(userProfile && { username: userProfile.username, avatar_url: userProfile.avatar_url }),
-          is_liked: isLiked
-        };
-      }));
-
-      setRandomConfessions(processedConfessions);
+      // Limit to 4 confessions
+      setRandomConfessions(allConfessions.slice(0, 4));
     } catch (error) {
       console.error('Error fetching random confessions:', error);
       Alert.alert('Error', 'Failed to load confessions');
@@ -170,7 +112,8 @@ const ConfessionButtonScreen = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+    return [];
+  }
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -272,8 +215,8 @@ const ConfessionButtonScreen = () => {
         <View style={styles.confessionHeader}>
           <Image 
             source={{ uri: item.is_anonymous 
-              ? 'https://via.placeholder.com/30x30?text=A' 
-              : (item.avatar_url || 'https://via.placeholder.com/30x30?text=U') 
+              ? 'https://via.placeholder.com/40x40?text=A' 
+              : (item.avatar_url || 'https://via.placeholder.com/40x40?text=U') 
             }}
             style={styles.avatar}
           />
@@ -300,7 +243,7 @@ const ConfessionButtonScreen = () => {
           </View>
         </View>
         
-        <Text style={styles.confessionContent} numberOfLines={3}>
+        <Text style={styles.confessionContent} numberOfLines={4}>
           {item.content}
         </Text>
         
@@ -341,7 +284,7 @@ const ConfessionButtonScreen = () => {
   return (
     <SafeAreaView style={styles.container}>
       <LinearGradient
-        colors={['#0a0a2a', '#1a1a3a']}
+        colors={['#0a0a2a', '#1a1a4a']}
         start={{x: 0, y: 0}}
         end={{x: 1, y: 1}}
         style={styles.header}
@@ -371,19 +314,19 @@ const ConfessionButtonScreen = () => {
                 end={{x: 1, y: 1}}
                 style={styles.gradientButton}
               >
-                <Ionicons name="person" size={32} color="#fff" />
+                <Ionicons name="person" size={42} color="#fff" />
                 <Text style={styles.buttonText}>Person</Text>
               </LinearGradient>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.button} onPress={handlePlaceConfession}>
               <LinearGradient
-                colors={['#4CAF50', '#8BC34A']}
+                colors={['#4CAF50', '#8BC44A']}
                 start={{x: 0, y: 0}}
                 end={{x: 1, y: 1}}
                 style={styles.gradientButton}
               >
-                <Ionicons name="business" size={32} color="#fff" />
+                <Ionicons name="business" size={42} color="#fff" />
                 <Text style={styles.buttonText}>Colleges/Offices/Places</Text>
               </LinearGradient>
             </TouchableOpacity>
@@ -458,7 +401,7 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.4,
     shadowRadius: 8,
     elevation: 10,
     overflow: 'hidden',
@@ -477,7 +420,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     textShadowColor: 'rgba(0, 0, 0, 0.5)',
     textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
+    textShadowRadius: 4,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -500,7 +443,7 @@ const styles = StyleSheet.create({
     borderRadius: 15,
   },
   confessionCard: {
-    backgroundColor: '#1a1a3a',
+    backgroundColor: '#1a1a4a',
     borderRadius: 12,
     padding: 15,
     marginHorizontal: 20,
@@ -508,9 +451,9 @@ const styles = StyleSheet.create({
     shadowColor: "#9900ff",
     shadowOffset: {
       width: 0,
-      height: 3,
+      height: 4,
     },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.4,
     shadowRadius: 6,
     elevation: 8,
     borderWidth: 1,
@@ -522,8 +465,8 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   avatar: {
-    width: 30,
-    height: 30,
+    width: 40,
+    height: 40,
     borderRadius: 15,
     marginRight: 10,
   },
@@ -533,7 +476,7 @@ const styles = StyleSheet.create({
   username: {
     color: '#ff00ff',
     fontWeight: 'bold',
-    fontSize: 13,
+    fontSize: 14,
   },
   locationText: {
     color: '#999',
