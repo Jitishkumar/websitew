@@ -240,8 +240,8 @@ const ConfessionPersonScreen = () => {
               likes_count,
               comments_count,
               created_at,
-              confession_creator:creator_id(username, avatar_url),
-              confessed_person:person_id(name, profile_image)
+              person:person_id(name, profile_image),
+              confession_creator:creator_id(username, avatar_url)
             `)
             .eq('id', selectedConfessionId)
             .single();
@@ -668,8 +668,8 @@ const ConfessionPersonScreen = () => {
           likes_count,
           comments_count,
           created_at,
-          confession_creator:creator_id(username, avatar_url),
-          confessed_person:person_id(name, profile_image)
+          person:person_id(name, profile_image),
+          confession_creator:creator_id(username, avatar_url)
         `)
         .eq('person_id', personIdentifier) // Always query by person_id
         .order('created_at', { ascending: false })
@@ -740,8 +740,8 @@ const ConfessionPersonScreen = () => {
           username: confession.confession_creator?.username || 'User',
           avatar_url: confession.confession_creator?.avatar_url,
           is_liked: is_liked,
-          confessedPersonName: confession.confessed_person?.name,
-          confessedPersonProfileImage: confession.confessed_person?.profile_image,
+          confessedPersonName: confession.person?.name,
+          confessedPersonProfileImage: confession.person?.profile_image,
           is_tagged_in_content: currentUserUsername && confession.content.includes(`@${currentUserUsername}`),
           // is_tagged_in_comment is handled in the comment screen, not here
         };
