@@ -1,5 +1,5 @@
 import { Text, View, StyleSheet, Alert, TouchableOpacity, SafeAreaView, ActivityIndicator } from 'react-native';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { TextInput } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,6 +12,8 @@ function HomePage({navigation}) {
   const [isMatching, setIsMatching] = useState(false);
   const [matchingStatus, setMatchingStatus] = useState('');
   const insets = useSafeAreaInsets();
+  const pollIntervalRef = useRef(null);
+  const matchingTimeoutRef = useRef(null);
 
   useEffect(() => {
     getCurrentUser();
@@ -19,6 +21,7 @@ function HomePage({navigation}) {
     // Clean up any existing waiting entries for this user on mount
     return () => {
       cleanupUserWaitingEntry();
+      clearPolling();
     };
   }, []);
 
@@ -61,10 +64,25 @@ function HomePage({navigation}) {
     }
   };
 
+  const clearPolling = () => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+    if (matchingTimeoutRef.current) {
+      clearTimeout(matchingTimeoutRef.current);
+      matchingTimeoutRef.current = null;
+    }
+  };
+
   const findRandomMatch = async () => {
     if (!currentUser) {
       Alert.alert('Error', 'Please login first');
       return;
+    }
+
+    if (isMatching) {
+      return; // Prevent multiple simultaneous matching attempts
     }
 
     setIsMatching(true);
@@ -73,6 +91,9 @@ function HomePage({navigation}) {
     try {
       // First, clean up old waiting users (older than 5 minutes)
       await supabase.rpc('cleanup_old_waiting_users');
+
+      // Clean up any existing entries for current user
+      await cleanupUserWaitingEntry();
 
       // Check if user is already in an active call
       const { data: activeCall } = await supabase
@@ -86,22 +107,6 @@ function HomePage({navigation}) {
         setIsMatching(false);
         setMatchingStatus('');
         Alert.alert('Already in Call', 'You are already in an active call. Please end your current call first.');
-        return;
-      }
-
-      // Check if user is already waiting
-      const { data: alreadyWaiting } = await supabase
-        .from('waiting_users')
-        .select('id, call_id')
-        .eq('user_id', currentUser.id)
-        .eq('status', 'waiting')
-        .limit(1);
-
-      if (alreadyWaiting && alreadyWaiting.length > 0) {
-        setIsMatching(false);
-        setMatchingStatus('');
-        setCallId(alreadyWaiting[0].call_id);
-        Alert.alert('Already Searching', 'You are already searching for a match. Please wait or cancel your current search.');
         return;
       }
 
@@ -119,6 +124,7 @@ function HomePage({navigation}) {
           .eq('gender', oppositeGender)
           .eq('status', 'waiting')
           .neq('user_id', currentUser.id)
+          .order('created_at', { ascending: true })
           .limit(1);
           
         if (oppositeMatches && oppositeMatches.length > 0) {
@@ -134,6 +140,7 @@ function HomePage({navigation}) {
           .eq('gender', currentUser.gender)
           .eq('status', 'waiting')
           .neq('user_id', currentUser.id)
+          .order('created_at', { ascending: true })
           .limit(1);
           
         if (sameGenderMatches && sameGenderMatches.length > 0) {
@@ -148,6 +155,7 @@ function HomePage({navigation}) {
           .select('*')
           .eq('status', 'waiting')
           .neq('user_id', currentUser.id)
+          .order('created_at', { ascending: true })
           .limit(1);
           
         if (anyMatches && anyMatches.length > 0) {
@@ -159,53 +167,81 @@ function HomePage({navigation}) {
       if (availableMatch) {
         setMatchingStatus('Match found! Connecting...');
         
-        // Use the waiting user's existing call_id - this is key!
         const callIdToUse = availableMatch.call_id;
         
-        // Create active call session with the matched user's call ID
-        const { error: sessionError } = await supabase
-          .from('active_calls')
-          .insert({
-            call_id: callIdToUse, // Use the same call ID as the waiting user
-            user1_id: availableMatch.user_id,
-            user1_name: availableMatch.username,
-            user2_id: currentUser.id,
-            user2_name: currentUser.username,
-            created_at: new Date().toISOString(),
-            status: 'active'
-          });
+        // Use a transaction-like approach with error handling
+        try {
+          // Remove the matched user from waiting list first
+          const { error: deleteError } = await supabase
+            .from('waiting_users')
+            .delete()
+            .eq('user_id', availableMatch.user_id);
 
-        if (sessionError) {
-          console.error('Error creating session:', sessionError);
+          if (deleteError) {
+            console.error('Error removing waiting user:', deleteError);
+            setIsMatching(false);
+            setMatchingStatus('');
+            Alert.alert('Error', 'Failed to connect. Please try again.');
+            return;
+          }
+
+          // Create active call session
+          const { error: sessionError } = await supabase
+            .from('active_calls')
+            .insert({
+              call_id: callIdToUse,
+              user1_id: availableMatch.user_id,
+              user1_name: availableMatch.username,
+              user2_id: currentUser.id,
+              user2_name: currentUser.username,
+              created_at: new Date().toISOString(),
+              status: 'active'
+            });
+
+          if (sessionError) {
+            console.error('Error creating session:', sessionError);
+            
+            // If call creation failed, restore the waiting user
+            await supabase
+              .from('waiting_users')
+              .insert({
+                user_id: availableMatch.user_id,
+                username: availableMatch.username,
+                gender: availableMatch.gender,
+                call_id: availableMatch.call_id,
+                status: 'waiting'
+              });
+
+            setIsMatching(false);
+            setMatchingStatus('');
+            Alert.alert('Error', 'Failed to create call session. Please try again.');
+            return;
+          }
+
+          setCallId(callIdToUse);
           setIsMatching(false);
           setMatchingStatus('');
-          Alert.alert('Error', 'Failed to create call session. Please try again.');
-          return;
+          
+          // Navigate to call page
+          navigation.navigate('CallPage', {
+            data: currentUser.username,
+            id: callIdToUse,
+            matchedUser: availableMatch.username,
+            isJoining: true
+          });
+
+        } catch (error) {
+          console.error('Error in match creation process:', error);
+          setIsMatching(false);
+          setMatchingStatus('');
+          Alert.alert('Error', 'Failed to connect. Please try again.');
         }
 
-        // Remove the matched user from waiting list (they're now in active call)
-        await supabase
-          .from('waiting_users')
-          .delete()
-          .eq('user_id', availableMatch.user_id);
-
-        setCallId(callIdToUse);
-        setIsMatching(false);
-        setMatchingStatus('');
-        
-        // Navigate to call page with the SAME call ID
-        navigation.navigate('CallPage', {
-          data: currentUser.username,
-          id: callIdToUse, // Same call ID so both users join the same room
-          matchedUser: availableMatch.username,
-          isJoining: true
-        });
-
       } else {
-        // No match found, add user to waiting list with a NEW call ID
+        // No match found, add user to waiting list
         setMatchingStatus('No users available. Adding you to waiting list...');
         
-        const newCallId = generateCallId(); // Only generate new ID when no one is waiting
+        const newCallId = generateCallId();
         
         const { error: waitingError } = await supabase
           .from('waiting_users')
@@ -213,7 +249,7 @@ function HomePage({navigation}) {
             user_id: currentUser.id,
             username: currentUser.username,
             gender: currentUser.gender,
-            call_id: newCallId, // This becomes the call ID others will join
+            call_id: newCallId,
             status: 'waiting'
           });
 
@@ -229,7 +265,7 @@ function HomePage({navigation}) {
         setIsMatching(false);
         setMatchingStatus('Waiting for someone to join...');
         
-        // Start polling for matches - when someone joins, they'll use this same call ID
+        // Start polling for matches
         startMatchingPolling(newCallId);
       }
 
@@ -242,7 +278,7 @@ function HomePage({navigation}) {
   };
 
   const startMatchingPolling = (callId) => {
-    const pollInterval = setInterval(async () => {
+    pollIntervalRef.current = setInterval(async () => {
       try {
         // Check if someone joined our call
         const { data: activeCall } = await supabase
@@ -253,7 +289,7 @@ function HomePage({navigation}) {
           .limit(1);
 
         if (activeCall && activeCall.length > 0) {
-          clearInterval(pollInterval);
+          clearPolling();
           setMatchingStatus('');
           
           const call = activeCall[0];
@@ -273,8 +309,8 @@ function HomePage({navigation}) {
     }, 2000); // Poll every 2 seconds
 
     // Stop polling after 5 minutes and remove from waiting list
-    setTimeout(async () => {
-      clearInterval(pollInterval);
+    matchingTimeoutRef.current = setTimeout(async () => {
+      clearPolling();
       setMatchingStatus('');
       await cleanupUserWaitingEntry();
       Alert.alert('Timeout', 'No match found within 5 minutes. Please try again.');
@@ -282,12 +318,17 @@ function HomePage({navigation}) {
   };
 
   const cancelWaiting = async () => {
+    clearPolling();
     await cleanupUserWaitingEntry();
     setMatchingStatus('');
     setCallId('');
+    setIsMatching(false);
   };
 
   const handleGoBack = () => {
+    if (isMatching || matchingStatus) {
+      cancelWaiting();
+    }
     navigation.navigate('MainApp');
   };
 

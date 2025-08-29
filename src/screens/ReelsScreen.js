@@ -87,54 +87,74 @@ const ReelsScreen = () => {
       console.error('Error getting current user:', error);
     }
   };
-
-
-
-
-
-  const loadReels = async (isInitialLoad = false) => {
-    try {
-      if (isInitialLoad) {
-        setLoading(true);
-        setPage(0);
-      } else {
-        setLoadingMore(true);
-      }
-  
-      const currentPage = isInitialLoad ? 0 : page;
-      const from = currentPage * REELS_PER_PAGE;
-      const to = from + REELS_PER_PAGE - 1;
-  
-      const { data, error } = await supabase
-        .from('posts')
-        .select(`
-          *,
-          profiles:user_id(
-            *,
-            followers:follows!follows_following_id_fkey(
-              follower_id,
-              following_id
-            )
-          ),
-          likes:post_likes(count),
-          comments:post_comments(count),
-          user_likes:post_likes!post_likes_post_id_fkey(user_id)
-        `)
-        .eq('type', 'video')
-        .order('created_at', { ascending: false })
-        .range(from, to);
-          
-      if (error) throw error;
-      // ... rest of the function
-    } catch (error) {
-      console.error('Error loading reels:', error);
-      Alert.alert('Error', 'Failed to load reels');
-    } finally {
-      setLoading(false);
-      setLoadingMore(false);
-      setRefreshing(false);
+// Replace the loadReels function in your ReelsScreen with this corrected version:
+const loadReels = async (isInitialLoad = false) => {
+  try {
+    if (isInitialLoad) {
+      setLoading(true);
+      setPage(0);
+    } else {
+      setLoadingMore(true);
     }
-  };
+
+    const currentPage = isInitialLoad ? 0 : page;
+    const from = currentPage * REELS_PER_PAGE;
+    const to = from + REELS_PER_PAGE - 1;
+
+
+
+
+
+    const { data, error } = await supabase
+    .from('posts')
+    .select(`
+      *,
+      profiles:user_id(*),
+      likes:post_likes(count),
+      comments:post_comments(count),
+      user_likes:post_likes!post_likes_post_id_fkey(user_id)
+    `)
+    .eq('type', 'video')
+    .order('created_at', { ascending: false })
+    .range(from, to);
+
+
+
+
+
+    if (error) throw error;
+
+    if (data) {
+      const processedReels = data.map(reel => ({
+        ...reel,
+        is_following: currentUser ? reel.profiles?.followers?.some(
+          follow => follow.follower_id === currentUser.id
+        ) || false : false,
+        is_liked: currentUser ? reel.user_likes?.some(
+          like => like.user_id === currentUser.id
+        ) || false : false,
+        is_own_post: currentUser ? reel.user_id === currentUser.id : false
+      }));
+
+      if (isInitialLoad) {
+        setReels(processedReels);
+        setPage(1);
+      } else {
+        setReels(prevReels => [...prevReels, ...processedReels]);
+        setPage(currentPage + 1);
+      }
+
+      setHasMore(data.length === REELS_PER_PAGE);
+    }
+  } catch (error) {
+    console.error('Error loading reels:', error);
+    Alert.alert('Error', 'Failed to load reels');
+  } finally {
+    setLoading(false);
+    setLoadingMore(false);
+    setRefreshing(false);
+  }
+};
 
 
 
@@ -964,11 +984,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#000',
   },
-  followingButton: {
-    backgroundColor: '#4CAF50', // A different color for following
-  },
-  followingButtonText: {
-    color: '#fff',
-  },
 });
+
 export default ReelsScreen;
