@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, ActivityIndicator, Animated, Alert, FlatList } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, ActivityIndicator, Animated, Alert, FlatList, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
@@ -25,6 +25,27 @@ const UserProfileScreen = () => {
   
   const memoizedPosts = useMemo(() => posts, [posts]);
   const memoizedShorts = useMemo(() => shorts, [shorts]);
+
+  // State for followers/following modals
+  const [showFollowersModal, setShowFollowersModal] = useState(false);
+  const [showFollowingModal, setShowFollowingModal] = useState(false);
+  const [followers, setFollowers] = useState([]);
+  const [following, setFollowing] = useState([]);
+  const [loadingConnections, setLoadingConnections] = useState(false);
+
+  // Function to fetch blocked user IDs
+  const getBlockedUserIds = async (currentUserId) => {
+    const { data, error } = await supabase
+      .from('blocked_users')
+      .select('blocked_id')
+      .eq('blocker_id', currentUserId);
+
+    if (error) {
+      console.error('Error fetching blocked user IDs:', error);
+      return [];
+    }
+    return data.map(item => item.blocked_id);
+  };
 
   // Function to create blinking animation
   const createBlinkAnimation = (color) => {
@@ -449,10 +470,23 @@ const UserProfileScreen = () => {
   
     const fetchFollowersCount = async () => {
       try {
-        const { count, error } = await supabase
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData?.session?.user) return;
+        
+        const currentUserId = sessionData.session.user.id;
+
+        const blockedIds = await getBlockedUserIds(currentUserId);
+        
+        let query = supabase
           .from('follows')
           .select('*', { count: 'exact', head: true })
           .eq('following_id', userId);
+
+        if (blockedIds.length > 0) {
+          query = query.not('follower_id', 'in', blockedIds);
+        }
+
+        const { count, error } = await query;
           
         if (error) {
           console.error('Error fetching followers count:', error);
@@ -466,18 +500,156 @@ const UserProfileScreen = () => {
   
     const fetchFollowingCount = async () => {
       try {
-        const { count, error } = await supabase
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData?.session?.user) return;
+
+        const currentUserId = sessionData.session.user.id;
+        
+        const blockedIds = await getBlockedUserIds(currentUserId);
+
+        let query = supabase
           .from('follows')
           .select('*', { count: 'exact', head: true })
           .eq('follower_id', userId);
+
+        if (blockedIds.length > 0) {
+          query = query.not('following_id', 'in', blockedIds);
+        }
+
+        const { count, error } = await query;
           
         if (error) {
           console.error('Error fetching following count:', error);
-        } else {
+        }
+        else {
           setFollowingCount(count || 0);
         }
       } catch (error) {
         console.error('Error fetching following count:', error);
+      }
+    };
+
+    const fetchFollowers = async () => {
+      try {
+        setLoadingConnections(true);
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData?.session?.user) return;
+        const currentUserId = sessionData.session.user.id;
+
+        const blockedIds = await getBlockedUserIds(currentUserId);
+
+        let query = supabase
+          .from('follows')
+          .select(`
+            follower_id,
+            profiles!follows_follower_id_fkey (
+              id,
+              username,
+              full_name,
+              avatar_url
+            )
+          `)
+          .eq('following_id', userId);
+
+        if (blockedIds.length > 0) {
+          query = query.not('follower_id', 'in', blockedIds);
+        }
+
+        const { data, error } = await query;
+
+        if (error) throw error;
+
+        const followersList = data.map(item => {
+          const profile = item.profiles;
+          let avatarUrl = null;
+          if (profile.avatar_url) {
+            let avatarPath = profile.avatar_url;
+            if (avatarPath.includes('media/media/') || avatarPath.includes('storage/v1/object/public/media/')) {
+              const match = avatarPath.match(/([a-f0-9-]+\/avatar_[0-9]+\\.jpg)/);
+              if (match && match[1]) {
+                avatarPath = match[1];
+              } else {
+                avatarPath = avatarPath.split('media/').pop();
+              }
+            }
+            avatarUrl = `https://lckhaysswueoyinhfzyz.supabase.co/storage/v1/object/public/media/${avatarPath}`;
+          }
+          return {
+            ...profile,
+            avatar_url: avatarUrl
+          };
+        });
+
+        setFollowers(followersList);
+        setShowFollowersModal(true);
+
+      } catch (error) {
+        console.error('Error fetching followers:', error);
+        Alert.alert('Error', 'Failed to load followers.');
+      } finally {
+        setLoadingConnections(false);
+      }
+    };
+
+    const fetchFollowing = async () => {
+      try {
+        setLoadingConnections(true);
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData?.session?.user) return;
+        const currentUserId = sessionData.session.user.id;
+
+        const blockedIds = await getBlockedUserIds(currentUserId);
+
+        let query = supabase
+          .from('follows')
+          .select(`
+            following_id,
+            profiles!follows_following_id_fkey (
+              id,
+              username,
+              full_name,
+              avatar_url
+            )
+          `)
+          .eq('follower_id', userId);
+
+        if (blockedIds.length > 0) {
+          query = query.not('following_id', 'in', blockedIds);
+        }
+
+        const { data, error } = await query;
+
+        if (error) throw error;
+
+        const followingList = data.map(item => {
+          const profile = item.profiles;
+          let avatarUrl = null;
+          if (profile.avatar_url) {
+            let avatarPath = profile.avatar_url;
+            if (avatarPath.includes('media/media/') || avatarPath.includes('storage/v1/object/public/media/')) {
+              const match = avatarPath.match(/([a-f0-9-]+\/avatar_[0-9]+\\.jpg)/);
+              if (match && match[1]) {
+                avatarPath = match[1];
+              } else {
+                avatarPath = avatarPath.split('media/').pop();
+              }
+            }
+            avatarUrl = `https://lckhaysswueoyinhfzyz.supabase.co/storage/v1/object/public/media/${avatarPath}`;
+          }
+          return {
+            ...profile,
+            avatar_url: avatarUrl
+          };
+        });
+
+        setFollowing(followingList);
+        setShowFollowingModal(true);
+
+      } catch (error) {
+        console.error('Error fetching following:', error);
+        Alert.alert('Error', 'Failed to load following.');
+      } finally {
+        setLoadingConnections(false);
       }
     };
   
@@ -740,7 +912,7 @@ const UserProfileScreen = () => {
       );
       return;
     }
-    navigation.navigate('FollowersList', { userId: userId });
+    fetchFollowers();
   };
 
   const handleFollowingPress = () => {
@@ -753,7 +925,7 @@ const UserProfileScreen = () => {
       );
       return;
     }
-    navigation.navigate('FollowingList', { userId: userId });
+    fetchFollowing();
   };
   
   const handlePostPress = (index) => {
@@ -1043,6 +1215,64 @@ const UserProfileScreen = () => {
     </View>
   );
 
+  // Connections Modal (moved from ProfileScreen.js)
+  const ConnectionsModal = ({ visible, onClose, title, connections, isLoading }) => {
+    return (
+      <Modal
+        visible={visible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={onClose}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>{title}</Text>
+            {isLoading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#ff00ff" />
+              </View>
+            ) : connections.length > 0 ? (
+              <FlatList
+                data={connections}
+                keyExtractor={(item, index) => item.id ? item.id.toString() : index.toString()}
+                renderItem={({ item }) => (
+                  <TouchableOpacity 
+                    style={styles.connectionItem}
+                    onPress={() => {
+                      onClose();
+                      navigation.navigate('UserProfile', { userId: item.id });
+                    }}
+                  >
+                    <Image 
+                      source={{ uri: item.avatar_url || 'https://via.placeholder.com/150' }}
+                      style={styles.connectionAvatar}
+                    />
+                    <View style={styles.connectionInfo}>
+                      <Text style={styles.connectionName}>{item.full_name || 'No name'}</Text>
+                      <Text style={styles.connectionUsername}>@{item.username || 'username'}</Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
+                style={styles.connectionsList}
+              />
+            ) : (
+              <View style={styles.emptyContainer}>
+                <Ionicons name="people-outline" size={50} color="#666" />
+                <Text style={styles.emptyText}>No {title.toLowerCase()} yet</Text>
+              </View>
+            )}
+            <TouchableOpacity 
+              style={styles.closeButton}
+              onPress={onClose}
+            >
+              <Text style={styles.closeText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
   // Content for Posts and Shorts tabs
   const ContentSection = () => {
     if (activeTab === 'Details') {
@@ -1204,6 +1434,21 @@ const UserProfileScreen = () => {
           </TouchableOpacity>
         </View>
       )}
+      {/* Render Connections Modals */}
+      <ConnectionsModal
+        visible={showFollowersModal}
+        onClose={() => setShowFollowersModal(false)}
+        title="Followers"
+        connections={followers}
+        isLoading={loadingConnections}
+      />
+      <ConnectionsModal
+        visible={showFollowingModal}
+        onClose={() => setShowFollowingModal(false)}
+        title="Following"
+        connections={following}
+        isLoading={loadingConnections}
+      />
     </View>
   );
 };
@@ -1626,6 +1871,68 @@ const styles = StyleSheet.create({
   mentionText: {
     color: '#1DA1F2', // Example color for mentions
     fontWeight: 'bold',
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+  },
+  modalContent: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 10,
+    padding: 20,
+    width: '80%',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: 'white',
+    marginBottom: 15,
+  },
+  connectionsList: {
+    width: '100%',
+    maxHeight: '70%',
+    marginBottom: 20,
+  },
+  connectionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+  },
+  connectionAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 10,
+  },
+  connectionInfo: {
+    flex: 1,
+  },
+  connectionName: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  connectionUsername: {
+    color: '#999',
+    fontSize: 14,
+  },
+  closeButton: {
+    backgroundColor: '#ff00ff',
+    paddingHorizontal: 25,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  closeText: {
+    color: 'white',
+    fontWeight: '600',
   },
 });
 

@@ -765,15 +765,23 @@ const ProfileScreen = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { count, error } = await supabase
+      const blockedIds = await getBlockedUserIds(user.id);
+        
+      let query = supabase
         .from('follows')
         .select('*', { count: 'exact' })
         .eq('following_id', user.id);
 
+      if (blockedIds.length > 0) {
+        query = query.not('follower_id', 'in', blockedIds);
+      }
+
+      const { count, error } = await query;
+          
       if (error) {
         console.error('Error fetching followers count:', error);
       } else {
-        setFollowersCount(count);
+        setFollowersCount(count || 0);
       }
     } catch (error) {
       console.error('Error fetching followers count:', error);
@@ -785,11 +793,19 @@ const ProfileScreen = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { count, error } = await supabase
+      const blockedIds = await getBlockedUserIds(user.id);
+
+      let query = supabase
         .from('follows')
         .select('*', { count: 'exact' })
         .eq('follower_id', user.id);
 
+      if (blockedIds.length > 0) {
+        query = query.not('following_id', 'in', blockedIds);
+      }
+
+      const { count, error } = await query;
+          
       if (error) {
         console.error('Error fetching following count:', error);
       } else {
@@ -800,13 +816,28 @@ const ProfileScreen = () => {
     }
   };
 
+  const getBlockedUserIds = async (currentUserId) => {
+    const { data, error } = await supabase
+      .from('blocked_users')
+      .select('blocked_id')
+      .eq('blocker_id', currentUserId);
+
+    if (error) {
+      console.error('Error fetching blocked user IDs:', error);
+      return [];
+    }
+    return data.map(item => item.blocked_id);
+  };
+
   const fetchFollowers = async () => {
     try {
       setLoadingConnections(true);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data, error } = await supabase
+      const blockedIds = await getBlockedUserIds(user.id);
+
+      let query = supabase
         .from('follows')
         .select(`
           follower_id,
@@ -817,8 +848,13 @@ const ProfileScreen = () => {
             avatar_url
           )
         `)
-        .eq('following_id', user.id)
-        .not('follower_id', 'in', `(SELECT blocked_id FROM blocked_users WHERE blocker_id = '${user.id}')`);
+        .eq('following_id', user.id);
+
+      if (blockedIds.length > 0) {
+        query = query.not('follower_id', 'in', blockedIds);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         console.error('Error fetching followers:', error);
@@ -861,7 +897,9 @@ const ProfileScreen = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data, error } = await supabase
+      const blockedIds = await getBlockedUserIds(user.id);
+
+      let query = supabase
         .from('follows')
         .select(`
           following_id,
@@ -872,8 +910,13 @@ const ProfileScreen = () => {
             avatar_url
           )
         `)
-        .eq('follower_id', user.id)
-        .not('following_id', 'in', `(SELECT blocked_id FROM blocked_users WHERE blocker_id = '${user.id}')`);
+        .eq('follower_id', user.id);
+
+      if (blockedIds.length > 0) {
+        query = query.not('following_id', 'in', blockedIds);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         console.error('Error fetching following:', error);

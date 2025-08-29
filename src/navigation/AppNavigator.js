@@ -42,6 +42,7 @@ import ConfessionCommentScreen from '../screens/ConfessionCommentScreen';
 import ConfessionButtonScreen from '../screens/ConfessionButton'; // Import the new screen
 import ConfessionPersonScreen from '../screens/ConfessionPersonScreen'; // Import the new Person Confession screen
 import ConfessionPersonCommentScreen from '../screens/ConfessionPersonCommentScreen'; // Import the new Person Confession Comment screen
+import ReelsScreen from '../screens/ReelsScreen'; // Import the new Reels screen
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -79,6 +80,15 @@ const TabNavigator = () => {
       options={{
         tabBarIcon: ({ color }) => (
           <Ionicons name="home-outline" size={24} color={color} />
+        ),
+      }}
+    />
+    <Tab.Screen 
+      name="Reels" 
+      component={ReelsScreen}
+      options={{
+        tabBarIcon: ({ color }) => (
+          <Ionicons name="film-outline" size={24} color={color} />
         ),
       }}
     />
