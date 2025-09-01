@@ -1,43 +1,37 @@
 import { Text, StyleSheet, View, TouchableOpacity, SafeAreaView, Alert, AppState } from 'react-native';
 import React, { useEffect, useState, useRef } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import JitsiMeet from '@jitsi/react-native-sdk';
+import {
+    ZegoUIKitPrebuiltCall,
+    ONE_ON_ONE_VIDEO_CALL_CONFIG,
+} from '@zegocloud/zego-uikit-prebuilt-call-rn';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 
 function CallPage(props) {
-    const params = props.route.params;
-    console.log('CallPage params:', params);
-    
-    const name = params.data;
-    const id = params.id;
-    const matchedUser = params.matchedUser || 'Unknown User';
-    const isJoining = params.isJoining || false;
-    
+    console.log(props.route.params);
+    const name = props.route.params.data;
+    const id = props.route.params.id;
+    const matchedUser = props.route.params.matchedUser || 'Unknown User';
+    const isJoining = props.route.params.isJoining || false;
     const insets = useSafeAreaInsets();
     const [callEnded, setCallEnded] = useState(false);
     const [currentUser, setCurrentUser] = useState(null);
-    const [callStarted, setCallStarted] = useState(false);
-    
     const callTimerRef = useRef(null);
     const appStateRef = useRef(AppState.currentState);
-    const cleanupExecutedRef = useRef(false);
 
     useEffect(() => {
-        if (callStarted) return; // Prevent multiple initializations
-        
-        setCallStarted(true);
         getCurrentUser();
         
         // Start 3-minute timer for automatic call end
         callTimerRef.current = setTimeout(() => {
-            if (!callEnded && !cleanupExecutedRef.current) {
+            if (!callEnded) {
                 Alert.alert('Time Up', 'Call duration limit (3 minutes) reached. Call will end now.');
                 handleCallEnd('time_limit');
             }
         }, 180000); // 3 minutes
 
-        // Listen for app state changes
+        // Listen for app state changes (user switching apps, going to background)
         const appStateSubscription = AppState.addEventListener('change', handleAppStateChange);
 
         // Update call session when component mounts
@@ -50,11 +44,11 @@ function CallPage(props) {
             appStateSubscription?.remove();
             
             // Clean up when component unmounts
-            if (!callEnded && !cleanupExecutedRef.current) {
+            if (!callEnded) {
                 handleCallEnd('component_unmount');
             }
         };
-    }, []); // Empty dependency array to run only once
+    }, []);
 
     const getCurrentUser = async () => {
         try {
@@ -78,7 +72,7 @@ function CallPage(props) {
     const handleAppStateChange = (nextAppState) => {
         // If user goes to background or inactive, end the call
         if (appStateRef.current === 'active' && (nextAppState === 'background' || nextAppState === 'inactive')) {
-            if (!callEnded && !cleanupExecutedRef.current) {
+            if (!callEnded) {
                 handleCallEnd('app_background');
             }
         }
@@ -105,9 +99,7 @@ function CallPage(props) {
     };
 
     const cleanupCallData = async () => {
-        if (!currentUser || cleanupExecutedRef.current) return;
-        
-        cleanupExecutedRef.current = true;
+        if (!currentUser) return;
         
         try {
             // Remove from active calls
@@ -128,15 +120,16 @@ function CallPage(props) {
     };
 
     const handleCallEnd = async (reason) => {
-        if (callEnded || cleanupExecutedRef.current) return; // Prevent multiple calls
+        if (callEnded) return; // Prevent multiple calls
         
-        console.log('Ending call:', { callID: id, reason });
         setCallEnded(true);
         
         // Clear timer
         if (callTimerRef.current) {
             clearTimeout(callTimerRef.current);
         }
+        
+        console.log('Call ended:', { callID: id, reason });
         
         // Update call session and cleanup
         await updateCallSession('ended');
@@ -147,13 +140,6 @@ function CallPage(props) {
             index: 0,
             routes: [{ name: 'HomePage' }],
         });
-
-        // End Jitsi Meet call
-        try {
-            await JitsiMeet.endCall();
-        } catch (error) {
-            console.error('Error ending Jitsi call:', error);
-        }
     };
 
     const handleGoBack = () => {
@@ -183,66 +169,48 @@ function CallPage(props) {
         paddingTop: insets.top > 0 ? insets.top : 16,
     };
 
-    // Jitsi Meet configuration for one-on-one calls
-    const jitsiConfig = {
-        roomName: id, // Use call_id as room name
-        domain: 'meet.jit.si', // Use Jitsi's hosted server
-        config: {
-            startWithAudioMuted: false,
-            startWithVideoMuted: false,
-            disableModeratorIndicator: true, // Simplify for one-on-one
-            maxUsers: 2, // Limit to 2 participants
-            showUserName: true,
-            defaultLocalDisplayName: name || 'You', // User's display name
-            toolbarButtons: [
-                'camera',
-                'microphone',
-                'hangup',
-                'tileview',
-                'videoquality',
-            ],
-            // Ensure gallery view for equal video display
-            defaultView: 'tile',
-            // Disable features not needed for one-on-one
-            disableScreenSharing: true,
-            disableVideoBackground: true,
-            // Call duration display
-            showCallTimer: true,
+    // Custom config for one-on-one calls with 3-minute limit
+    const callConfig = {
+        ...ONE_ON_ONE_VIDEO_CALL_CONFIG,
+        onCallEnd: (callID, reason, duration) => { 
+            handleCallEnd('zego_ended');
         },
-        userInfo: {
-            displayName: name || 'You',
-            email: currentUser?.email || '',
+        onUserJoin: (users) => {
+            console.log('Users joined:', users);
         },
-        // Handle call end events
-        onConferenceTerminated: () => {
-            console.log('Jitsi conference terminated');
-            handleCallEnd('jitsi_terminated');
+        onUserLeave: (users) => {
+            console.log('Users left:', users);
+            // If the other user leaves, end the call
+            if (users.length === 0 || users.length === 1) {
+                handleCallEnd('user_left');
+            }
         },
-        onConferenceLeft: () => {
-            console.log('User left Jitsi conference');
-            setTimeout(() => {
-                if (!callEnded) {
-                    handleCallEnd('user_left');
-                }
-            }, 2000); // 2-second delay for temporary disconnections
+        // Limit to 2 participants maximum
+        maxUsers: 2,
+        // Show usernames in the call
+        showUserName: true,
+        // Enable camera by default
+        turnOnCameraWhenJoining: true,
+        // Enable microphone by default
+        turnOnMicrophoneWhenJoining: true,
+        // Custom UI settings
+        layout: {
+            mode: 'pictureInPicture',
+            config: {
+                isSmallViewDraggable: true,
+                smallViewPosition: 'topRight',
+            }
         },
-        onConferenceJoined: () => {
-            console.log('User joined Jitsi conference');
+        // Show call duration
+        showCallTimer: true,
+        // Automatically hang up after network disconnection
+        hangUpConfirmInfo: {
+            title: 'End Call',
+            message: 'Are you sure you want to end this call?',
+            cancelButtonName: 'Cancel',
+            confirmButtonName: 'End Call',
         },
     };
-
-    if (callEnded) {
-        return (
-            <SafeAreaView style={styles.safeArea}>
-                <View style={styles.endedContainer}>
-                    <Text style={styles.endedText}>Call Ended</Text>
-                    <TouchableOpacity style={styles.backButton} onPress={() => props.navigation.navigate('HomePage')}>
-                        <Text style={styles.backButtonText}>Back to Home</Text>
-                    </TouchableOpacity>
-                </View>
-            </SafeAreaView>
-        );
-    }
 
     return (
         <SafeAreaView style={styles.safeArea}>
@@ -264,110 +232,96 @@ function CallPage(props) {
                 </View>
             </View>
             <View style={styles.container}>
-                {name && id && (
-                    <JitsiMeet
-                        style={{ flex: 1, width: '100%' }}
-                        config={jitsiConfig}
-                    />
-                )}
+                <ZegoUIKitPrebuiltCall
+                    appID={139240443}
+                    appSign={'9f90ba0d2d6029c51fe4992a8821060e1199d7bcac53c20da01e472df4cb8ca4'}
+                    userID={name} 
+                    userName={name}
+                    callID={id} 
+                    config={callConfig}
+                />
             </View>
         </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-    safeArea: {
-        flex: 1,
-        backgroundColor: '#0a0a2a',
-        paddingTop: 0,
-    },
-    container: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    endedContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    endedText: {
-        color: '#ffffff',
-        fontSize: 24,
-        fontWeight: 'bold',
-        marginBottom: 20,
-    },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 16,
-        paddingBottom: 12,
-        backgroundColor: '#0a0a2a',
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(255, 0, 255, 0.2)',
-    },
-    backButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 8,
-        backgroundColor: 'rgba(255, 68, 68, 0.1)',
-        borderRadius: 20,
-    },
-    backButtonText: {
-        color: '#ffffff',
-        fontSize: 16,
-        fontWeight: 'bold',
-    },
-    endCallText: {
-        color: '#ff4444',
-        fontSize: 12,
-        fontWeight: 'bold',
-        marginLeft: 4,
-    },
-    headerCenter: {
-        flex: 1,
-        alignItems: 'center',
-    },
-    headerTitle: {
-        color: '#ffffff',
-        fontSize: 18,
-        fontWeight: 'bold',
-    },
-    matchInfo: {
-        color: 'rgba(255, 255, 255, 0.8)',
-        fontSize: 12,
-        marginTop: 2,
-    },
-    timerInfo: {
-        color: 'rgba(255, 255, 255, 0.6)',
-        fontSize: 10,
-        marginTop: 1,
-    },
-    headerRight: {
-        width: 60,
-        alignItems: 'flex-end',
-    },
-    statusIndicator: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: 'rgba(0, 255, 0, 0.1)',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 12,
-    },
-    activeIndicator: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        backgroundColor: '#00ff00',
-        marginRight: 4,
-    },
-    activeText: {
-        color: '#00ff00',
-        fontSize: 10,
-        fontWeight: 'bold',
-    },
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#0a0a2a',
+    paddingTop: 0,
+  },
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    backgroundColor: '#0a0a2a',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 0, 255, 0.2)',
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
+    backgroundColor: 'rgba(255, 68, 68, 0.1)',
+    borderRadius: 20,
+  },
+  endCallText: {
+    color: '#ff4444',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginLeft: 4,
+  },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  headerTitle: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  matchInfo: {
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  timerInfo: {
+    color: 'rgba(255, 255, 255, 0.6)',
+    fontSize: 10,
+    marginTop: 1,
+  },
+  headerRight: {
+    width: 60,
+    alignItems: 'flex-end',
+  },
+  statusIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 255, 0, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  activeIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#00ff00',
+    marginRight: 4,
+  },
+  activeText: {
+    color: '#00ff00',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
 });
 
 export default CallPage;

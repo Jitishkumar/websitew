@@ -1003,27 +1003,32 @@ const ConfessionPersonScreen = () => {
   const postConfession = async () => {
     if (!newConfession.trim() && media.length === 0) return;
     
+    console.log('Starting postConfession...');
+    
     try {
       const { data: { user } } = await supabase.auth.getUser();
+      console.log('Current user:', user?.id);
+      
       if (!user) {
         Alert.alert('Error', 'You must be logged in to post a confession');
         return;
       }
       
+      // Upload media if any
       const mediaUrls = [];
       for (const item of media) {
         if (item.uri) {
           try {
-            const uploadResult = await uploadToCloudinary(item.uri, 'image');
+            const uploadResult = await uploadToCloudinary(item.uri, 'person_confessions');
             
-            if (!uploadResult || !uploadResult.url) {
+            if (!uploadResult || !uploadResult.secure_url) {
               throw new Error('Failed to upload media');
             }
             
             mediaUrls.push({
-              url: uploadResult.url,
+              url: uploadResult.secure_url,
               type: 'image',
-              publicId: uploadResult.publicId
+              publicId: uploadResult.public_id
             });
           } catch (mediaError) {
             console.error('Media upload error:', mediaError);
@@ -1032,30 +1037,108 @@ const ConfessionPersonScreen = () => {
         }
       }
       
+      // Prepare confession data
       const confessionData = {
         user_id: remainAnonymous ? null : user.id,
         creator_id: user.id,
-        person_id: selectedPerson.id, // Use person_id
-        person_name: selectedPerson.name, // Use person_name
+        person_id: selectedPerson.id,
+        person_name: selectedPerson.name,
         content: newConfession.trim(),
-        media: mediaUrls,
+        media: mediaUrls.length > 0 ? mediaUrls : null,
         is_anonymous: remainAnonymous,
         created_at: new Date().toISOString()
       };
 
-      const { error: confessionError } = await supabase
-        .from('person_confessions') // Insert into person_confessions
-        .insert([confessionData]);
-        
+      // Insert the new confession
+      const { data: newConfessionData, error: confessionError } = await supabase
+        .from('person_confessions')
+        .insert([confessionData])
+        .select()
+        .single();
+
       if (confessionError) throw confessionError;
+
+      // Create a notification for the person being confessed about
+      console.log('Creating notification for person ID:', selectedPerson.id);
       
+      // Get the person's profile to find their user account or creator
+      const { data: personProfile, error: personError } = await supabase
+        .from('person_profiles')
+        .select(`
+          id, 
+          name,
+          created_by,
+          user_id  // This is the user account associated with this person
+        `)
+        .eq('id', selectedPerson.id)
+        .single();
+
+      console.log('Person profile data:', personProfile);
+      
+      if (personError) {
+        console.error('Error fetching person profile:', personError);
+        return; // Exit if we can't get the person's profile
+      }
+
+      // Determine who should receive the notification
+      // Priority 1: If the person is linked to a user account (user_id), notify that user
+      // Priority 2: Otherwise, if there's a creator (created_by), notify them
+      const recipientId = personProfile.user_id || personProfile.created_by;
+      
+      if (recipientId) {
+        console.log(`Sending notification to user: ${recipientId}`);
+        
+        // Get the sender's username if not anonymous
+        let senderName = 'Someone';
+        if (!remainAnonymous) {
+          const { data: senderProfile } = await supabase
+            .from('profiles')
+            .select('username')
+            .eq('id', user.id)
+            .single();
+          
+          if (senderProfile?.username) {
+            senderName = senderProfile.username;
+          }
+        }
+        
+        const notificationContent = `${senderName} posted a confession about you (${personProfile.name}): "${newConfession.trim().substring(0, 50)}${newConfession.length > 50 ? '...' : ''}"`;
+        
+        const { data: notificationData, error: notificationError } = await supabase
+          .from('notifications')
+          .insert([
+            {
+              recipient_id: recipientId,
+              sender_id: remainAnonymous ? null : user.id,
+              type: 'mention',
+              content: notificationContent,
+              reference_id: newConfessionData.id,
+              is_read: false
+            }
+          ])
+          .select();
+          
+        if (notificationError) {
+          console.error('Error creating notification:', notificationError);
+        } else {
+          console.log('Notification created successfully:', notificationData);
+        }
+      } else {
+        console.log('No user account or creator found for person profile, skipping notification');
+      }
+      
+      // Reset form and refresh confessions
       setNewConfession('');
       setMedia([]);
       setShowNewConfessionModal(false);
-      // After posting, reload confessions for the selected person by name
-      if (selectedPerson?.id) { // Reload by ID
+      
+      // Refresh the confessions list
+      if (selectedPerson?.id) {
         loadPersonConfessions(selectedPerson.id);
       }
+      
+      // Show success message
+      Alert.alert('Success', 'Your confession has been posted!');
       
     } catch (error) {
       console.error('Error posting person confession:', error);
@@ -1065,39 +1148,53 @@ const ConfessionPersonScreen = () => {
 
   const deleteConfession = async (confessionId) => {
     try {
+      // First, get the confession to check for media that needs to be deleted
       const { data: confessionData, error: fetchError } = await supabase
-        .from('person_confessions') // From person_confessions
-        .select('media')
+        .from('person_confessions')
+        .select('id, media, creator_id')
         .eq('id', confessionId)
         .single();
-      
+
       if (fetchError) throw fetchError;
       
-      if (confessionData?.media && Array.isArray(confessionData.media)) {
+      // Check if the current user is the creator of the confession
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.id !== confessionData.creator_id) {
+        Alert.alert('Error', 'You can only delete your own confessions');
+        return;
+      }
+
+      // Delete media from Cloudinary if it exists
+      if (confessionData.media && Array.isArray(confessionData.media)) {
         for (const mediaItem of confessionData.media) {
           if (mediaItem.publicId) {
             try {
               await deleteFromCloudinary(mediaItem.publicId, 'image');
             } catch (mediaError) {
               console.error('Error deleting media from Cloudinary:', mediaError);
+              // Continue even if media deletion fails
             }
           }
         }
       }
       
-      const { error } = await supabase
-        .from('person_confessions') // Delete from person_confessions
+      // Delete the confession from the database
+      const { error: deleteError } = await supabase
+        .from('person_confessions')
         .delete()
         .eq('id', confessionId);
 
-      if (error) throw error;
+      if (deleteError) throw deleteError;
       
-      // Use person_id for reloading confessions after deletion
+      // Refresh the confessions list
       if (selectedPerson?.id) {
         loadPersonConfessions(selectedPerson.id);
       }
+      
+      Alert.alert('Success', 'Confession deleted successfully');
+      
     } catch (error) {
-      console.error('Error deleting person confession:', error);
+      console.error('Error deleting confession:', error);
       Alert.alert('Error', 'Failed to delete confession. Please try again.');
     }
   };
