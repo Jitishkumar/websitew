@@ -51,6 +51,7 @@ const ConfessionsHeader = React.memo(({
   searchError,
   loading, // Keep loading for the `noResultsContainer` conditional rendering
   userLocation,
+  getMapUrl,
 }) => {
   return (
     <View>
@@ -1495,6 +1496,7 @@ const ConfessionScreen = () => {
             searchError={searchError}
             loading={loading}
             userLocation={userLocation}
+            getMapUrl={getMapUrl}
           />
         }
         contentContainerStyle={styles.confessionsList}

@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  ScrollView, 
-  Image, 
-  FlatList, 
-  ActivityIndicator, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  Image,
+  FlatList,
+  ActivityIndicator,
   Dimensions,
-  RefreshControl 
+  RefreshControl
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -23,7 +23,7 @@ const { width } = Dimensions.get('window');
 const TrendingScreen = () => {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  
+
   // State management
   const [activeTab, setActiveTab] = useState('all');
   const [trendingPosts, setTrendingPosts] = useState([]);
@@ -46,7 +46,7 @@ const TrendingScreen = () => {
   const fetchTrendingContent = async () => {
     try {
       setLoading(true);
-      
+
       if (activeTab === 'topics') {
         await fetchTrendingTopics();
       } else {
@@ -64,51 +64,33 @@ const TrendingScreen = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      let query = supabase
-        .from('posts')
-        .select(`
-          id,
-          user_id,
-          caption,
-          media_url,
-          type,
-          created_at,
-          profiles:user_id(username, avatar_url)
-        `)
-        .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()) // Last 7 days
-        .order('created_at', { ascending: false });
+      // Fetch trending posts using the new RPC function
+      const { data: posts, error: postsError } = await supabase.rpc('get_trending_posts', {
+        p_limit: 8, // Show top 8 posts
+        p_days: 4    // From the last 4 days
+      });
 
-      // Filter by type if needed
-      if (activeTab === 'videos') {
-        query = query.eq('type', 'video');
+      if (postsError) {
+        console.error('Error fetching trending posts:', postsError);
+        throw postsError;
       }
 
-      const { data: posts, error: postsError } = await query.limit(50);
+      if (!posts || posts.length === 0) {
+        setTrendingPosts([]);
+        return;
+      }
 
-      if (postsError) throw postsError;
-
-      // Get likes count for each post in the last 3 days
       const postIds = posts.map(p => p.id);
-      const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
-      
-      const { data: likesData, error: likesError } = await supabase
-        .from('post_likes')
-        .select('post_id, user_id')
-        .in('post_id', postIds)
-        .gte('created_at', threeDaysAgo);
 
-      if (likesError) throw likesError;
-
-      // Get comments count for each post in the last 3 days
+      // Get comments count for each post
       const { data: commentsData, error: commentsError } = await supabase
         .from('post_comments')
         .select('post_id, user_id')
-        .in('post_id', postIds)
-        .gte('created_at', threeDaysAgo);
+        .in('post_id', postIds);
 
       if (commentsError) throw commentsError;
 
-      // Get user's likes
+      // Check which posts the current user has liked
       const { data: userLikes, error: userLikesError } = await supabase
         .from('post_likes')
         .select('post_id')
@@ -119,7 +101,6 @@ const TrendingScreen = () => {
 
       // Process and combine data
       const processedPosts = posts.map(post => {
-        const postLikes = likesData.filter(like => like.post_id === post.id);
         const postComments = commentsData.filter(comment => comment.post_id === post.id);
         const isLiked = userLikes.some(like => like.post_id === post.id);
 
@@ -127,27 +108,20 @@ const TrendingScreen = () => {
           ...post,
           username: post.profiles?.username || 'Unknown',
           avatar_url: post.profiles?.avatar_url,
-          likes_count: postLikes.length,
-          comments_count: postComments.length,
-          is_liked: isLiked
+          likes: post.like_count, // Use like_count from the RPC function
+          comments: postComments.length,
+          isLiked: isLiked,
         };
       });
 
-      // Filter posts with at least 1 like and sort by likes
-      const trendingPosts = processedPosts
-        .filter(post => post.likes_count > 0)
-        .sort((a, b) => {
-          if (b.likes_count === a.likes_count) {
-            return new Date(b.created_at) - new Date(a.created_at);
-          }
-          return b.likes_count - a.likes_count;
-        })
-        .slice(0, 20); // Top 20 trending posts
+      // Filter by active tab (videos or all)
+      const finalPosts = activeTab === 'videos'
+        ? processedPosts.filter(p => p.type === 'video')
+        : processedPosts;
 
-      setTrendingPosts(trendingPosts);
+      setTrendingPosts(finalPosts);
     } catch (error) {
       console.error('Error fetching trending posts:', error);
-      setTrendingPosts([]);
     }
   };
 
@@ -156,8 +130,18 @@ const TrendingScreen = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      // Get private account user IDs
+      const { data: privateUsers, error: privateError } = await supabase
+        .from('user_settings')
+        .select('user_id')
+        .eq('private_account', true);
+
+      if (privateError) throw privateError;
+
+      const privateUserIds = privateUsers?.map(u => u.user_id) || [];
+
       // Get posts from the last 7 days with captions
-      const { data: posts, error: postsError } = await supabase
+      let postsQuery = supabase
         .from('posts')
         .select(`
           id,
@@ -169,7 +153,19 @@ const TrendingScreen = () => {
         .not('caption', 'is', null)
         .neq('caption', '');
 
+      // Add filter for private accounts if there are any
+      if (privateUserIds.length > 0) {
+        postsQuery = postsQuery.not('user_id', 'in', `(${privateUserIds.join(',')})`);
+      }
+
+      const { data: posts, error: postsError } = await postsQuery;
+
       if (postsError) throw postsError;
+
+      if (!posts) {
+        setTrendingTopics([]);
+        return;
+      }
 
       const postIds = posts.map(p => p.id);
       const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
@@ -194,16 +190,16 @@ const TrendingScreen = () => {
 
       // Process topics
       const topicsMap = new Map();
-      
+
       posts.forEach(post => {
         const likesCount = likesData.filter(like => like.post_id === post.id).length;
         const commentsCount = commentsData.filter(comment => comment.post_id === post.id).length;
-        
+
         if (likesCount > 0) {
-          const caption = post.caption.length > 50 
-            ? post.caption.substring(0, 47) + '...' 
+          const caption = post.caption.length > 50
+            ? post.caption.substring(0, 47) + '...'
             : post.caption;
-          
+
           if (!topicsMap.has(caption)) {
             topicsMap.set(caption, {
               id: `topic_${post.id}`,
@@ -211,7 +207,7 @@ const TrendingScreen = () => {
               engagement_score: 0
             });
           }
-          
+
           const topic = topicsMap.get(caption);
           topic.engagement_score += likesCount + commentsCount;
         }
@@ -229,43 +225,150 @@ const TrendingScreen = () => {
     }
   };
 
+  // Privacy check function similar to SearchScreen
+  const handlePrivacyNavigation = async (userId) => {
+    try {
+      // Get the current user's ID
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.log('Privacy check: User not authenticated, navigating to Login');
+        navigation.navigate('Login');
+        return;
+      }
+
+      // Don't check privacy for own profile
+      if (user.id === userId) {
+        console.log('Privacy check: Viewing own profile, navigating to Profile');
+        navigation.navigate('Profile');
+        return;
+      }
+
+      console.log(`Privacy check: Checking if user ${userId} has a private account`);
+      // Use the RLS-bypassing function to check if the profile is private
+      const { data: settingsData, error: settingsError } = await supabase
+        .rpc('get_user_privacy', { target_user_id: userId })
+        .maybeSingle();
+
+      if (settingsError) {
+        console.log('Privacy check: Error fetching user settings:', settingsError);
+        throw settingsError;
+      }
+
+      console.log('Privacy check: User settings data:', settingsData);
+      // If no settings data is found, assume the account is not private
+      if (!settingsData) {
+        console.log('Privacy check: No user settings found, assuming account is not private');
+        console.log('Privacy check: Navigating to UserProfileScreen');
+        navigation.navigate('UserProfileScreen', { userId });
+        return;
+      }
+
+      const isPrivate = settingsData.private_account ?? false;
+      console.log(`Privacy check: Is account private? ${isPrivate}`);
+
+      // If account is private, check if the current user is an approved follower
+      if (isPrivate) {
+        console.log(`Privacy check: Account is private, checking if user ${user.id} follows ${userId}`);
+        const { data: followData, error: followError } = await supabase
+          .from('follows')
+          .select('*')
+          .eq('follower_id', user.id)
+          .eq('following_id', userId)
+          .maybeSingle();
+
+        if (followError) {
+          console.log('Privacy check: Error checking follow status:', followError);
+          throw followError;
+        }
+
+        console.log('Privacy check: Follow data:', followData);
+        // If the user is not an approved follower, navigate to PrivateProfile
+        if (!followData) {
+          console.log(`Privacy check: User ${user.id} is not following private account ${userId}, navigating to PrivateProfileScreen`);
+          navigation.navigate('PrivateProfileScreen', { userId });
+          return;
+        }
+        console.log(`Privacy check: User ${user.id} is following private account ${userId}, can view profile`);
+      }
+
+      // If account is not private or user is an approved follower, navigate to UserProfile
+      console.log(`Privacy check: Navigating to UserProfileScreen for user ${userId}`);
+      navigation.navigate('UserProfileScreen', { userId });
+    } catch (error) {
+      console.error('Error checking profile privacy:', error);
+      console.log(`Privacy check: Error occurred, defaulting to UserProfileScreen for user ${userId}`);
+      // Default to UserProfileScreen in case of error, consistent with our approach for missing data
+      navigation.navigate('UserProfileScreen', { userId });
+    }
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchTrendingContent();
+    await fetchTrendingPosts();
     setRefreshing(false);
   };
 
   const handleUsernamePress = (userId, username) => {
-    // Navigate to UserProfileScreen when username is clicked
-    navigation.navigate('UserProfileScreen', { 
-      userId,
-      username 
-    });
+    // Since we only show public accounts in trending, we can navigate directly
+    // But still use privacy check for consistency
+    handlePrivacyNavigation(userId);
   };
 
-  const handlePostPress = (post, index) => {
-    if (post.type === 'video') {
-      // Navigate to Shorts screen for videos
-      const videoData = trendingPosts.filter(p => p.type === 'video');
-      const videoIndex = videoData.findIndex(p => p.id === post.id);
-      navigation.navigate('Shorts', { 
-        posts: videoData,
-        initialIndex: videoIndex 
-      });
-    } else {
-      // Navigate to full screen post view for other posts
-      navigation.navigate('PostViewer', { 
-        post,
-        posts: trendingPosts.filter(p => p.type !== 'video'),
-        initialIndex: trendingPosts.findIndex(p => p.id === post.id)
-      });
+  const handlePostPress = async (post, index) => {
+    // Since we only show posts from public accounts in trending,
+    // we can navigate directly to view the post without additional privacy checks
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        navigation.navigate('Login');
+        return;
+      }
+
+      // Don't check privacy for own posts
+      if (user.id === post.user_id) {
+        if (post.type === 'video') {
+          const videoData = trendingPosts.filter(p => p.type === 'video');
+          const videoIndex = videoData.findIndex(p => p.id === post.id);
+          navigation.navigate('Shorts', {
+            posts: videoData,
+            initialIndex: videoIndex
+          });
+        } else {
+          navigation.navigate('PostViewer', {
+            post,
+            posts: trendingPosts.filter(p => p.type !== 'video'),
+            initialIndex: trendingPosts.findIndex(p => p.id === post.id)
+          });
+        }
+        return;
+      }
+
+      // Since all posts in trending are from public accounts, navigate directly
+      if (post.type === 'video') {
+        const videoData = trendingPosts.filter(p => p.type === 'video');
+        const videoIndex = videoData.findIndex(p => p.id === post.id);
+        navigation.navigate('Shorts', {
+          posts: videoData,
+          initialIndex: videoIndex
+        });
+      } else {
+        navigation.navigate('PostViewer', {
+          post,
+          posts: trendingPosts.filter(p => p.type !== 'video'),
+          initialIndex: trendingPosts.findIndex(p => p.id === post.id)
+        });
+      }
+    } catch (error) {
+      console.error('Error viewing post:', error);
+      // Fallback to profile navigation
+      handlePrivacyNavigation(post.user_id);
     }
   };
 
   const handleTopicPress = (topic) => {
-    navigation.navigate('TopicPosts', { 
+    navigation.navigate('TopicPosts', {
       topic: topic.topic_name,
-      topicId: topic.id 
+      topicId: topic.id
     });
   };
 
@@ -280,10 +383,10 @@ const TrendingScreen = () => {
           ]}
           onPress={() => setActiveTab(tab.id)}
         >
-          <Ionicons 
-            name={tab.icon} 
-            size={20} 
-            color={activeTab === tab.id ? '#fff' : '#999'} 
+          <Ionicons
+            name={tab.icon}
+            size={20}
+            color={activeTab === tab.id ? '#fff' : '#999'}
             style={styles.tabIcon}
           />
           <Text style={[
@@ -298,7 +401,7 @@ const TrendingScreen = () => {
   );
 
   const renderPostItem = ({ item, index }) => (
-    <TouchableOpacity 
+    <TouchableOpacity
       style={styles.postCard}
       onPress={() => handlePostPress(item, index)}
     >
@@ -321,27 +424,27 @@ const TrendingScreen = () => {
         ) : (
           <Image source={{ uri: item.media_url }} style={styles.postImage} />
         )}
-        
+
         <View style={styles.postInfo}>
           <View style={styles.userInfo}>
-            <Image 
-              source={{ 
+            <Image
+              source={{
                 uri: item.avatar_url || 'https://via.placeholder.com/40x40.png?text=User'
-              }} 
+              }}
               style={styles.userAvatar}
             />
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={() => handleUsernamePress(item.user_id, item.username)}
               style={styles.usernameContainer}
             >
               <Text style={styles.username}>@{item.username}</Text>
             </TouchableOpacity>
           </View>
-          
+
           <Text style={styles.postCaption} numberOfLines={2}>
             {item.caption}
           </Text>
-          
+
           <View style={styles.postStats}>
             <View style={styles.statItem}>
               <Ionicons name="heart" size={16} color="#ff00ff" />
@@ -364,7 +467,7 @@ const TrendingScreen = () => {
   );
 
   const renderTopicItem = ({ item, index }) => (
-    <TouchableOpacity 
+    <TouchableOpacity
       style={styles.topicCard}
       onPress={() => handleTopicPress(item)}
     >
@@ -437,10 +540,10 @@ const TrendingScreen = () => {
         }
         ListEmptyComponent={() => (
           <View style={styles.emptyContainer}>
-            <Ionicons 
-              name={activeTab === 'videos' ? 'videocam' : 'document-text'} 
-              size={60} 
-              color="#666" 
+            <Ionicons
+              name={activeTab === 'videos' ? 'videocam' : 'document-text'}
+              size={60}
+              color="#666"
             />
             <Text style={styles.emptyText}>
               No trending {activeTab === 'videos' ? 'videos' : 'posts'} found
@@ -467,16 +570,16 @@ const TrendingScreen = () => {
             <Text style={styles.betaText}>BETA</Text>
           </View>
         </View>
-        
+
         {/* Search Bar */}
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.searchContainer}
           onPress={() => navigation.navigate('Search')}
         >
           <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
           <Text style={styles.searchPlaceholder}>Search for posts, users or feeds</Text>
         </TouchableOpacity>
-        
+
         {/* Tab Buttons */}
         {renderTabButtons()}
       </LinearGradient>
@@ -639,6 +742,9 @@ const styles = StyleSheet.create({
     height: 30,
     borderRadius: 15,
     marginRight: 8,
+  },
+  usernameContainer: {
+    flex: 1,
   },
   username: {
     color: '#ff66ff',

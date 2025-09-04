@@ -87,7 +87,7 @@ const ReelsScreen = () => {
       console.error('Error getting current user:', error);
     }
   };
-// Replace the loadReels function in your ReelsScreen with this corrected version:
+// Load reels with public account filtering
 const loadReels = async (isInitialLoad = false) => {
   try {
     if (isInitialLoad) {
@@ -98,53 +98,56 @@ const loadReels = async (isInitialLoad = false) => {
     }
 
     const currentPage = isInitialLoad ? 0 : page;
-    const from = currentPage * REELS_PER_PAGE;
-    const to = from + REELS_PER_PAGE - 1;
+    const offset = currentPage * REELS_PER_PAGE;
 
+    // Use the new RPC function to get public reels in random order
+    const { data, error } = await supabase.rpc('get_public_reels', {
+      p_limit: REELS_PER_PAGE,
+      p_offset: offset
+    });
 
+    if (error) {
+      console.error('Error fetching public reels:', error);
+      throw error;
+    }
 
-
-
-    const { data, error } = await supabase
-    .from('posts')
-    .select(`
-      *,
-      profiles:user_id(*),
-      likes:post_likes(count),
-      comments:post_comments(count),
-      user_likes:post_likes!post_likes_post_id_fkey(user_id)
-    `)
-    .eq('type', 'video')
-    .order('created_at', { ascending: false })
-    .range(from, to);
-
-
-
-
-
-    if (error) throw error;
-
-    if (data) {
-      const processedReels = data.map(reel => ({
-        ...reel,
-        is_following: currentUser ? reel.profiles?.followers?.some(
-          follow => follow.follower_id === currentUser.id
-        ) || false : false,
-        is_liked: currentUser ? reel.user_likes?.some(
-          like => like.user_id === currentUser.id
-        ) || false : false,
-        is_own_post: currentUser ? reel.user_id === currentUser.id : false
-      }));
+    if (data && data.length > 0) {
+      // Process the reels data to include like and follow status
+      const processedReels = data.map(reel => {
+        const isLiked = currentUser ? 
+          reel.user_likes?.some(like => like.user_id === currentUser.id) || false : false;
+        const isFollowing = currentUser ? 
+          reel.profiles?.followers?.some(follow => follow.follower_id === currentUser.id) || false : false;
+        
+        return {
+          ...reel,
+          is_following: isFollowing,
+          is_liked: isLiked,
+          is_own_post: currentUser ? reel.user_id === currentUser.id : false,
+          likes: reel.likes || [{ count: 0 }],
+          comments: reel.comments || [{ count: 0 }],
+          profiles: reel.profiles || { id: reel.user_id, username: 'unknown', avatar_url: null }
+        };
+      });
 
       if (isInitialLoad) {
         setReels(processedReels);
         setPage(1);
       } else {
-        setReels(prevReels => [...prevReels, ...processedReels]);
+        setReels(prevReels => {
+          // Filter out any duplicates that might occur due to random ordering
+          const existingIds = new Set(prevReels.map(r => r.id));
+          const newReels = processedReels.filter(reel => !existingIds.has(reel.id));
+          return [...prevReels, ...newReels];
+        });
         setPage(currentPage + 1);
       }
 
       setHasMore(data.length === REELS_PER_PAGE);
+    } else if (isInitialLoad) {
+      // No reels found
+      setReels([]);
+      setHasMore(false);
     }
   } catch (error) {
     console.error('Error loading reels:', error);
