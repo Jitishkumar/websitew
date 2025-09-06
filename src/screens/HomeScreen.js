@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useVideo } from '../context/VideoContext';
+import { useNotifications } from '../context/NotificationContext';
 import { StyleSheet, View, Text, TouchableOpacity, TextInput, Image, Modal, ActivityIndicator, FlatList, RefreshControl, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFonts, Poppins_700Bold } from '@expo-google-fonts/poppins';
@@ -14,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 const HomeScreen = () => {
   const navigation = useNavigation();
+  const { unreadCount: notificationUnreadCount } = useNotifications();
   const [stories, setStories] = useState([]);
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -257,7 +259,28 @@ const HomeScreen = () => {
       >
         <Text style={styles.logo}>Flexx</Text>
         <View style={styles.headerIcons}>
-
+          <TouchableOpacity 
+            style={styles.iconButton}
+            onPress={() => navigation.navigate('Notifications')}
+          >
+            <LinearGradient
+              colors={['#ff6600', '#ff3300']}
+              style={styles.iconBackground}
+            >
+              <Ionicons name="notifications-outline" size={22} color="#fff" />
+              {notificationUnreadCount > 0 && (
+                <View style={[styles.notificationBadge, {
+                  width: notificationUnreadCount > 99 ? 20 : notificationUnreadCount > 9 ? 18 : 16,
+                }]}>
+                  <Text style={[styles.notificationBadgeText, {
+                    fontSize: notificationUnreadCount > 99 ? 8 : 10,
+                  }]}>
+                    {notificationUnreadCount > 99 ? '99+' : notificationUnreadCount}
+                  </Text>
+                </View>
+              )}
+            </LinearGradient>
+          </TouchableOpacity>
         
           <TouchableOpacity 
             style={styles.iconButton}
@@ -298,7 +321,6 @@ const HomeScreen = () => {
             >
               <Ionicons name="videocam-outline" size={22} color="#fff" />
             </LinearGradient>
-            <View style={styles.notificationBadge} />
           </TouchableOpacity>
         </View>
       </LinearGradient>
@@ -602,14 +624,15 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(255, 0, 255, 0.5)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 8,
+    marginRight: 20,
   },
   headerIcons: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 8,
   },
   iconButton: {
-    padding: 6,
+    padding: 4,
   },
   iconBackground: {
     width: 36,
@@ -625,14 +648,19 @@ const styles = StyleSheet.create({
   },
   notificationBadge: {
     position: 'absolute',
-    top: 6,
-    right: 6,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    top: -3,
+    right: -6,
     backgroundColor: '#ff00ff',
+    borderRadius: 10,
+    height: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: '#fff',
+  },
+  notificationBadgeText: {
+    color: 'white',
+    fontWeight: 'bold',
   },
   createPost: {
     margin: 15,

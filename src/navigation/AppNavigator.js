@@ -125,34 +125,11 @@ const TabNavigator = () => {
       }}
     />
     <Tab.Screen 
-      name="Notifications" 
-      component={NotificationsScreen}
+      name="ConfessionButton" 
+      component={ConfessionButtonScreen}
       options={{
         tabBarIcon: ({ color }) => (
-          <View>
-            <Ionicons name="notifications-outline" size={24} color={color} />
-            {notificationUnreadCount > 0 && (
-              <View style={{
-                position: 'absolute',
-                right: -6,
-                top: -3,
-                backgroundColor: '#ff00ff',
-                borderRadius: 10,
-                width: notificationUnreadCount > 99 ? 20 : notificationUnreadCount > 9 ? 18 : 16,
-                height: 16,
-                justifyContent: 'center',
-                alignItems: 'center',
-              }}>
-                <Text style={{
-                  color: 'white',
-                  fontSize: notificationUnreadCount > 99 ? 8 : 10,
-                  fontWeight: 'bold',
-                }}>
-                  {notificationUnreadCount > 99 ? '99+' : notificationUnreadCount}
-                </Text>
-              </View>
-            )}
-          </View>
+          <Ionicons name="heart-outline" size={24} color={color} />
         ),
       }}
     />
@@ -197,6 +174,7 @@ const AppNavigator = () => {
       <Stack.Screen name="AddAccount" component={AddAccountScreen} options={{ headerShown: false }} />
       <Stack.Screen name="CreatePost" component={CreatePostScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Trending" component={TrendingScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Comment" component={CommentScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Settings" component={SettingsScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Posts" component={PostsScreen} options={{ headerShown: false }} />

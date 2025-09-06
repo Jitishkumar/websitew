@@ -153,7 +153,11 @@ const ShortsScreen = ({ route }) => {
           }).start(() => setShowPauseIcon(false));
         }, 800);
         
-        currentVideoRef.pauseAsync();
+        try {
+          currentVideoRef.pauseAsync();
+        } catch (error) {
+          console.warn('Error pausing video in ShortsScreen:', error);
+        }
       }
     }
   };
@@ -172,7 +176,11 @@ const ShortsScreen = ({ route }) => {
         setIsPlaying(false);
         const currentVideoRef = videoRefs.current[currentIndex];
         if (currentVideoRef) {
-          currentVideoRef.pauseAsync();
+          try {
+            currentVideoRef.pauseAsync();
+          } catch (error) {
+            console.warn('Error pausing video on touch hold in ShortsScreen:', error);
+          }
         }
       }
     }, 300);

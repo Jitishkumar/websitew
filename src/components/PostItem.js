@@ -14,7 +14,8 @@ import {
   ScrollView,
   Linking,
   TextInput,
-  Animated
+  Animated,
+  Vibration
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Video } from 'expo-av';
@@ -67,9 +68,22 @@ const PostItem = ({ post, onOptionsPress }) => {
   const videoRef = useRef(null);
   const controlsTimeout = useRef(null);
   const pauseIconTimeout = useRef(null);
+  const likeTimeout = useRef(null);
+  const [isLiking, setIsLiking] = useState(false);
   
   // Get video context
   const { activeVideoId, setActiveVideo, clearActiveVideo, isFullscreenMode, setFullscreen: setContextFullscreen } = useVideo();
+
+  // Helper function to safely pause video
+  const safePauseVideo = async () => {
+    if (videoRef.current) {
+      try {
+        await videoRef.current.pauseAsync();
+      } catch (error) {
+        console.warn('Error pausing video:', error);
+      }
+    }
+  };
 
   const handleProfilePress = () => {
     navigation.navigate('UserProfileScreen', { userId: post?.user_id || post?.user?.id });
@@ -80,9 +94,7 @@ const PostItem = ({ post, onOptionsPress }) => {
     if (lastTap && (now - lastTap) < 300) {
       // Double tap - go to shorts screen for vertical scrolling
       // Pause the feed video first to prevent double audio
-      if (videoRef.current) {
-        videoRef.current.pauseAsync();
-      }
+      safePauseVideo();
       setPlaying(false);
       clearActiveVideo();
       
@@ -194,9 +206,23 @@ const PostItem = ({ post, onOptionsPress }) => {
 
   const onPlaybackStatusUpdate = (status) => {
     if (status.isLoaded) {
-      setProgress(status.positionMillis / status.durationMillis);
-      setCurrentTime(status.positionMillis);
+      // Only update progress if not currently seeking
+      if (!seeking) {
+        setProgress(status.positionMillis / status.durationMillis);
+        setCurrentTime(status.positionMillis);
+      }
       setDuration(status.durationMillis);
+      
+      // When video finishes, replay it instead of stopping
+      if (status.didJustFinish) {
+        if (videoRef.current) {
+          try {
+            videoRef.current.replayAsync();
+          } catch (error) {
+            console.warn('Error replaying video:', error);
+          }
+        }
+      }
     }
   };
   
@@ -215,38 +241,48 @@ const PostItem = ({ post, onOptionsPress }) => {
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: (evt) => {
         setSeeking(true);
+        // Add haptic feedback
+        Vibration.vibrate(50);
         // Pause video while seeking
         if (videoRef.current && playing) {
-          videoRef.current.pauseAsync();
+          try {
+            videoRef.current.pauseAsync();
+          } catch (error) {
+            console.warn('Error pausing video for seeking:', error);
+          }
         }
       },
       onPanResponderMove: (evt, gestureState) => {
-        // Calculate new progress based on touch position
+        // Calculate new progress based on touch position relative to seekbar
         const seekbarWidth = width - 40; // Adjust for padding
-        const newProgress = Math.max(0, Math.min(1, gestureState.moveX / seekbarWidth));
+        const touchX = evt.nativeEvent.locationX;
+        const newProgress = Math.max(0, Math.min(1, touchX / seekbarWidth));
         setProgress(newProgress);
-        // Update video position while dragging
-        if (videoRef.current && duration > 0) {
+        
+        // Update current time display while dragging (but don't seek yet)
+        if (duration > 0) {
           const newPosition = newProgress * duration;
-          videoRef.current.setPositionAsync(newPosition);
           setCurrentTime(newPosition);
         }
       },
       onPanResponderRelease: async (evt, gestureState) => {
         // Calculate final progress and seek to that position
         const seekbarWidth = width - 40; // Adjust for padding
-        const newProgress = Math.max(0, Math.min(1, gestureState.moveX / seekbarWidth));
+        const touchX = evt.nativeEvent.locationX;
+        const newProgress = Math.max(0, Math.min(1, touchX / seekbarWidth));
         
-        // Keep seeking true until the operation completes
+        // Seek to the new position
         await handleSeek(newProgress);
         
-        // Resume playback from the new position
-        if (videoRef.current) {
-          setPlaying(true);
-          await videoRef.current.playAsync();
+        // Resume playback from the new position if it was playing before
+        if (videoRef.current && playing) {
+          try {
+            await videoRef.current.playAsync();
+          } catch (error) {
+            console.warn('Error resuming video after seeking:', error);
+          }
         }
         
-        // Only set seeking to false after all operations complete
         setSeeking(false);
       },
     })
@@ -255,10 +291,14 @@ const PostItem = ({ post, onOptionsPress }) => {
   // Handle seeking
   const handleSeek = async (value) => {
     if (videoRef.current && duration > 0) {
-      const newPosition = value * duration;
-      await videoRef.current.setPositionAsync(newPosition);
-      setCurrentTime(newPosition);
-      setProgress(value);
+      try {
+        const newPosition = value * duration;
+        await videoRef.current.setPositionAsync(newPosition);
+        setCurrentTime(newPosition);
+        setProgress(value);
+      } catch (error) {
+        console.warn('Error seeking video:', error);
+      }
     }
   };
   
@@ -282,9 +322,7 @@ const PostItem = ({ post, onOptionsPress }) => {
     if (activeVideoId && activeVideoId !== post.id && playing) {
       // If another video is now active and this one is playing, pause this one
       setPlaying(false);
-      if (videoRef.current) {
-        videoRef.current.pauseAsync();
-      }
+      safePauseVideo();
     }
   }, [activeVideoId, post.id, playing]);
   
@@ -301,11 +339,7 @@ const PostItem = ({ post, onOptionsPress }) => {
             console.error('Error playing video:', error);
           }
         } else {
-          try {
-            await videoRef.current.pauseAsync();
-          } catch (error) {
-            console.error('Error pausing video:', error);
-          }
+          await safePauseVideo();
           if (isMounted) setPlaying(false);
         }
       }
@@ -313,9 +347,7 @@ const PostItem = ({ post, onOptionsPress }) => {
     handleVideoStateChange();
     return () => {
       isMounted = false;
-      if (videoRef.current) {
-        videoRef.current.pauseAsync();
-      }
+      safePauseVideo();
     };
   }, [post.id, activeVideoId, isFullscreenMode]);
   
@@ -324,9 +356,7 @@ const PostItem = ({ post, onOptionsPress }) => {
     if (isFullscreenMode && !fullscreen && playing) {
       // If we're in fullscreen mode but this video isn't the fullscreen one and it's playing, pause it
       setPlaying(false);
-      if (videoRef.current) {
-        videoRef.current.pauseAsync();
-      }
+      safePauseVideo();
     }
   }, [isFullscreenMode, fullscreen, playing]);
   
@@ -350,6 +380,10 @@ const PostItem = ({ post, onOptionsPress }) => {
       if (videoRef.current) {
         videoRef.current.pauseAsync();
       }
+      // Clean up like timeout
+      if (likeTimeout.current) {
+        clearTimeout(likeTimeout.current);
+      }
     };
   }, [fullscreen]);
 
@@ -370,13 +404,31 @@ const PostItem = ({ post, onOptionsPress }) => {
   }, []);
 
   const handleLike = async () => {
+    // Prevent rapid clicking
+    if (isLiking) return;
+    
+    // Clear any existing timeout
+    if (likeTimeout.current) {
+      clearTimeout(likeTimeout.current);
+    }
+    
+    setIsLiking(true);
+    
     try {
       const { isLiked: liked, likesCount: newCount } = await PostsService.toggleLike(post.id);
       setIsLiked(liked);
       setLikesCount(newCount);
     } catch (error) {
       console.error('Error toggling like:', error);
-      Alert.alert('Error', 'Failed to update like');
+      // Don't show alert for duplicate key errors as they're handled gracefully
+      if (error.code !== '23505') {
+        Alert.alert('Error', 'Failed to update like');
+      }
+    } finally {
+      // Add a small delay before allowing another like action
+      likeTimeout.current = setTimeout(() => {
+        setIsLiking(false);
+      }, 500);
     }
   };
 
@@ -594,9 +646,22 @@ const PostItem = ({ post, onOptionsPress }) => {
                       <View style={styles.seekbarContainer}>
                         <View style={styles.progressBackground} />
                         <View style={[styles.progressBar, { width: `${progress * 100}%` }]} />
-                        <View {...panResponder.panHandlers} style={styles.seekbarTouchable}>
-                          <View style={[styles.seekKnob, { left: `${progress * 100}%` }]} />
-                        </View>
+                        <TouchableWithoutFeedback
+                          onPress={(evt) => {
+                            if (!seeking && duration > 0) {
+                              const seekbarWidth = width - 40;
+                              const touchX = evt.nativeEvent.locationX;
+                              const newProgress = Math.max(0, Math.min(1, touchX / seekbarWidth));
+                              handleSeek(newProgress);
+                            }
+                          }}
+                        >
+                          <View style={styles.seekbarTouchArea}>
+                            <View {...panResponder.panHandlers} style={styles.seekbarTouchable}>
+                              <View style={[styles.seekKnob, { left: `${progress * 100}%` }]} />
+                            </View>
+                          </View>
+                        </TouchableWithoutFeedback>
                       </View>
                     </LinearGradient>
                   )}
@@ -632,9 +697,17 @@ const PostItem = ({ post, onOptionsPress }) => {
 
         {/* Post Actions */}
         <LinearGradient colors={['rgba(26, 26, 58, 0.8)', 'rgba(13, 13, 42, 0.9)']} style={styles.actions}>
-          <TouchableOpacity style={styles.actionButton} onPress={handleLike}>
+          <TouchableOpacity 
+            style={[styles.actionButton, isLiking && styles.disabledButton]} 
+            onPress={handleLike}
+            disabled={isLiking}
+          >
             <LinearGradient colors={isLiked ? ['#ff00ff', '#9900ff'] : ['transparent', 'transparent']} style={isLiked ? styles.likedIconBackground : {}}>
-              <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={26} color={isLiked ? '#fff' : '#e0e0ff'} />
+              {isLiking ? (
+                <ActivityIndicator size="small" color={isLiked ? '#fff' : '#e0e0ff'} />
+              ) : (
+                <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={26} color={isLiked ? '#fff' : '#e0e0ff'} />
+              )}
             </LinearGradient>
             <Text style={[styles.actionText, isLiked && styles.likedText]}>
               {likesCount}
@@ -800,9 +873,22 @@ const PostItem = ({ post, onOptionsPress }) => {
                       <View style={styles.fullscreenSeekbarContainer}>
                         <View style={styles.fullscreenProgressBackground} />
                         <View style={[styles.fullscreenProgressBar, { width: `${progress * 100}%` }]} />
-                        <View {...panResponder.panHandlers} style={styles.seekbarTouchable}>
-                          <View style={[styles.fullscreenSeekKnob, { left: `${progress * 100}%` }]} />
-                        </View>
+                        <TouchableWithoutFeedback
+                          onPress={(evt) => {
+                            if (!seeking && duration > 0) {
+                              const seekbarWidth = width - 40;
+                              const touchX = evt.nativeEvent.locationX;
+                              const newProgress = Math.max(0, Math.min(1, touchX / seekbarWidth));
+                              handleSeek(newProgress);
+                            }
+                          }}
+                        >
+                          <View style={styles.fullscreenSeekbarTouchArea}>
+                            <View {...panResponder.panHandlers} style={styles.fullscreenSeekbarTouchable}>
+                              <View style={[styles.fullscreenSeekKnob, { left: `${progress * 100}%` }]} />
+                            </View>
+                          </View>
+                        </TouchableWithoutFeedback>
                       </View>
                       
                       {/* Playback controls */}
@@ -941,6 +1027,9 @@ const styles = StyleSheet.create({
   },
   likedText: {
     color: '#ff00ff',
+  },
+  disabledButton: {
+    opacity: 0.6,
   },
   actionButtons: {
     flexDirection: 'row',

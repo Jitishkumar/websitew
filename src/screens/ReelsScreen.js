@@ -213,7 +213,11 @@ const loadReels = async (isInitialLoad = false) => {
           }).start(() => setShowPauseIcon(false));
         }, 800);
         
-        currentVideoRef.pauseAsync();
+        try {
+          currentVideoRef.pauseAsync();
+        } catch (error) {
+          console.warn('Error pausing video in ReelsScreen:', error);
+        }
       }
     }
   };
@@ -230,7 +234,11 @@ const loadReels = async (isInitialLoad = false) => {
         setIsPlaying(false);
         const currentVideoRef = videoRefs.current[currentIndex];
         if (currentVideoRef) {
+          try {
           currentVideoRef.pauseAsync();
+        } catch (error) {
+          console.warn('Error pausing video in ReelsScreen:', error);
+        }
         }
       }
     }, 300);

@@ -248,53 +248,95 @@ export class PostsService {
       if (!user) throw new Error('User not authenticated');
       
       // Check if user already liked the post
-      const { data: existingLike } = await supabase
+      const { data: existingLike, error: checkError } = await supabase
         .from('post_likes')
         .select()
         .eq('post_id', postId)
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
+      
+      if (checkError) {
+        console.error('Error checking existing like:', checkError);
+        throw checkError;
+      }
       
       if (existingLike) {
         // Unlike
-        const { error } = await supabase
+        const { error: deleteError } = await supabase
           .from('post_likes')
           .delete()
           .eq('post_id', postId)
           .eq('user_id', user.id);
           
-        if (error) throw error;
+        if (deleteError) {
+          console.error('Error deleting like:', deleteError);
+          throw deleteError;
+        }
         
         // Get updated like count
-        const { data: updatedLikes } = await supabase
+        const { data: updatedLikes, error: countError } = await supabase
           .from('post_likes')
           .select('count')
           .eq('post_id', postId);
+          
+        if (countError) {
+          console.error('Error getting updated like count:', countError);
+        }
           
         return {
           isLiked: false,
-          likesCount: updatedLikes?.[0]?.count || 0
+          likesCount: updatedLikes?.length || 0
         };
       } else {
-        // Like
-        const { error } = await supabase
+        // Like - use upsert to handle potential race conditions
+        const { error: insertError } = await supabase
           .from('post_likes')
-          .insert({
+          .upsert({
             post_id: postId,
             user_id: user.id
+          }, { 
+            onConflict: 'post_id,user_id',
+            ignoreDuplicates: true 
           });
           
-        if (error) throw error;
+        if (insertError) {
+          // If it's a duplicate key error, check if the like was actually added
+          if (insertError.code === '23505') {
+            console.warn('Duplicate like detected, checking current state...');
+            // Check if the like actually exists now
+            const { data: checkLike } = await supabase
+              .from('post_likes')
+              .select()
+              .eq('post_id', postId)
+              .eq('user_id', user.id)
+              .maybeSingle();
+              
+            if (checkLike) {
+              // Like was actually added, continue with getting count
+              console.log('Like was added despite duplicate error');
+            } else {
+              console.error('Like was not added due to duplicate error:', insertError);
+              throw insertError;
+            }
+          } else {
+            console.error('Error inserting like:', insertError);
+            throw insertError;
+          }
+        }
         
         // Get updated like count
-        const { data: updatedLikes } = await supabase
+        const { data: updatedLikes, error: countError } = await supabase
           .from('post_likes')
           .select('count')
           .eq('post_id', postId);
           
+        if (countError) {
+          console.error('Error getting updated like count:', countError);
+        }
+          
         return {
           isLiked: true,
-          likesCount: updatedLikes?.[0]?.count || 0
+          likesCount: updatedLikes?.length || 0
         };
       }
       
