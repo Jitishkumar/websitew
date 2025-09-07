@@ -438,8 +438,8 @@ const ConfessionPersonScreen = () => {
       
       if (personsError) throw personsError;
       
-      // Filter out current user
-      const filteredData = currentUser ? personsData.filter(user => user.id !== currentUser.id) : personsData;
+      // Don't filter out current user - allow users to confess about themselves
+      const filteredData = personsData;
       
       // Check for blocked status and verification
       const usersWithStatus = await Promise.all(filteredData.map(async (user) => {
@@ -1432,6 +1432,11 @@ const ConfessionPersonScreen = () => {
                   media_url: item.media && item.media.length > 0 ? item.media[0].url : null,
                   caption: item.content || '',
                   from: 'ConfessionPerson',
+                  author: {
+                    user_id: item.person?.id || 'unknown',
+                    username: item.person?.name || 'Unknown Person',
+                    avatar_url: item.person?.profile_image || null,
+                  },
                 };
                 const parentNav = navigation.getParent?.();
                 if (parentNav) {

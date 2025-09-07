@@ -9,7 +9,7 @@ create table public.messages (
   created_at timestamp with time zone null default now(),
   read boolean null default false,
   updated_at timestamp with time zone null default now(),
-  cloudinary_public_id text null,
+  metadata jsonb null,
   constraint messages_pkey primary key (id)
 ) TABLESPACE pg_default;
 
@@ -33,8 +33,6 @@ execute FUNCTION set_updated_at ();
 create trigger update_last_active_on_message_send
 after INSERT on messages for EACH row
 execute FUNCTION update_last_active ();
-
-
 
 
 

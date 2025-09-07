@@ -913,45 +913,159 @@ const MessageScreen = () => {
                   // Extract username and content for shared text posts
                   const usernameMatch = item.text.match(/@(\w+):/);
                   const username = usernameMatch ? usernameMatch[1] : 'Unknown User';
-                  const content = item.text.split(':\n\n')[1] || item.text;
                   
-                  // Create a mock post object that PhotoTextViewerScreen expects
-                  const mockPost = {
-                    id: `shared-${Date.now()}`,
-                    caption: content,
-                    user_id: 'shared',
-                    profiles: {
-                      username: username,
-                      avatar_url: null
-                    },
-                    media_url: null,
-                    type: 'text',
-                    isSharedPost: true
-                  };
+                  // Extract post ID and source from the message
+                  const postIdMatch = item.text.match(/\[PostID:([^\]]+)\]/);
+                  const fromMatch = item.text.match(/\[From:([^\]]+)\]/);
+                  const postId = postIdMatch ? postIdMatch[1] : null;
+                  const fromSource = fromMatch ? fromMatch[1] : null;
                   
-                  navigation.navigate('PhotoTextViewer', {
-                    posts: [mockPost],
-                    initialIndex: 0
-                  });
+                  // Navigate based on the source and post ID
+                  if (postId && fromSource) {
+                    if (fromSource === 'Confession') {
+                      // Navigate to Confession screen with specific post ID
+                      navigation.navigate('Confession', { highlightPostId: postId });
+                    } else if (fromSource === 'ConfessionPerson') {
+                      // Navigate to ConfessionPerson screen with specific post ID
+                      navigation.navigate('ConfessionPerson', { highlightPostId: postId });
+                    } else {
+                      // For regular posts, navigate to PhotoTextViewer
+                      const content = item.text.split(':\n\n')[1]?.split('\n\n[PostID:')[0] || item.text;
+                      const mockPost = {
+                        id: postId,
+                        caption: content,
+                        user_id: 'shared',
+                        profiles: {
+                          username: username,
+                          avatar_url: null
+                        },
+                        media_url: null,
+                        type: 'text',
+                        isSharedPost: true
+                      };
+                      
+                      navigation.navigate('PhotoTextViewer', {
+                        posts: [mockPost],
+                        initialIndex: 0
+                      });
+                    }
+                  } else {
+                    // Fallback for older shared messages without post ID
+                    if (username === 'Anonymous') {
+                      navigation.navigate('Confession');
+                    } else if (username !== 'Unknown User') {
+                      navigation.navigate('ConfessionPerson');
+                    }
+                  }
                 }
               }}
               delayLongPress={500}
               style={[
                 styles.textMessageContainer,
-                item.text.startsWith('📝 Shared post from') && styles.sharedTextContainer
+                item.text.startsWith('📝 Shared post from') && styles.sharedConfessionContainer
               ]}
             >
-              <Text style={[
-                styles.messageText,
-                item.text.startsWith('📝 Shared post from') && styles.sharedTextMessage
-              ]}>
-                {item.text}
-              </Text>
-              {item.text.startsWith('📝 Shared post from') && (
-                <View style={styles.sharedTextIndicator}>
-                  <Ionicons name="open-outline" size={16} color="rgba(255,255,255,0.7)" />
-                  <Text style={styles.tapToViewText}>Tap to view</Text>
-                </View>
+              {item.text.startsWith('📝 Shared post from') ? (
+                // Check if this is a confession or regular post
+                (() => {
+                  const fromMatch = item.text.match(/\[From:([^\]]+)\]/);
+                  const fromSource = fromMatch ? fromMatch[1] : null;
+                  const isConfession = fromSource === 'Confession' || fromSource === 'ConfessionPerson' || item.text.includes('@Anonymous');
+                  
+                  if (isConfession) {
+                    // Render confession card preview
+                    return (
+                      <View style={styles.confessionCardPreview}>
+                        <LinearGradient
+                          colors={['#1a1a2e', '#16213e', '#0f3460']}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                          style={styles.confessionCardGradient}
+                        >
+                          {/* Header with user info */}
+                          <View style={styles.confessionCardHeader}>
+                            <View style={styles.confessionUserInfo}>
+                              <View style={styles.confessionAvatar}>
+                                <Text style={styles.confessionAvatarText}>
+                                  {item.text.includes('@Anonymous') ? '🎭' : '👤'}
+                                </Text>
+                              </View>
+                              <Text style={styles.confessionUsername}>
+                                {item.text.match(/@(\w+):/)?.[1] || 'Anonymous'}
+                              </Text>
+                            </View>
+                            <View style={styles.confessionBadge}>
+                              <Text style={styles.confessionBadgeText}>Confession</Text>
+                            </View>
+                          </View>
+                          
+                          {/* Confession content */}
+                          <View style={styles.confessionContent}>
+                            <Text style={styles.confessionText} numberOfLines={4}>
+                              {item.text.split(':\n\n')[1]?.split('\n\n[PostID:')[0] || item.text}
+                            </Text>
+                          </View>
+                          
+                          {/* Footer */}
+                          <View style={styles.confessionCardFooter}>
+                            <View style={styles.tapToViewIndicator}>
+                              <Ionicons name="open-outline" size={14} color="rgba(255,255,255,0.6)" />
+                              <Text style={styles.tapToViewText}>Tap to view full confession</Text>
+                            </View>
+                          </View>
+                        </LinearGradient>
+                      </View>
+                    );
+                  } else {
+                    // Render regular post preview
+                    const username = item.text.match(/@(\w+):/)?.[1] || 'Unknown User';
+                    const content = item.text.split(':\n\n')[1]?.split('\n\n[PostID:')[0] || item.text;
+                    
+                    return (
+                      <View style={styles.sharedPostPreview}>
+                        <LinearGradient
+                          colors={['#2a2a2a', '#1a1a1a']}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                          style={styles.sharedPostGradient}
+                        >
+                          {/* Header with user info */}
+                          <View style={styles.sharedPostHeader}>
+                            <View style={styles.sharedPostUserInfo}>
+                              <View style={styles.sharedPostAvatar}>
+                                <Text style={styles.sharedPostAvatarText}>📝</Text>
+                              </View>
+                              <Text style={styles.sharedPostUsername}>@{username}</Text>
+                            </View>
+                            <View style={styles.sharedPostBadge}>
+                              <Text style={styles.sharedPostBadgeText}>Post</Text>
+                            </View>
+                          </View>
+                          
+                          {/* Post content */}
+                          <View style={styles.sharedPostContent}>
+                            <Text style={styles.sharedPostText} numberOfLines={3}>
+                              {content}
+                            </Text>
+                          </View>
+                          
+                          {/* Footer */}
+                          <View style={styles.sharedPostFooter}>
+                            <View style={styles.tapToViewIndicator}>
+                              <Ionicons name="open-outline" size={14} color="rgba(255,255,255,0.6)" />
+                              <Text style={styles.tapToViewText}>Tap to view post</Text>
+                            </View>
+                          </View>
+                        </LinearGradient>
+                      </View>
+                    );
+                  }
+                })()
+              ) : (
+                // Regular text message
+                <Text style={styles.messageText}>
+                  {item.text}
+                </Text>
               )}
             </TouchableOpacity>
           ) : null}
@@ -959,7 +1073,31 @@ const MessageScreen = () => {
           {item.media_url ? (
             <TouchableOpacity
               onLongPress={() => onLongPress(item)}
-              onPress={() => onMediaPress(item.media_url, item.media_type)}
+              onPress={() => {
+                if (item.media_type === 'video') {
+                  // Create a mock post object for ShortsScreen
+                  const mockPost = {
+                    id: `shared-video-${Date.now()}`,
+                    media_url: item.media_url,
+                    type: 'video',
+                    caption: item.text || '',
+                    user_id: item.sender_id,
+                    profiles: {
+                      username: recipientName,
+                      avatar_url: recipientAvatar
+                    }
+                  };
+                  
+                  // Navigate to ShortsScreen with posts array
+                  navigation.navigate('Shorts', { 
+                    posts: [mockPost],
+                    initialIndex: 0
+                  });
+                } else {
+                  // Use existing media press handler for images
+                  onMediaPress(item.media_url, item.media_type);
+                }
+              }}
               delayLongPress={500}
               style={styles.mediaContainer}
             >
@@ -970,9 +1108,14 @@ const MessageScreen = () => {
                     style={styles.messageImage}
                     resizeMode="cover"
                     shouldPlay={false}
-                    isMuted={true}
-                    usePoster={true}
-                    posterSource={{ uri: item.media_url }}
+                    isLooping={false}
+                    useNativeControls={false}
+                    rate={1.0}
+                    onLoadStart={() => {}}
+                    onLoad={() => {}}
+                    onError={() => {
+                      console.log('Video thumbnail failed to load');
+                    }}
                   />
                   <View style={styles.playOverlay}>
                     <Ionicons name="play-circle" size={40} color="#fff" />
@@ -1633,6 +1776,158 @@ const styles = StyleSheet.create({
     color: '#999',
     fontSize: 14,
     marginTop: 10,
+  },
+  sharedConfessionContainer: {
+    marginVertical: 4,
+  },
+  confessionCardPreview: {
+    width: '100%',
+    minHeight: 120,
+    borderRadius: 12,
+    overflow: 'hidden',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  confessionCardGradient: {
+    flex: 1,
+    padding: 12,
+    justifyContent: 'space-between',
+  },
+  confessionCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  confessionUserInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  confessionAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  confessionAvatarText: {
+    fontSize: 12,
+  },
+  confessionUsername: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  confessionBadge: {
+    backgroundColor: 'rgba(255,0,255,0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,0,255,0.3)',
+  },
+  confessionBadgeText: {
+    color: '#ff00ff',
+    fontSize: 10,
+    fontWeight: '500',
+  },
+  confessionContent: {
+    flex: 1,
+    justifyContent: 'center',
+    marginVertical: 8,
+  },
+  confessionText: {
+    color: '#fff',
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: 'center',
+  },
+  confessionCardFooter: {
+    alignItems: 'center',
+  },
+  tapToViewIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  tapToViewText: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 10,
+    marginLeft: 4,
+  },
+  sharedPostPreview: {
+    width: '100%',
+    minHeight: 100,
+    borderRadius: 12,
+    overflow: 'hidden',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+  },
+  sharedPostGradient: {
+    flex: 1,
+    padding: 12,
+    justifyContent: 'space-between',
+  },
+  sharedPostHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  sharedPostUserInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  sharedPostAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  sharedPostAvatarText: {
+    fontSize: 12,
+  },
+  sharedPostUsername: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  sharedPostBadge: {
+    backgroundColor: 'rgba(0,150,255,0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(0,150,255,0.3)',
+  },
+  sharedPostBadgeText: {
+    color: '#0096ff',
+    fontSize: 10,
+    fontWeight: '500',
+  },
+  sharedPostContent: {
+    flex: 1,
+    justifyContent: 'center',
+    marginVertical: 8,
+  },
+  sharedPostText: {
+    color: '#fff',
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: 'left',
+  },
+  sharedPostFooter: {
+    alignItems: 'center',
   },
   sharedTextContainer: {
     borderWidth: 1,

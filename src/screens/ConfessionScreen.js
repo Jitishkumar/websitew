@@ -1405,6 +1405,11 @@ const ConfessionScreen = () => {
                   media_url: item.media && item.media.length > 0 ? item.media[0].url : null,
                   caption: item.content || '',
                   from: 'Confession',
+                  author: {
+                    user_id: 'anonymous',
+                    username: 'Anonymous',
+                    avatar_url: null,
+                  },
                 };
                 const parentNav = navigation.getParent?.();
                 if (parentNav) {
