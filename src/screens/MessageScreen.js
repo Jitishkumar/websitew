@@ -888,7 +888,7 @@ const MessageScreen = () => {
         item.sender === 'me' ? styles.myMessage : styles.theirMessage,
       ]}>
         <LinearGradient
-          colors={item.sender === 'me' ? ['#ff00ff', '#9900ff'] : ['#333', '#222']}
+          colors={item.sender === 'me' ? ['#333', '#222'] : ['#ff00ff', '#9900ff']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.messageBubbleGradient}
@@ -907,10 +907,52 @@ const MessageScreen = () => {
           {item.text ? (
             <TouchableOpacity
               onLongPress={() => onLongPress(item)}
+              onPress={() => {
+                // Check if this is a shared post (starts with 📝 Shared post from)
+                if (item.text.startsWith('📝 Shared post from')) {
+                  // Extract username and content for shared text posts
+                  const usernameMatch = item.text.match(/@(\w+):/);
+                  const username = usernameMatch ? usernameMatch[1] : 'Unknown User';
+                  const content = item.text.split(':\n\n')[1] || item.text;
+                  
+                  // Create a mock post object that PhotoTextViewerScreen expects
+                  const mockPost = {
+                    id: `shared-${Date.now()}`,
+                    caption: content,
+                    user_id: 'shared',
+                    profiles: {
+                      username: username,
+                      avatar_url: null
+                    },
+                    media_url: null,
+                    type: 'text',
+                    isSharedPost: true
+                  };
+                  
+                  navigation.navigate('PhotoTextViewer', {
+                    posts: [mockPost],
+                    initialIndex: 0
+                  });
+                }
+              }}
               delayLongPress={500}
-              style={styles.textMessageContainer}
+              style={[
+                styles.textMessageContainer,
+                item.text.startsWith('📝 Shared post from') && styles.sharedTextContainer
+              ]}
             >
-              <Text style={styles.messageText}>{item.text}</Text>
+              <Text style={[
+                styles.messageText,
+                item.text.startsWith('📝 Shared post from') && styles.sharedTextMessage
+              ]}>
+                {item.text}
+              </Text>
+              {item.text.startsWith('📝 Shared post from') && (
+                <View style={styles.sharedTextIndicator}>
+                  <Ionicons name="open-outline" size={16} color="rgba(255,255,255,0.7)" />
+                  <Text style={styles.tapToViewText}>Tap to view</Text>
+                </View>
+              )}
             </TouchableOpacity>
           ) : null}
           
@@ -1591,6 +1633,28 @@ const styles = StyleSheet.create({
     color: '#999',
     fontSize: 14,
     marginTop: 10,
+  },
+  sharedTextContainer: {
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    borderStyle: 'dashed',
+  },
+  sharedTextMessage: {
+    fontStyle: 'italic',
+  },
+  sharedTextIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+  },
+  tapToViewText: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 12,
+    marginLeft: 4,
   },
 });
 

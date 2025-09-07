@@ -411,6 +411,8 @@ const VerifyAccountScreen = () => {
         <ScrollView 
           style={styles.content}
           contentContainerStyle={[styles.contentContainer, { paddingBottom: insets.bottom > 0 ? insets.bottom : 20 }]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
           <View style={styles.infoContainer}>
             <Ionicons name="checkmark-circle" size={24} color="#ff0000" style={styles.infoIcon} />
@@ -550,6 +552,8 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: 16,
+    flexGrow: 1,
+    minHeight: 600,
   },
   infoContainer: {
     flexDirection: 'row',

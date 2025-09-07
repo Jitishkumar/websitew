@@ -192,11 +192,25 @@ const ShareUserSelectionScreen = () => {
         const participants = [currentUserId, recipientId].sort();
         const conversationId = `${participants[0]}_${participants[1]}`;
 
+        // Create message content with author info
+        let messageContent = sharePayload.caption || '';
+        
+        // For shared posts, format the content to include author info
+        if (sharePayload.author) {
+          if (sharePayload.media_url) {
+            // For media posts, keep the caption as is (author info will be shown in header)
+            messageContent = messageContent;
+          } else {
+            // For text-only posts, format with author info
+            messageContent = `📝 Shared post from @${sharePayload.author.username}:\n\n${messageContent}`;
+          }
+        }
+
         const messageData = {
           conversation_id: conversationId,
           sender_id: currentUserId,
           receiver_id: recipientId,
-          content: sharePayload.caption || '',
+          content: messageContent,
           media_url: sharePayload.media_url || null,
           media_type: sharePayload.media_type || null,
           created_at: new Date().toISOString(),
