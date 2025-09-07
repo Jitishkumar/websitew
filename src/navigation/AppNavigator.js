@@ -43,6 +43,7 @@ import ConfessionButtonScreen from '../screens/ConfessionButton'; // Import the 
 import ConfessionPersonScreen from '../screens/ConfessionPersonScreen'; // Import the new Person Confession screen
 import ConfessionPersonCommentScreen from '../screens/ConfessionPersonCommentScreen'; // Import the new Person Confession Comment screen
 import ReelsScreen from '../screens/ReelsScreen'; // Import the new Reels screen
+import ShareUserSelectionScreen from '../screens/ShareUserSelectionScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -191,6 +192,7 @@ const AppNavigator = () => {
       <Stack.Screen name="ConfessionComment" component={ConfessionCommentScreen} options={{ headerShown: false }} />
       <Stack.Screen name="ConfessionPerson" component={ConfessionPersonScreen} options={{ headerShown: false }} />
       <Stack.Screen name="ConfessionPersonComment" component={ConfessionPersonCommentScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="ShareUserSelection" component={ShareUserSelectionScreen} options={{ headerShown: false }} />
     </Stack.Navigator>
   );
 };

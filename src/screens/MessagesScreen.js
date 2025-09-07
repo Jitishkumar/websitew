@@ -13,7 +13,6 @@ const MessagesScreen = () => {
   const navigation = useNavigation();
   const { fetchUnreadCount, markConversationAsRead } = useMessages();
   const route = useRoute();
-  const [sharePayload, setSharePayload] = useState(null);
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(false); // Changed to false since we'll load cache first
   const [currentUserId, setCurrentUserId] = useState(null);
@@ -244,26 +243,19 @@ const MessagesScreen = () => {
     };
   }, []);
   
-  // Handle inbound sharePayload via navigation and screen focus
+
+  // Refresh conversations when the screen comes into focus
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       if (currentUserId) {
         console.log('Screen focused, checking for conversation updates');
+        // Don't show loading, just refresh in background
         fetchConversations(currentUserId, false);
-
-        // If navigating with a share payload, set it in state and clear the param
-        if (route.params?.sharePayload) {
-          setSharePayload(route.params.sharePayload);
-          navigation.setParams({ sharePayload: undefined });
-        } else {
-          // If navigating without a share payload, clear any existing one
-          setSharePayload(null);
-        }
       }
     });
-
+    
     return unsubscribe;
-  }, [navigation, currentUserId, route.params]);
+  }, [navigation, currentUserId]);
   
   // Enhanced fetch conversations function with better caching
   const fetchConversations = async (userId, showLoadingIndicator = true) => {
@@ -538,14 +530,6 @@ const MessagesScreen = () => {
           contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
           showsVerticalScrollIndicator={false}
         >
-          {sharePayload && (
-            <View style={{ paddingHorizontal: 20, paddingBottom: 10 }}>
-              <View style={{ backgroundColor: 'rgba(108,63,216,0.15)', borderColor: '#6c3fd8', borderWidth: 1, padding: 10, borderRadius: 10 }}>
-                <Text style={{ color: '#fff', fontWeight: '600' }}>Select a chat to share this reel</Text>
-                <Text style={{ color: 'rgba(255,255,255,0.7)', marginTop: 4 }} numberOfLines={2}>{sharePayload.caption || ''}</Text>
-              </View>
-            </View>
-          )}
           {loading ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color="#6c3fd8" />
@@ -562,7 +546,6 @@ const MessagesScreen = () => {
                     recipientId: conversation.otherUserId,
                     recipientName: conversation.name,
                     recipientAvatar: conversation.avatar,
-                    sharePayload: sharePayload || null,
                   });
                 }}
               >

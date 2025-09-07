@@ -1408,9 +1408,9 @@ const ConfessionScreen = () => {
                 };
                 const parentNav = navigation.getParent?.();
                 if (parentNav) {
-                  parentNav.navigate('Messages', { sharePayload });
+                  parentNav.navigate('ShareUserSelection', { sharePayload });
                 } else {
-                  navigation.navigate('Messages', { sharePayload });
+                  navigation.navigate('ShareUserSelection', { sharePayload });
                 }
               } catch (error) {
                 Alert.alert('Error', 'Could not open share sheet');
