@@ -14,7 +14,7 @@ import {
   Image
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useFocusEffect, CommonActions } from '@react-navigation/native';
 import { Video } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -183,43 +183,9 @@ const loadReels = async (isInitialLoad = false) => {
     return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
   };
 
-  // Handle video press - toggle play/pause on single click
+  // Handle video press - show controls only (do not toggle play/pause)
   const handleVideoPress = () => {
-    const newPlayingState = !isPlaying;
-    setIsPlaying(newPlayingState);
-    
     showVideoControls();
-    
-    const currentVideoRef = videoRefs.current[currentIndex];
-    if (currentVideoRef) {
-      if (newPlayingState) {
-        currentVideoRef.playAsync();
-      } else {
-        setShowPauseIcon(true);
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 200,
-          useNativeDriver: true
-        }).start();
-        
-        if (pauseIconTimeout.current) {
-          clearTimeout(pauseIconTimeout.current);
-        }
-        pauseIconTimeout.current = setTimeout(() => {
-          Animated.timing(fadeAnim, {
-            toValue: 0,
-            duration: 200,
-            useNativeDriver: true
-          }).start(() => setShowPauseIcon(false));
-        }, 800);
-        
-        try {
-          currentVideoRef.pauseAsync();
-        } catch (error) {
-          console.warn('Error pausing video in ReelsScreen:', error);
-        }
-      }
-    }
   };
   
   // Touch handlers for press-to-pause functionality
@@ -519,9 +485,15 @@ const loadReels = async (isInitialLoad = false) => {
   const handleUserProfile = (userId) => {
     if (currentUser?.id === userId) {
       navigation.navigate('Profile');
-    } else {
-      navigation.navigate('UserProfile', { userId });
+      return;
     }
+    const action = CommonActions.navigate({ name: 'UserProfileScreen', params: { userId } });
+    const parentNav = navigation.getParent?.();
+    if (parentNav && parentNav.dispatch) {
+      parentNav.dispatch(action);
+      return;
+    }
+    navigation.dispatch(action);
   };
 
   // Render each reel item
@@ -871,16 +843,17 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     lineHeight: 20,
+    paddingRight: 70,
   },
   socialButtons: {
     position: 'absolute',
     right: 15,
-    bottom: 100,
+    bottom: 150,
     alignItems: 'center',
   },
   socialButton: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 12,
   },
   socialButtonGradient: {
     width: 48,

@@ -118,48 +118,9 @@ const ShortsScreen = ({ route }) => {
     return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
   };
 
-  // Handle video press - toggle play/pause on single click
+  // Handle video press - show controls only (do not toggle play/pause)
   const handleVideoPress = () => {
-    // Toggle play/pause state
-    const newPlayingState = !isPlaying;
-    setIsPlaying(newPlayingState);
-    
-    // Show controls briefly
     showVideoControls();
-    
-    // Play or pause the current video
-    const currentVideoRef = videoRefs.current[currentIndex];
-    if (currentVideoRef) {
-      if (newPlayingState) {
-        currentVideoRef.playAsync();
-      } else {
-        // Show pause icon with animation
-        setShowPauseIcon(true);
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 200,
-          useNativeDriver: true
-        }).start();
-        
-        // Hide pause icon after a short delay
-        if (pauseIconTimeout.current) {
-          clearTimeout(pauseIconTimeout.current);
-        }
-        pauseIconTimeout.current = setTimeout(() => {
-          Animated.timing(fadeAnim, {
-            toValue: 0,
-            duration: 200,
-            useNativeDriver: true
-          }).start(() => setShowPauseIcon(false));
-        }, 800);
-        
-        try {
-          currentVideoRef.pauseAsync();
-        } catch (error) {
-          console.warn('Error pausing video in ShortsScreen:', error);
-        }
-      }
-    }
   };
   
   // Add touch handlers for press-to-pause functionality

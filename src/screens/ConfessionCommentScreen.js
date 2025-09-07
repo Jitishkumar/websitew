@@ -20,18 +20,19 @@ import { supabase } from '../lib/supabase';
 import { sendCommentNotification } from '../utils/notificationService';
 import { processMentions } from '../utils/mentionService';
 import { useNavigation } from '@react-navigation/native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 
 const { height } = Dimensions.get('window');
 
-const ConfessionCommentScreen = ({ route, visible, onClose, confessionId: propConfessionId, onCommentPosted }) => {
+const ConfessionCommentScreen = (props) => {
+  const { route, visible, onClose, confessionId: propConfessionId, onCommentPosted } = props || {};
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
 
   // Get confessionId from either props or route params
   const confessionId = propConfessionId || route?.params?.confessionId;
   const highlightCommentId = route?.params?.highlightCommentId;
-  const cameFromNotifications = route?.params?.cameFromNotifications; // New prop
+  const cameFromNotifications = route?.params?.cameFromNotifications; // kept for backwards compatibility
 
   const handleClose = () => {
     if (typeof onClose === 'function') {
@@ -550,20 +551,14 @@ const ConfessionCommentScreen = ({ route, visible, onClose, confessionId: propCo
   };
 
   return (
-    <View style={styles.container}>
-      <LinearGradient
-        colors={['#0a0a2a', '#1a1a3a']}
-        style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        {cameFromNotifications && (
-          <TouchableOpacity onPress={() => navigation.navigate('Confession', { selectedConfessionId: confessionId })} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#fff" />
-          </TouchableOpacity>
-        )}
-        <Text style={styles.headerTitle}>Comments</Text>
-        <TouchableOpacity onPress={handleClose}>
-          <Ionicons name="close" size={24} color="#fff" />
+    <SafeAreaView style={styles.container}>
+      <View style={styles.headerBar}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backChevron}>
+          <Ionicons name="chevron-back" size={24} color="#fff" />
         </TouchableOpacity>
-      </LinearGradient>
+        <Text style={styles.headerTitle}>Comments</Text>
+        <View style={{ width: 24 }} />
+      </View>
 
       {!confessionId ? (
         <View style={styles.loading}>
@@ -591,8 +586,18 @@ const ConfessionCommentScreen = ({ route, visible, onClose, confessionId: propCo
           <LinearGradient
             colors={['#1a1a3a', '#0d0d2a']}
             style={[styles.inputContainerGradient, { paddingBottom: insets.bottom > 0 ? insets.bottom + 10 : 20 }]}>
+            {replyingTo && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+                <Text style={{ color: '#00ffff' }}>
+                  Replying to {(() => { const c = comments.find(cm => cm.id === replyingTo); return c?.is_anonymous ? 'Anonymous' : (c?.profiles?.username || 'User'); })()}
+                </Text>
+                <TouchableOpacity onPress={() => setReplyingTo(null)} style={{ marginLeft: 10 }}>
+                  <Ionicons name="close-circle" size={16} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            )}
             <View style={styles.anonymousOption}>
-              <Text style={styles.anonymousText}>Anonymous</Text>
+              <Text style={styles.anonymousText}>Post anonymously</Text>
               <Switch
                 value={isAnonymous}
                 onValueChange={setIsAnonymous}
@@ -626,7 +631,7 @@ const ConfessionCommentScreen = ({ route, visible, onClose, confessionId: propCo
           </LinearGradient>
         </KeyboardAvoidingView>
       )}
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -634,6 +639,15 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#050520',
+  },
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 15,
+  },
+  backChevron: {
+    padding: 5,
   },
   header: {
     flexDirection: 'row',

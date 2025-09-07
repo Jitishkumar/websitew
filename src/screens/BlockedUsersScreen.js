@@ -29,24 +29,76 @@ const BlockedUsersScreen = () => {
         return;
       }
       
-      // Fetch blocked users with their profile information
-      const { data, error } = await supabase
+      // 1) Fetch block records (this is allowed by your RLS)
+      const { data: blocks, error: blocksError } = await supabase
         .from('blocked_users')
-        .select(`
-          id,
-          blocked_id,
-          created_at,
-          profiles:blocked_id(id, username, full_name, avatar_url)
-        `)
-        .eq('blocker_id', user.id);
-        
-      if (error) {
-        console.error('Error fetching blocked users:', error);
+        .select('id, blocked_id, created_at')
+        .eq('blocker_id', user.id)
+        .order('created_at', { ascending: false });
+      
+      if (blocksError) {
+        console.error('Error fetching blocked users:', blocksError);
         Alert.alert('Error', 'Failed to load blocked users');
         return;
       }
       
-      setBlockedUsers(data || []);
+      if (!blocks || blocks.length === 0) {
+        setBlockedUsers([]);
+        return;
+      }
+      
+      // 2) Prefer secure RPC to bypass RLS for showing minimal info in UI
+      const blockedIds = blocks.map(b => b.blocked_id);
+      let profiles = [];
+      try {
+        const { data: rpcData, error: rpcError } = await supabase.rpc('get_blocked_profiles', { p_blocker_id: user.id });
+        if (rpcError) {
+          console.warn('RPC get_blocked_profiles unavailable or failed, falling back:', rpcError);
+          // Fallback: attempt direct profiles read (may be empty due to RLS)
+          const { data: fallbackProfiles, error: fallbackError } = await supabase
+            .from('profiles')
+            .select('id, username, full_name, avatar_url')
+            .in('id', blockedIds);
+          if (fallbackError) {
+            console.error('Error fetching blocked profiles (fallback):', fallbackError);
+          } else {
+            profiles = fallbackProfiles || [];
+          }
+        } else {
+          profiles = rpcData || [];
+        }
+      } catch (rpcEx) {
+        console.warn('RPC exception, falling back to direct profiles read:', rpcEx);
+        const { data: fallbackProfiles, error: fallbackError } = await supabase
+          .from('profiles')
+          .select('id, username, full_name, avatar_url')
+          .in('id', blockedIds);
+        if (fallbackError) {
+          console.error('Error fetching blocked profiles (fallback):', fallbackError);
+        } else {
+          profiles = fallbackProfiles || [];
+        }
+      }
+      
+      const idToProfile = {};
+      (profiles || []).forEach(p => {
+        let avatarUrl = p.avatar_url;
+        if (avatarUrl) {
+          if (avatarUrl.includes('media/media/') || avatarUrl.includes('storage/v1/object/public/media/')) {
+            const parts = avatarUrl.split('media/');
+            const last = parts[parts.length - 1];
+            avatarUrl = `https://lckhaysswueoyinhfzyz.supabase.co/storage/v1/object/public/media/${last}`;
+          }
+        }
+        idToProfile[p.id] = { ...p, avatar_url: avatarUrl };
+      });
+      
+      const merged = blocks.map(b => ({
+        ...b,
+        profiles: idToProfile[b.blocked_id] || null,
+      }));
+      
+      setBlockedUsers(merged);
     } catch (error) {
       console.error('Error in fetchBlockedUsers:', error);
       Alert.alert('Error', 'An unexpected error occurred');
@@ -96,24 +148,26 @@ const BlockedUsersScreen = () => {
 
   const renderBlockedUser = ({ item }) => {
     const profile = item.profiles;
-    if (!profile) return null;
+    const displayName = profile?.full_name || 'Blocked user';
+    const displayHandle = profile?.username ? `@${profile.username}` : `ID: ${item.blocked_id.slice(0, 8)}…`;
+    const avatarSource = profile?.avatar_url
+      ? { uri: profile.avatar_url }
+      : require('../../assets/defaultavatar.png');
+    const targetUserId = profile?.id || item.blocked_id;
     
     return (
       <View style={styles.userItem}>
         <Image 
-          source={profile.avatar_url 
-            ? { uri: profile.avatar_url } 
-            : require('../../assets/defaultavatar.png')
-          } 
+          source={avatarSource}
           style={styles.avatar} 
         />
         <View style={styles.userInfo}>
-          <Text style={styles.userName}>{profile.full_name || 'User'}</Text>
-          <Text style={styles.userHandle}>@{profile.username || 'username'}</Text>
+          <Text style={styles.userName}>{displayName}</Text>
+          <Text style={styles.userHandle}>{displayHandle}</Text>
         </View>
         <TouchableOpacity 
           style={styles.unblockButton}
-          onPress={() => handleUnblock(profile.id, item.id)}
+          onPress={() => handleUnblock(targetUserId, item.id)}
         >
           <Text style={styles.unblockText}>Unblock</Text>
         </TouchableOpacity>
@@ -156,7 +210,7 @@ const BlockedUsersScreen = () => {
         <FlatList
           data={blockedUsers}
           renderItem={renderBlockedUser}
-          keyExtractor={item => item.id}
+          keyExtractor={item => item.id.toString()}
           contentContainerStyle={styles.listContainer}
           refreshing={refreshing}
           onRefresh={handleRefresh}

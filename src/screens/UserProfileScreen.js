@@ -483,7 +483,9 @@ const UserProfileScreen = () => {
           .eq('following_id', userId);
 
         if (blockedIds.length > 0) {
-          query = query.not('follower_id', 'in', blockedIds);
+          blockedIds.forEach(blockedId => {
+            query = query.neq('follower_id', blockedId);
+          });
         }
 
         const { count, error } = await query;
@@ -513,7 +515,9 @@ const UserProfileScreen = () => {
           .eq('follower_id', userId);
 
         if (blockedIds.length > 0) {
-          query = query.not('following_id', 'in', blockedIds);
+          blockedIds.forEach(blockedId => {
+            query = query.neq('following_id', blockedId);
+          });
         }
 
         const { count, error } = await query;
@@ -552,7 +556,9 @@ const UserProfileScreen = () => {
           .eq('following_id', userId);
 
         if (blockedIds.length > 0) {
-          query = query.not('follower_id', 'in', blockedIds);
+          blockedIds.forEach(blockedId => {
+            query = query.neq('follower_id', blockedId);
+          });
         }
 
         const { data, error } = await query;
@@ -614,7 +620,9 @@ const UserProfileScreen = () => {
           .eq('follower_id', userId);
 
         if (blockedIds.length > 0) {
-          query = query.not('following_id', 'in', blockedIds);
+          blockedIds.forEach(blockedId => {
+            query = query.neq('following_id', blockedId);
+          });
         }
 
         const { data, error } = await query;

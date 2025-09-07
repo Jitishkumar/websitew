@@ -20,7 +20,7 @@ import { supabase } from '../lib/supabase';
 import { sendCommentNotification } from '../utils/notificationService';
 import { processMentions } from '../utils/mentionService';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 
 const { height } = Dimensions.get('window');
 
@@ -565,25 +565,14 @@ const ConfessionPersonCommentScreen = ({ visible, onClose, confessionId: propCon
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-    >
-      <LinearGradient
-        colors={['#0a0a2a', '#1a1a3a']}
-        style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        {cameFromNotifications && (
-          <TouchableOpacity onPress={() => navigation.navigate('ConfessionPerson', { selectedConfessionId: confessionId })} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#fff" />
-          </TouchableOpacity>
-        )}
-        <Text style={styles.headerTitle}>Person Comments</Text>
-        <TouchableOpacity onPress={handleClose}>
-          <Ionicons name="close" size={24} color="#fff" />
+    <SafeAreaView style={styles.container}>
+      <View style={styles.headerBar}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backChevron}>
+          <Ionicons name="chevron-back" size={24} color="#fff" />
         </TouchableOpacity>
-        {!cameFromNotifications && <View style={{ width: 24 }} />} {/* Add this to balance spacing if no back button */}
-      </LinearGradient>
+        <Text style={styles.headerTitle}>Comments</Text>
+        <View style={{ width: 24 }} />
+      </View>
 
       {loading ? (
         <ActivityIndicator size="large" color="#ff00ff" style={styles.loading} />
@@ -613,6 +602,16 @@ const ConfessionPersonCommentScreen = ({ visible, onClose, confessionId: propCon
             thumbColor={isAnonymous ? "#f4f3f4" : "#f4f3f4"}
           />
         </View>
+        {replyingTo && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+            <Text style={{ color: '#00ffff' }}>
+              Replying to {(() => { const c = comments.find(cm => cm.id === replyingTo); return c?.is_anonymous ? 'Anonymous' : (c?.profiles?.username || 'User'); })()}
+            </Text>
+            <TouchableOpacity onPress={() => setReplyingTo(null)} style={{ marginLeft: 10 }}>
+              <Ionicons name="close-circle" size={16} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        )}
         <View style={styles.inputRow}>
           <TextInput
             style={styles.input}
@@ -638,7 +637,7 @@ const ConfessionPersonCommentScreen = ({ visible, onClose, confessionId: propCon
           </TouchableOpacity>
         </View>
       </LinearGradient>
-    </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 
@@ -646,6 +645,15 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#050520',
+  },
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 15,
+  },
+  backChevron: {
+    padding: 5,
   },
   modalContainer: {
     flex: 1,
