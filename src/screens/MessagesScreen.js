@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TextInput, ScrollView, Image, TouchableOpacity,
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { useMessages } from '../context/MessageContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -12,6 +12,8 @@ const MessagesScreen = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const { fetchUnreadCount, markConversationAsRead } = useMessages();
+  const route = useRoute();
+  const [sharePayload, setSharePayload] = useState(null);
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(false); // Changed to false since we'll load cache first
   const [currentUserId, setCurrentUserId] = useState(null);
@@ -242,6 +244,13 @@ const MessagesScreen = () => {
     };
   }, []);
   
+  // Handle inbound sharePayload via navigation
+  useEffect(() => {
+    if (route?.params?.sharePayload) {
+      setSharePayload(route.params.sharePayload);
+    }
+  }, [route?.params?.sharePayload]);
+
   // Refresh conversations when the screen comes into focus
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
@@ -249,6 +258,10 @@ const MessagesScreen = () => {
         console.log('Screen focused, checking for conversation updates');
         // Don't show loading, just refresh in background
         fetchConversations(currentUserId, false);
+        // Clear one-time share payload after focus so it doesn't persist across visits
+        if (route?.params?.sharePayload) {
+          navigation.setParams({ sharePayload: undefined });
+        }
       }
     });
     
@@ -528,6 +541,14 @@ const MessagesScreen = () => {
           contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
           showsVerticalScrollIndicator={false}
         >
+          {sharePayload && (
+            <View style={{ paddingHorizontal: 20, paddingBottom: 10 }}>
+              <View style={{ backgroundColor: 'rgba(108,63,216,0.15)', borderColor: '#6c3fd8', borderWidth: 1, padding: 10, borderRadius: 10 }}>
+                <Text style={{ color: '#fff', fontWeight: '600' }}>Select a chat to share this reel</Text>
+                <Text style={{ color: 'rgba(255,255,255,0.7)', marginTop: 4 }} numberOfLines={2}>{sharePayload.caption || ''}</Text>
+              </View>
+            </View>
+          )}
           {loading ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color="#6c3fd8" />
@@ -544,6 +565,7 @@ const MessagesScreen = () => {
                     recipientId: conversation.otherUserId,
                     recipientName: conversation.name,
                     recipientAvatar: conversation.avatar,
+                    sharePayload: sharePayload || null,
                   });
                 }}
               >

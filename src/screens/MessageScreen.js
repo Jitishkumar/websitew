@@ -35,7 +35,7 @@ const MessageScreen = () => {
   const [conversationId, setConversationId] = useState(null);
   const navigation = useNavigation();
   const route = useRoute();
-  const { recipientId, recipientName = "Chat", recipientAvatar } = route.params;
+  const { recipientId, recipientName = "Chat", recipientAvatar, sharePayload } = route.params;
   const flatListRef = useRef(null);
   const { markConversationAsRead, fetchUnreadCount, onlineStatus, updateCurrentUserLastActive } = useMessages();
   const recipientOnlineStatus = onlineStatus[recipientId];
@@ -75,6 +75,11 @@ const MessageScreen = () => {
         
         await loadMessages(convId, user.id);
         fetchReadReceiptsSettings(user.id, recipientId);
+
+        // If opened with a share payload (from Reels), auto-send the reel once
+        if (route?.params?.sharePayload) {
+          await sendSharedReelOnce(route.params.sharePayload, user.id, recipientId, convId);
+        }
       } catch (error) {
         console.error('Error setting up conversation:', error);
       }
@@ -82,6 +87,62 @@ const MessageScreen = () => {
     
     setupConversation();
   }, [recipientId]);
+
+  const hasSentShare = useRef(false);
+
+  const sendSharedReelOnce = async (payload, currentUserId, toUserId, convId) => {
+    if (hasSentShare.current) return;
+    hasSentShare.current = true;
+    try {
+      // Payload expected: { type: 'reel', postId, media_url, caption }
+      const mediaUrl = payload?.media_url;
+      if (!mediaUrl) return;
+
+      const tempId = `share-${Date.now()}`;
+      const newMessage = {
+        id: tempId,
+        text: payload?.caption || '',
+        sender: 'me',
+        sender_id: currentUserId,
+        timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+        read: false,
+        media_url: mediaUrl,
+        media_type: 'video',
+        cloudinary_public_id: null,
+      };
+
+      const optimistic = [...messages, newMessage];
+      setMessages(optimistic);
+      await AsyncStorage.setItem(`conversation_${convId}`, JSON.stringify(optimistic));
+
+      const { data, error } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id: convId,
+          sender_id: currentUserId,
+          receiver_id: toUserId,
+          content: payload?.caption || '',
+          media_url: mediaUrl,
+          media_type: 'video',
+          created_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error sending shared reel:', error);
+        setMessages(prev => prev.filter(m => m.id !== tempId));
+        const rollback = optimistic.filter(m => m.id !== tempId);
+        await AsyncStorage.setItem(`conversation_${convId}`, JSON.stringify(rollback));
+      } else {
+        setMessages(prev => prev.map(m => (m.id === tempId ? { ...m, id: data.id } : m)));
+        const finalized = optimistic.map(m => (m.id === tempId ? { ...m, id: data.id } : m));
+        await AsyncStorage.setItem(`conversation_${convId}`, JSON.stringify(finalized));
+      }
+    } catch (e) {
+      console.error('Exception sending shared reel:', e);
+    }
+  };
 
   const fetchReadReceiptsSettings = async (currentUserId, recipientUserId) => {
     try {
@@ -800,9 +861,19 @@ const MessageScreen = () => {
               style={styles.mediaContainer}
             >
               {item.media_type === 'video' ? (
-                <View style={styles.videoPlaceholder}>
-                  <Ionicons name="play-circle" size={40} color="#fff" />
-                  <Text style={styles.videoText}>Play Video</Text>
+                <View style={styles.videoThumbContainer}>
+                  <Video
+                    source={{ uri: item.media_url }}
+                    style={styles.messageImage}
+                    resizeMode="cover"
+                    shouldPlay={false}
+                    isMuted={true}
+                    usePoster={true}
+                    posterSource={{ uri: item.media_url }}
+                  />
+                  <View style={styles.playOverlay}>
+                    <Ionicons name="play-circle" size={40} color="#fff" />
+                  </View>
                 </View>
               ) : (
                 <Image 
@@ -1285,6 +1356,23 @@ const styles = StyleSheet.create({
     width: 200,
     height: 200,
     borderRadius: 12,
+  },
+  videoThumbContainer: {
+    width: 200,
+    height: 200,
+    borderRadius: 12,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#000',
+  },
+  playOverlay: {
+    position: 'absolute',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    width: '100%',
+    height: '100%',
   },
   videoPlaceholder: {
     width: 200,

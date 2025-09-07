@@ -466,17 +466,22 @@ const loadReels = async (isInitialLoad = false) => {
   // Handle share functionality
   const handleShare = async (reel) => {
     try {
-      const result = await Share.share({
-        message: `Check out this reel from ${reel.profiles?.username || 'a user'}!\n\n${reel.caption || ''}\n\nOpen the app to watch.`,
-        url: reel.media_url,
-        title: 'Share this reel'
-      });
-      
-      if (result.action === Share.sharedAction) {
-        console.log('Shared successfully');
+      // Navigate to Messages tab with share payload for in-app share
+      const sharePayload = {
+        type: 'reel',
+        postId: reel.id,
+        media_url: reel.media_url,
+        caption: reel.caption || '',
+        from: 'Reels',
+      };
+      const parentNav = navigation.getParent?.();
+      if (parentNav) {
+        parentNav.navigate('Messages', { sharePayload });
+      } else {
+        navigation.navigate('Messages', { sharePayload });
       }
     } catch (error) {
-      Alert.alert('Error', 'Could not share this reel');
+      Alert.alert('Error', 'Could not open share sheet');
       console.error('Error sharing:', error);
     }
   };
