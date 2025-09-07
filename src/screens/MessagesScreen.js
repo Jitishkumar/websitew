@@ -244,29 +244,26 @@ const MessagesScreen = () => {
     };
   }, []);
   
-  // Handle inbound sharePayload via navigation
-  useEffect(() => {
-    if (route?.params?.sharePayload) {
-      setSharePayload(route.params.sharePayload);
-    }
-  }, [route?.params?.sharePayload]);
-
-  // Refresh conversations when the screen comes into focus
+  // Handle inbound sharePayload via navigation and screen focus
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       if (currentUserId) {
         console.log('Screen focused, checking for conversation updates');
-        // Don't show loading, just refresh in background
         fetchConversations(currentUserId, false);
-        // Clear one-time share payload after focus so it doesn't persist across visits
-        if (route?.params?.sharePayload) {
+
+        // If navigating with a share payload, set it in state and clear the param
+        if (route.params?.sharePayload) {
+          setSharePayload(route.params.sharePayload);
           navigation.setParams({ sharePayload: undefined });
+        } else {
+          // If navigating without a share payload, clear any existing one
+          setSharePayload(null);
         }
       }
     });
-    
+
     return unsubscribe;
-  }, [navigation, currentUserId]);
+  }, [navigation, currentUserId, route.params]);
   
   // Enhanced fetch conversations function with better caching
   const fetchConversations = async (userId, showLoadingIndicator = true) => {

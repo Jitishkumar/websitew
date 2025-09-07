@@ -291,26 +291,21 @@ const ShortsScreen = ({ route }) => {
   // Handle share functionality
   const handleShare = async (post) => {
     try {
-      const result = await Share.share({
-        message: `Check out this video from ${post.profiles?.username || 'a user'}!\n\n${post.caption || ''}\n\nOpen the app to watch.`,
-        url: post.media_url, // This may not work on all platforms
-        title: 'Share this video'
-      });
-      
-      if (result.action === Share.sharedAction) {
-        if (result.activityType) {
-          // shared with activity type of result.activityType
-          console.log('Shared with activity type:', result.activityType);
-        } else {
-          // shared
-          console.log('Shared successfully');
-        }
-      } else if (result.action === Share.dismissedAction) {
-        // dismissed
-        console.log('Share dismissed');
+      const sharePayload = {
+        type: 'reel',
+        postId: post.id,
+        media_url: post.media_url,
+        caption: post.caption || '',
+        from: 'ShortsScreen',
+      };
+      const parentNav = navigation.getParent?.();
+      if (parentNav) {
+        parentNav.navigate('Messages', { sharePayload });
+      } else {
+        navigation.navigate('Messages', { sharePayload });
       }
     } catch (error) {
-      Alert.alert('Error', 'Could not share this video');
+      Alert.alert('Error', 'Could not open share sheet');
       console.error('Error sharing:', error);
     }
   };

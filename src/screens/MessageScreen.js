@@ -94,12 +94,19 @@ const MessageScreen = () => {
     if (hasSentShare.current) return;
     hasSentShare.current = true;
     try {
-      // Payload expected: { type: 'reel', postId, media_url, caption }
-      const mediaUrl = payload?.media_url;
-      if (!mediaUrl) return;
+      // Payload expected: { type: 'reel'|'video'|'image'|'text'|'media', postId, media_url, caption }
+      const mediaUrl = payload?.media_url || null;
+      const inferredType = (() => {
+        if (payload?.type === 'reel' || payload?.type === 'video') return 'video';
+        if (payload?.type === 'image') return 'image';
+        if (!mediaUrl) return null; // text-only share
+        const lower = mediaUrl.toLowerCase();
+        if (lower.endsWith('.mp4') || lower.includes('/video')) return 'video';
+        return 'image';
+      })();
 
       const tempId = `share-${Date.now()}`;
-      const newMessage = {
+      const newMessage = inferredType ? {
         id: tempId,
         text: payload?.caption || '',
         sender: 'me',
@@ -107,7 +114,17 @@ const MessageScreen = () => {
         timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
         read: false,
         media_url: mediaUrl,
-        media_type: 'video',
+        media_type: inferredType,
+        cloudinary_public_id: null,
+      } : {
+        id: tempId,
+        text: payload?.caption || '',
+        sender: 'me',
+        sender_id: currentUserId,
+        timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+        read: false,
+        media_url: null,
+        media_type: null,
         cloudinary_public_id: null,
       };
 
@@ -122,8 +139,8 @@ const MessageScreen = () => {
           sender_id: currentUserId,
           receiver_id: toUserId,
           content: payload?.caption || '',
-          media_url: mediaUrl,
-          media_type: 'video',
+          media_url: inferredType ? mediaUrl : null,
+          media_type: inferredType,
           created_at: new Date().toISOString(),
         })
         .select()
@@ -138,6 +155,8 @@ const MessageScreen = () => {
         setMessages(prev => prev.map(m => (m.id === tempId ? { ...m, id: data.id } : m)));
         const finalized = optimistic.map(m => (m.id === tempId ? { ...m, id: data.id } : m));
         await AsyncStorage.setItem(`conversation_${convId}`, JSON.stringify(finalized));
+        // Reload full conversation to ensure entire history is shown
+        await loadMessages(convId, currentUserId);
       }
     } catch (e) {
       console.error('Exception sending shared reel:', e);
@@ -472,7 +491,7 @@ const MessageScreen = () => {
             return;
         }
 
-        const formattedMessages = data.map(msg => ({
+        let formattedMessages = data.map(msg => ({
             id: msg.id,
             text: msg.content,
             sender: msg.sender_id === actualUserId ? 'me' : 'them',
@@ -483,6 +502,37 @@ const MessageScreen = () => {
             media_type: msg.media_type || null,
             cloudinary_public_id: msg.cloudinary_public_id || null
         }));
+
+        // Enrich shared media messages with original post owner info (username, avatar)
+        try {
+          const mediaUrls = Array.from(new Set(
+            formattedMessages
+              .filter(m => !!m.media_url)
+              .map(m => m.media_url)
+          ));
+          if (mediaUrls.length > 0) {
+            const { data: postsData, error: postsError } = await supabase
+              .from('posts')
+              .select('media_url, user_id, profiles:user_id (username, avatar_url)')
+              .in('media_url', mediaUrls);
+            if (!postsError && postsData && postsData.length > 0) {
+              const urlToOwner = {};
+              postsData.forEach(p => {
+                urlToOwner[p.media_url] = {
+                  username: p.profiles?.username || 'User',
+                  avatar_url: p.profiles?.avatar_url || null,
+                };
+              });
+              formattedMessages = formattedMessages.map(m => (
+                m.media_url && urlToOwner[m.media_url]
+                  ? { ...m, post_owner_username: urlToOwner[m.media_url].username, post_owner_avatar: urlToOwner[m.media_url].avatar_url }
+                  : m
+              ));
+            }
+          }
+        } catch (e) {
+          console.warn('Failed to enrich messages with post owner info:', e);
+        }
 
         setMessages(formattedMessages);
         
@@ -843,6 +893,17 @@ const MessageScreen = () => {
           end={{ x: 1, y: 1 }}
           style={styles.messageBubbleGradient}
         >
+          {/* Shared post owner header (for media shares) */}
+          {item.media_url && (item.post_owner_username || item.post_owner_avatar) ? (
+            <View style={styles.sharedHeader}>
+              <Image 
+                source={{ uri: item.post_owner_avatar || 'https://via.placeholder.com/24' }} 
+                style={styles.sharedAvatar}
+              />
+              <Text style={styles.sharedUsername}>@{item.post_owner_username || 'user'}</Text>
+            </View>
+          ) : null}
+
           {item.text ? (
             <TouchableOpacity
               onLongPress={() => onLongPress(item)}
@@ -1356,6 +1417,23 @@ const styles = StyleSheet.create({
     width: 200,
     height: 200,
     borderRadius: 12,
+  },
+  sharedHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  sharedAvatar: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    marginRight: 6,
+    backgroundColor: '#222',
+  },
+  sharedUsername: {
+    color: '#fff',
+    fontSize: 12,
+    opacity: 0.9,
   },
   videoThumbContainer: {
     width: 200,

@@ -495,6 +495,32 @@ const PostItem = ({ post, onOptionsPress }) => {
     navigation.navigate('Comment', { postId: post.id }); // Navigate to CommentScreen as a full screen
   };
 
+  const handleShare = () => {
+    try {
+      const sharePayload = {
+        type: post.type || (post.media_url ? 'media' : 'text'),
+        postId: post.id,
+        media_url: post.media_url || null,
+        caption: post.caption || '',
+        from: 'PostItem',
+        author: {
+          user_id: post?.user_id,
+          username: post?.profiles?.username || 'Anonymous User',
+          avatar_url: getAvatarUrl(),
+        },
+      };
+      const parentNav = navigation.getParent?.();
+      if (parentNav) {
+        parentNav.navigate('Messages', { sharePayload });
+      } else {
+        navigation.navigate('Messages', { sharePayload });
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Could not open share sheet');
+      console.error('Error sharing post:', error);
+    }
+  };
+
   const handleEdit = async () => {
     try {
       await PostsService.editPost(post.id, editCaption);
@@ -758,7 +784,7 @@ const PostItem = ({ post, onOptionsPress }) => {
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.actionButton}>
+          <TouchableOpacity style={styles.actionButton} onPress={handleShare}>
             <Ionicons name="share-social-outline" size={24} color="#e0e0ff" />
           </TouchableOpacity>
         </LinearGradient>

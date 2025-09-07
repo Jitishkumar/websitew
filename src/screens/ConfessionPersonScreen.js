@@ -1422,7 +1422,29 @@ const ConfessionPersonScreen = () => {
             </Text>
           </TouchableOpacity>
           
-          <TouchableOpacity style={styles.actionButton}>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => {
+              try {
+                const sharePayload = {
+                  type: item.media && item.media.length > 0 ? (item.media[0].type === 'video' ? 'video' : 'image') : 'text',
+                  postId: item.id,
+                  media_url: item.media && item.media.length > 0 ? item.media[0].url : null,
+                  caption: item.content || '',
+                  from: 'ConfessionPerson',
+                };
+                const parentNav = navigation.getParent?.();
+                if (parentNav) {
+                  parentNav.navigate('Messages', { sharePayload });
+                } else {
+                  navigation.navigate('Messages', { sharePayload });
+                }
+              } catch (error) {
+                Alert.alert('Error', 'Could not open share sheet');
+                console.error('Error sharing confession (person):', error);
+              }
+            }}
+          >
             <Ionicons name="share-social-outline" size={24} color="#e0e0ff" />
           </TouchableOpacity>
 
