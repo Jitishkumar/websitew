@@ -403,32 +403,69 @@ const PostItem = ({ post, onOptionsPress }) => {
     getCurrentUser();
   }, []);
 
+  // Realtime like updates for this post
+  useEffect(() => {
+    if (!post?.id) return;
+
+    const channel = supabase
+      .channel(`post_likes_${post.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'post_likes', filter: `post_id=eq.${post.id}` },
+        async () => {
+          const { error, count } = await supabase
+            .from('post_likes')
+            .select('*', { count: 'exact', head: true })
+            .eq('post_id', post.id);
+          if (!error) setLikesCount(count || 0);
+
+          if (currentUser) {
+            const { data } = await supabase
+              .from('post_likes')
+              .select('user_id')
+              .eq('post_id', post.id)
+              .eq('user_id', currentUser.id)
+              .maybeSingle();
+            setIsLiked(!!data);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      try { supabase.removeChannel(channel); } catch {}
+    };
+  }, [post?.id, currentUser]);
+
   const handleLike = async () => {
-    // Prevent rapid clicking
-    if (isLiking) return;
-    
-    // Clear any existing timeout
-    if (likeTimeout.current) {
-      clearTimeout(likeTimeout.current);
-    }
-    
+    // Prevent double submits
+    if (isLiking || !currentUser) return;
+
+    // Optimistic UI
+    const previousLiked = isLiked;
+    const previousCount = likesCount;
+    const optimisticLiked = !previousLiked;
+    const optimisticCount = Math.max(0, previousCount + (optimisticLiked ? 1 : -1));
+    setIsLiked(optimisticLiked);
+    setLikesCount(optimisticCount);
+
     setIsLiking(true);
-    
+    if (likeTimeout.current) clearTimeout(likeTimeout.current);
+
     try {
-      const { isLiked: liked, likesCount: newCount } = await PostsService.toggleLike(post.id);
-      setIsLiked(liked);
-      setLikesCount(newCount);
+      const { isLiked: serverLiked, likesCount: serverCount } = await PostsService.toggleLike(post.id);
+      setIsLiked(serverLiked);
+      setLikesCount(serverCount);
     } catch (error) {
+      // Revert on failure
+      setIsLiked(previousLiked);
+      setLikesCount(previousCount);
       console.error('Error toggling like:', error);
-      // Don't show alert for duplicate key errors as they're handled gracefully
-      if (error.code !== '23505') {
+      if (error?.code !== '23505') {
         Alert.alert('Error', 'Failed to update like');
       }
     } finally {
-      // Add a small delay before allowing another like action
-      likeTimeout.current = setTimeout(() => {
-        setIsLiking(false);
-      }, 500);
+      likeTimeout.current = setTimeout(() => setIsLiking(false), 300);
     }
   };
 

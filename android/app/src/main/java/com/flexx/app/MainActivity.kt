@@ -1,4 +1,4 @@
-package com.time.da.perfectfl
+package com.flexx.app
 
 import android.os.Build
 import android.os.Bundle

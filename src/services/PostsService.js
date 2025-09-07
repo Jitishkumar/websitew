@@ -274,9 +274,9 @@ export class PostsService {
         }
         
         // Get updated like count
-        const { data: updatedLikes, error: countError } = await supabase
+        const { error: countError, count } = await supabase
           .from('post_likes')
-          .select('count')
+          .select('*', { count: 'exact', head: true })
           .eq('post_id', postId);
           
         if (countError) {
@@ -285,7 +285,7 @@ export class PostsService {
           
         return {
           isLiked: false,
-          likesCount: updatedLikes?.length || 0
+          likesCount: count || 0
         };
       } else {
         // Like - use upsert to handle potential race conditions
@@ -325,9 +325,9 @@ export class PostsService {
         }
         
         // Get updated like count
-        const { data: updatedLikes, error: countError } = await supabase
+        const { error: countError, count } = await supabase
           .from('post_likes')
-          .select('count')
+          .select('*', { count: 'exact', head: true })
           .eq('post_id', postId);
           
         if (countError) {
@@ -336,7 +336,7 @@ export class PostsService {
           
         return {
           isLiked: true,
-          likesCount: updatedLikes?.length || 0
+          likesCount: count || 0
         };
       }
       
