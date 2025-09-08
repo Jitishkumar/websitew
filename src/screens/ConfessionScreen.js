@@ -88,8 +88,14 @@ const ConfessionsHeader = React.memo(({
               clearTimeout(searchTimeoutRef.current);
             }
             
+            if (text.length === 0) {
+              // Only clear results when completely empty
+              setSearchResults([]);
+              return;
+            }
+            
             if (text.length < 3) {
-              // setSearchResults([]); // Handled by searchLocations when query < 3
+              // Don't search but keep existing results
               return;
             }
             
@@ -362,7 +368,7 @@ const ConfessionScreen = () => {
         clearTimeout(searchTimeoutRef.current);
       }
     };
-  }, [route.params?.selectedConfessionId, selectedLocation, userLocation, setSearchResults, setSearchLoading, setSearchError, setLoading, setConfessions, loadReactionsAndVerifications, currentUser, currentUserUsername]); // Empty dependency array ensures this runs only once on mount
+  }, [route.params?.selectedConfessionId, selectedLocation]); // Dependencies for useEffect
 
   const getProfilePrivacy = async (userId) => {
     try {
@@ -477,7 +483,7 @@ const ConfessionScreen = () => {
 
   const searchLocations = React.useCallback(async (query) => {
     if (query.length < 3) {
-      setSearchResults([]);
+      // Don't clear results immediately, let user interact with existing results
       return;
     }
     
@@ -553,7 +559,7 @@ const ConfessionScreen = () => {
     } finally {
       setSearchLoading(false);
     }
-  }, [userLocation, setSearchResults, setSearchLoading, setSearchError]); // Dependencies for useCallback
+  }, [userLocation]); // Dependencies for useCallback
 
   const handleAddPlace = async () => {
     if (!newPlace.name || !newPlace.city || !newPlace.state || !newPlace.country) {
@@ -654,7 +660,7 @@ const ConfessionScreen = () => {
     
     loadLocationProfile(locationId);
     loadConfessions(location.display_name, true); // Load confessions using location_name
-  }, [setSearchResults, setSelectedLocation, setMapRegion, loadLocationProfile, loadConfessions]); // Dependencies for useCallback
+  }, [loadLocationProfile, loadConfessions]); // Dependencies for useCallback
 
   const loadLocationProfile = React.useCallback(async (locationId) => {
     try {

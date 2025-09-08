@@ -65,11 +65,11 @@ const PersonConfessionsHeader = React.memo(function PersonConfessionsHeaderCompo
           style={styles.searchInput}
           placeholder="Search for a person..."
           placeholderTextColor="#999"
-          value={props.searchQuery}
+          value={String(props.searchQuery || '')}
           onChangeText={props.setSearchQuery}
           autoCapitalize="none"
         />
-        {props.searchQuery.length > 0 && (
+        {String(props.searchQuery || '').length > 0 && (
           <TouchableOpacity onPress={() => props.setSearchQuery('')}>
             <Ionicons name="close-circle" size={20} color="#999" />
           </TouchableOpacity>
@@ -100,7 +100,7 @@ const PersonConfessionsHeader = React.memo(function PersonConfessionsHeaderCompo
 ))}
         </ScrollView>
       ) : (
-        props.searchQuery.trim().length > 0 && !props.searchLoading && (
+        String(props.searchQuery || '').trim().length > 0 && !props.searchLoading && (
           <View style={styles.noResultsContainer}>
             <Text style={styles.noResultsText}>No persons found</Text>
             <TouchableOpacity 
@@ -182,7 +182,8 @@ const ConfessionPersonScreen = () => {
     name: '',
     bio: '' // Added bio for person profile
   });
-  const [searchLoading, setSearchLoading] = useState(false); 
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false); 
 
   // Emoji options for reactions
   const emojiOptions = ['😂', '❤️', '😮', '😢', '😡', '👍', '👎', '🔥', '💯', '🤔'];
@@ -603,6 +604,7 @@ const ConfessionPersonScreen = () => {
   const savePersonProfile = async () => { 
     if (!selectedPerson) return;
     
+    setProfileSaving(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
@@ -640,6 +642,8 @@ const ConfessionPersonScreen = () => {
     } catch (error) {
       console.error('Error saving person profile:', error);
       Alert.alert('Error', 'Failed to update profile. Please try again.');
+    } finally {
+      setProfileSaving(false);
     }
   };
 
@@ -1067,8 +1071,7 @@ const ConfessionPersonScreen = () => {
         .select(`
           id, 
           name,
-          created_by,
-          user_id  // This is the user account associated with this person
+          created_by
         `)
         .eq('id', selectedPerson.id)
         .single();
@@ -1511,34 +1514,27 @@ const ConfessionPersonScreen = () => {
       <FlatList
         data={confessions}
         keyExtractor={(item) => item.id.toString()}
-        // Add ref for scrolling
         ref={confessionsListRef}
         renderItem={renderConfessionItem}
         ListHeaderComponent={
-          <PersonConfessionsHeader // Use new header component
+          <PersonConfessionsHeader
             navigation={navigation}
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
             searchTimeoutRef={searchTimeoutRef}
-            searchPersons={searchPersons} // Pass searchPersons
+            searchPersons={searchPersons}
             searchResults={searchResults}
-            selectPerson={selectPerson} // Pass selectPerson
+            selectPerson={selectPerson}
             searchLoading={searchLoading}
-            // Removed map related props
-            // showMap={showMap}
-            // setShowMap={setShowMapCallback}
-            // goToUserLocation={goToUserLocation}
-            selectedPerson={selectedPerson} // Pass selectedPerson
-            renderPersonProfile={renderPersonProfile} // Pass renderPersonProfile
-            setShowAddPersonModal={setShowAddPersonModalCallback} // Pass setShowAddPersonModalCallback
+            selectedPerson={selectedPerson}
+            renderPersonProfile={renderPersonProfile}
+            setShowAddPersonModal={setShowAddPersonModalCallback}
             searchError={searchError}
             loading={loading}
-            // Removed userLocation
-            // userLocation={userLocation}
           />
         }
         contentContainerStyle={styles.confessionsList}
-        refreshing={loading} 
+        refreshing={loading}
         onRefresh={refreshConfessions}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={() => (
@@ -1569,7 +1565,7 @@ const ConfessionPersonScreen = () => {
 
       {/* Add Person Modal (adapted from Add Place Modal) */}
       <Modal
-        visible={showAddPersonModal} // Changed modal state
+        visible={showAddPersonModal}
         animationType="slide"
         transparent={true}
         onRequestClose={() => setShowAddPersonModal(false)}
@@ -1604,9 +1600,9 @@ const ConfessionPersonScreen = () => {
                 <Text style={styles.label}>Name</Text>
                 <TextInput
                   style={styles.input}
-                  value={newPerson.name} // Use newPerson.name
+                  value={newPerson.name}
                   onChangeText={(text) => setNewPerson(prev => ({ ...prev, name: text }))}
-                  placeholder="Enter person's name" // Changed placeholder
+                  placeholder="Enter person's name"
                   placeholderTextColor="#666"
                 />
               </View>
@@ -1690,7 +1686,7 @@ const ConfessionPersonScreen = () => {
 
       {/* Person Profile Modal (adapted from Location Profile Modal) */}
       <Modal
-        visible={showPersonProfileModal} // Changed modal state
+        visible={showPersonProfileModal}
         animationType="slide"
         transparent={true}
         onRequestClose={() => setShowPersonProfileModal(false)}
@@ -1735,10 +1731,18 @@ const ConfessionPersonScreen = () => {
             </View>
 
             <TouchableOpacity 
-              style={styles.saveProfileButton}
+              style={[styles.saveProfileButton, profileSaving && styles.saveProfileButtonDisabled]}
               onPress={savePersonProfile} // Call savePersonProfile
+              disabled={profileSaving}
             >
-              <Text style={styles.saveProfileButtonText}>Save Profile</Text>
+              {profileSaving ? (
+                <View style={styles.savingContainer}>
+                  <ActivityIndicator size="small" color="#fff" />
+                  <Text style={styles.saveProfileButtonText}>Saving...</Text>
+                </View>
+              ) : (
+                <Text style={styles.saveProfileButtonText}>Save Profile</Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -1841,16 +1845,16 @@ const ConfessionPersonScreen = () => {
         </TouchableOpacity>
       </Modal>
       <Modal
-        visible={showCommentModal} // New state for CommentScreen modal
+        visible={showCommentModal}
         animationType="slide"
         transparent={true}
         onRequestClose={() => setShowCommentModal(false)}
       >
-        <ConfessionPersonCommentScreen // Use the person-specific comment screen
+        <ConfessionPersonCommentScreen
           visible={showCommentModal}
           onClose={() => setShowCommentModal(false)}
           confessionId={selectedConfessionForReaction}
-          onCommentPosted={refreshConfessions} // Refresh confessions when a comment is posted
+          onCommentPosted={refreshConfessions}
         />
       </Modal>
     </View>
@@ -2512,6 +2516,14 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0, 0, 0, 0.5)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 3,
+  },
+  saveProfileButtonDisabled: {
+    opacity: 0.6,
+  },
+  savingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   confessionInput: {
     backgroundColor: '#2a0a3a',
