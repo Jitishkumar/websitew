@@ -955,26 +955,37 @@ const MessageScreen = () => {
             <TouchableOpacity
               onLongPress={() => onLongPress(item)}
               onPress={() => {
-                // Check if this is a shared post (starts with 📝 Shared post from)
-                if (item.text.startsWith('📝 Shared post from')) {
+                // Check if this is a shared post or confession
+                if (item.text.startsWith('📝 Shared post from') || item.text.startsWith('🤫 Shared confession from')) {
                   // Extract username and content for shared text posts
                   const usernameMatch = item.text.match(/@(\w+):/);
                   const username = usernameMatch ? usernameMatch[1] : 'Unknown User';
                   
-                  // Extract post ID and source from the message
+                  // Extract post ID, source, and entity info from the message
                   const postIdMatch = item.text.match(/\[PostID:([^\]]+)\]/);
                   const fromMatch = item.text.match(/\[From:([^\]]+)\]/);
+                  const personIdMatch = item.text.match(/\[PersonID:([^\]]+)\]/);
+                  const locationIdMatch = item.text.match(/\[LocationID:([^\]]+)\]/);
+                  
                   const postId = postIdMatch ? postIdMatch[1] : null;
                   const fromSource = fromMatch ? fromMatch[1] : null;
+                  const personId = personIdMatch ? personIdMatch[1] : null;
+                  const locationId = locationIdMatch ? locationIdMatch[1] : null;
                   
                   // Navigate based on the source and post ID
                   if (postId && fromSource) {
-                    if (fromSource === 'Confession') {
-                      // Navigate to Confession screen with specific post ID
-                      navigation.navigate('Confession', { highlightPostId: postId });
-                    } else if (fromSource === 'ConfessionPerson') {
-                      // Navigate to ConfessionPerson screen with specific post ID
-                      navigation.navigate('ConfessionPerson', { highlightPostId: postId });
+                    if (fromSource === 'Confession' && locationId) {
+                      // Navigate to Confession screen with specific location and post ID
+                      navigation.navigate('Confession', { 
+                        selectedConfessionId: postId,
+                        locationId: locationId
+                      });
+                    } else if (fromSource === 'ConfessionPerson' && personId) {
+                      // Navigate to ConfessionPerson screen with specific person and post ID
+                      navigation.navigate('ConfessionPerson', { 
+                        selectedConfessionId: postId,
+                        personId: personId
+                      });
                     } else {
                       // For regular posts, navigate to PhotoTextViewer
                       const content = item.text.split(':\n\n')[1]?.split('\n\n[PostID:')[0] || item.text;

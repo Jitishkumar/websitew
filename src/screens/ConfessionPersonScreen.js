@@ -183,7 +183,8 @@ const ConfessionPersonScreen = () => {
     bio: '' // Added bio for person profile
   });
   const [searchLoading, setSearchLoading] = useState(false);
-  const [profileSaving, setProfileSaving] = useState(false); 
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [postingConfession, setPostingConfession] = useState(false); 
 
   // Emoji options for reactions
   const emojiOptions = ['😂', '❤️', '😮', '😢', '😡', '👍', '👎', '🔥', '💯', '🤔'];
@@ -222,8 +223,8 @@ const ConfessionPersonScreen = () => {
     setupInitialData();
 
     if (route.params?.selectedConfessionId && !selectedPerson) {
-      // If navigated from a comment notification, load the specific confession
-      const { selectedConfessionId } = route.params;
+      // If navigated from a shared message or comment notification, load the specific confession
+      const { selectedConfessionId, personId } = route.params;
       const fetchAndSetConfession = async () => {
         try {
           setLoading(true);
@@ -277,6 +278,24 @@ const ConfessionPersonScreen = () => {
                 profile_image: null,
                 bio: null,
               };
+            }
+            
+            // If personId is provided from shared message, try to use that instead
+            if (personId && !personDetails) {
+              const { data: sharedPersonData, error: sharedPersonError } = await supabase
+                .from('person_profiles')
+                .select('*')
+                .eq('id', personId)
+                .single();
+              
+              if (!sharedPersonError && sharedPersonData) {
+                personDetails = {
+                  id: sharedPersonData.id,
+                  name: sharedPersonData.name,
+                  profile_image: sharedPersonData.profile_image,
+                  bio: sharedPersonData.bio,
+                };
+              }
             }
             
             if (personDetails) {
@@ -1009,6 +1028,7 @@ const ConfessionPersonScreen = () => {
     
     console.log('Starting postConfession...');
     
+    setPostingConfession(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       console.log('Current user:', user?.id);
@@ -1146,6 +1166,8 @@ const ConfessionPersonScreen = () => {
     } catch (error) {
       console.error('Error posting person confession:', error);
       Alert.alert('Error', error.message || 'Failed to post confession. Please try again.');
+    } finally {
+      setPostingConfession(false);
     }
   };
 
@@ -1807,10 +1829,18 @@ const ConfessionPersonScreen = () => {
             </View>
             
             <TouchableOpacity 
-              style={styles.postButton}
-              onPress={postConfession}
+              style={[styles.postButton, postingConfession && styles.disabledButton]}
+              onPress={postingConfession ? null : postConfession}
+              disabled={postingConfession}
             >
-              <Text style={styles.postButtonText}>Post Confession</Text>
+              {postingConfession ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="small" color="#fff" />
+                  <Text style={styles.postButtonText}>Posting...</Text>
+                </View>
+              ) : (
+                <Text style={styles.postButtonText}>Post Confession</Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -2778,7 +2808,15 @@ const styles = StyleSheet.create({
     color: '#00ffff',
     fontSize: 12,
     fontWeight: 'bold',
-  }
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  disabledButton: {
+    opacity: 0.6,
+  },
 });
 
 export default ConfessionPersonScreen;

@@ -244,6 +244,8 @@ const ConfessionScreen = () => {
     country: ''
   });
   const [searchLoading, setSearchLoading] = useState(false); // New state for search loading
+  const [postingConfession, setPostingConfession] = useState(false); // Loading state for posting confession
+  const [savingProfile, setSavingProfile] = useState(false); // Loading state for saving profile
 
   // Emoji options for reactions
   const emojiOptions = ['😂', '❤️', '😮', '😢', '😡', '👍', '👎', '🔥', '💯', '🤔'];
@@ -281,8 +283,8 @@ const ConfessionScreen = () => {
     setupInitialData();
 
     if (route.params?.selectedConfessionId && !selectedLocation) {
-      // If navigated from a comment notification, load the specific confession
-      const { selectedConfessionId } = route.params;
+      // If navigated from a shared message or comment notification, load the specific confession
+      const { selectedConfessionId, locationId } = route.params;
       const fetchAndSetConfession = async () => {
         try {
           setLoading(true);
@@ -342,6 +344,25 @@ const ConfessionScreen = () => {
                 lon: userLocation?.coords.longitude.toString() || '0',
                 is_custom: false,
               };
+            }
+            
+            // If locationId is provided from shared message, try to use that instead
+            if (locationId && !locationDetails) {
+              const { data: sharedLocationData, error: sharedLocationError } = await supabase
+                .from('places')
+                .select('*')
+                .eq('id', locationId)
+                .single();
+              
+              if (!sharedLocationError && sharedLocationData) {
+                locationDetails = {
+                  place_id: sharedLocationData.id,
+                  display_name: `${sharedLocationData.name}, ${sharedLocationData.city}${sharedLocationData.district ? ', ' + sharedLocationData.district : ''}, ${sharedLocationData.state}, ${sharedLocationData.country}`,
+                  lat: sharedLocationData.latitude ? sharedLocationData.latitude.toString() : '0',
+                  lon: sharedLocationData.longitude ? sharedLocationData.longitude.toString() : '0',
+                  is_custom: true
+                };
+              }
             }
             
             if (locationDetails) {
@@ -684,6 +705,7 @@ const ConfessionScreen = () => {
   const saveLocationProfile = async () => {
     if (!selectedLocation) return;
     
+    setSavingProfile(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
@@ -726,6 +748,8 @@ const ConfessionScreen = () => {
     } catch (error) {
       console.error('Error saving location profile:', error);
       Alert.alert('Error', 'Failed to update profile. Please try again.');
+    } finally {
+      setSavingProfile(false);
     }
   };
 
@@ -1080,6 +1104,7 @@ const ConfessionScreen = () => {
   const postConfession = async () => {
     if (!newConfession.trim() && media.length === 0) return;
     
+    setPostingConfession(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
@@ -1140,6 +1165,8 @@ const ConfessionScreen = () => {
     } catch (error) {
       console.error('Error posting confession:', error);
       Alert.alert('Error', error.message || 'Failed to post confession. Please try again.');
+    } finally {
+      setPostingConfession(false);
     }
   };
 
@@ -1411,6 +1438,8 @@ const ConfessionScreen = () => {
                   media_url: item.media && item.media.length > 0 ? item.media[0].url : null,
                   caption: item.content || '',
                   from: 'Confession',
+                  locationId: selectedLocation?.place_id || selectedLocation?.id,
+                  locationName: selectedLocation?.display_name || selectedLocation?.name,
                   author: {
                     user_id: 'anonymous',
                     username: 'Anonymous',
@@ -1715,10 +1744,18 @@ const ConfessionScreen = () => {
             </View>
 
             <TouchableOpacity 
-              style={styles.saveProfileButton}
-              onPress={saveLocationProfile}
+              style={[styles.saveProfileButton, savingProfile && styles.disabledButton]}
+              onPress={savingProfile ? null : saveLocationProfile}
+              disabled={savingProfile}
             >
-              <Text style={styles.saveProfileButtonText}>Save Profile</Text>
+              {savingProfile ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="small" color="#fff" />
+                  <Text style={styles.saveProfileButtonText}>Saving...</Text>
+                </View>
+              ) : (
+                <Text style={styles.saveProfileButtonText}>Save Profile</Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -1783,10 +1820,18 @@ const ConfessionScreen = () => {
             </View>
             
             <TouchableOpacity 
-              style={styles.postButton}
-              onPress={postConfession}
+              style={[styles.postButton, postingConfession && styles.disabledButton]}
+              onPress={postingConfession ? null : postConfession}
+              disabled={postingConfession}
             >
-              <Text style={styles.postButtonText}>Post Confession</Text>
+              {postingConfession ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="small" color="#fff" />
+                  <Text style={styles.postButtonText}>Posting...</Text>
+                </View>
+              ) : (
+                <Text style={styles.postButtonText}>Post Confession</Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -2737,6 +2782,14 @@ const styles = StyleSheet.create({
   mentionText: {
     color: '#00ffff',
     fontWeight: 'bold',
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  disabledButton: {
+    opacity: 0.6,
   },
 });
 

@@ -192,18 +192,27 @@ const ShareUserSelectionScreen = () => {
         const participants = [currentUserId, recipientId].sort();
         const conversationId = `${participants[0]}_${participants[1]}`;
 
-        // Create message content with author info
+        // Create message content with author info and navigation tags
         let messageContent = sharePayload.caption || '';
         
-        // For shared posts, format the content to include author info
+        // For shared posts, format the content to include author info and navigation tags
         if (sharePayload.author) {
-          if (sharePayload.media_url) {
+          if (sharePayload.from === 'Confession' || sharePayload.from === 'ConfessionPerson') {
+            // For confessions, use confession emoji and format with person/place info
+            const entityInfo = sharePayload.from === 'ConfessionPerson' 
+              ? `[PersonID:${sharePayload.author.user_id}]` 
+              : sharePayload.locationId ? `[LocationID:${sharePayload.locationId}]` : '';
+            messageContent = `🤫 Shared confession from @${sharePayload.author.username}:\n\n${messageContent}\n\n[PostID:${sharePayload.postId}]\n[From:${sharePayload.from}]\n${entityInfo}`;
+          } else if (sharePayload.media_url) {
             // For media posts, keep the caption as is (author info will be shown in header)
-            messageContent = messageContent;
+            messageContent = `${messageContent}\n\n[PostID:${sharePayload.postId}]\n[From:${sharePayload.from || 'Post'}]`;
           } else {
             // For text-only posts, format with author info
-            messageContent = `📝 Shared post from @${sharePayload.author.username}:\n\n${messageContent}`;
+            messageContent = `📝 Shared post from @${sharePayload.author.username}:\n\n${messageContent}\n\n[PostID:${sharePayload.postId}]\n[From:${sharePayload.from || 'Post'}]`;
           }
+        } else {
+          // Fallback for posts without author info
+          messageContent = `${messageContent}\n\n[PostID:${sharePayload.postId}]\n[From:${sharePayload.from || 'Post'}]`;
         }
 
         const messageData = {
