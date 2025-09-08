@@ -503,6 +503,7 @@ const PostItem = ({ post, onOptionsPress }) => {
         media_url: post.media_url || null,
         caption: post.caption || '',
         from: 'PostItem',
+        postType: post.type, // Add explicit post type for better detection
         author: {
           user_id: post?.user_id,
           username: post?.profiles?.username || 'Anonymous User',

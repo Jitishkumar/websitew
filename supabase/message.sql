@@ -21,6 +21,31 @@ create index IF not exists idx_messages_read_status on public.messages using btr
 
 create index IF not exists idx_messages_conversation_id on public.messages using btree (conversation_id) TABLESPACE pg_default;
 
+-- Update existing messages to set proper media_type based on media_url
+UPDATE public.messages 
+SET media_type = CASE 
+  WHEN media_url IS NOT NULL AND (
+    media_url ILIKE '%.mp4%' OR 
+    media_url ILIKE '%/video/%' OR 
+    media_url ILIKE '%video%'
+  ) THEN 'video'
+  WHEN media_url IS NOT NULL AND (
+    media_url ILIKE '%.jpg%' OR 
+    media_url ILIKE '%.jpeg%' OR 
+    media_url ILIKE '%.png%' OR 
+    media_url ILIKE '%/image/%' OR 
+    media_url ILIKE '%image%'
+  ) THEN 'image'
+  WHEN media_url IS NOT NULL THEN 'video' -- Default Cloudinary URLs to video
+  ELSE NULL
+END
+WHERE media_type IS NULL AND media_url IS NOT NULL;
+
+
+
+
+
+
 create trigger on_message_read_status_update
 after
 update OF read on messages for EACH row when (old.read is distinct from new.read)

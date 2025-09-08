@@ -47,13 +47,15 @@ const MessageScreen = () => {
   const hasMarkedOnFocus = useRef(false);
   
   // Media preview states
+  const [selectedMedia, setSelectedMedia] = useState(null);
+  const [showMediaPicker, setShowMediaPicker] = useState(false);
   const [showImagePreview, setShowImagePreview] = useState(false);
   const [showVideoPreview, setShowVideoPreview] = useState(false);
   const [previewMediaUrl, setPreviewMediaUrl] = useState(null);
+  const [previewVideoUrl, setPreviewVideoUrl] = useState(null);
+  const [videoPlaying, setVideoPlaying] = useState(false);
   const videoRef = useRef(null);
-  
-  // Media picker states
-  const [showMediaPicker, setShowMediaPicker] = useState(false);
+  const [videoLoaded, setVideoLoaded] = useState(false);
   const [hasCameraPermission, setHasCameraPermission] = useState(null);
 
   // Get current user and set up conversation
@@ -97,12 +99,52 @@ const MessageScreen = () => {
       // Payload expected: { type: 'reel'|'video'|'image'|'text'|'media', postId, media_url, caption }
       const mediaUrl = payload?.media_url || null;
       const inferredType = (() => {
-        if (payload?.type === 'reel' || payload?.type === 'video') return 'video';
-        if (payload?.type === 'image') return 'image';
-        if (!mediaUrl) return null; // text-only share
+        // First check explicit type from payload
+        if (payload?.type === 'video' || payload?.postType === 'video') return 'video';
+        if (payload?.type === 'image' || payload?.postType === 'image') return 'image';
+        
+        // If no media URL, it's text only
+        if (!mediaUrl) return null;
+        
+        // Check URL patterns
         const lower = mediaUrl.toLowerCase();
-        if (lower.endsWith('.mp4') || lower.includes('/video')) return 'video';
-        return 'image';
+        
+        // Video patterns
+        if (lower.includes('.mp4') || 
+            lower.includes('/video/') || 
+            lower.includes('video') ||
+            lower.includes('res_video')) {
+          return 'video';
+        }
+        
+        // Image patterns  
+        if (lower.includes('.jpg') || 
+            lower.includes('.jpeg') || 
+            lower.includes('.png') || 
+            lower.includes('.gif') ||
+            lower.includes('/image/') || 
+            lower.includes('image') ||
+            lower.includes('res_image')) {
+          return 'image';
+        }
+        
+        // For Cloudinary URLs without clear indicators, check resource type in URL
+        if (lower.includes('cloudinary.com')) {
+          // Look for resource type in URL path
+          if (lower.includes('/video/upload/') || lower.includes('/video/')) return 'video';
+          if (lower.includes('/image/upload/') || lower.includes('/image/')) return 'image';
+          
+          // If from PostItem, use the post type
+          if (payload?.from === 'PostItem' && payload?.postType) {
+            return payload.postType;
+          }
+          
+          // Default Cloudinary to video since most shares are videos
+          return 'video';
+        }
+        
+        // Final fallback
+        return 'video';
       })();
 
       const tempId = `share-${Date.now()}`;
@@ -513,21 +555,26 @@ const MessageScreen = () => {
           if (mediaUrls.length > 0) {
             const { data: postsData, error: postsError } = await supabase
               .from('posts')
-              .select('media_url, user_id, profiles:user_id (username, avatar_url)')
+              .select('*, profiles:user_id (*)')
               .in('media_url', mediaUrls);
             if (!postsError && postsData && postsData.length > 0) {
-              const urlToOwner = {};
+              const urlToPostData = {};
               postsData.forEach(p => {
-                urlToOwner[p.media_url] = {
-                  username: p.profiles?.username || 'User',
-                  avatar_url: p.profiles?.avatar_url || null,
-                };
+                urlToPostData[p.media_url] = p;
               });
-              formattedMessages = formattedMessages.map(m => (
-                m.media_url && urlToOwner[m.media_url]
-                  ? { ...m, post_owner_username: urlToOwner[m.media_url].username, post_owner_avatar: urlToOwner[m.media_url].avatar_url }
-                  : m
-              ));
+
+              formattedMessages = formattedMessages.map(m => {
+                if (m.media_url && urlToPostData[m.media_url]) {
+                  const postData = urlToPostData[m.media_url];
+                  return {
+                    ...m,
+                    post_owner_username: postData.profiles?.username || 'User',
+                    post_owner_avatar: postData.profiles?.avatar_url || null,
+                    original_post: postData, // Attach the full post object
+                  };
+                }
+                return m;
+              });
             }
           }
         } catch (e) {
@@ -1076,24 +1123,25 @@ const MessageScreen = () => {
               onPress={() => {
                 if (item.media_type === 'video') {
                   // Create a mock post object for ShortsScreen
-                  const mockPost = {
-                    id: `shared-video-${Date.now()}`,
+                  const mockPost = item.original_post || {
+                    id: `message_${item.id}`,
                     media_url: item.media_url,
                     type: 'video',
                     caption: item.text || '',
                     user_id: item.sender_id,
+                    created_at: new Date().toISOString(),
                     profiles: {
-                      username: recipientName,
-                      avatar_url: recipientAvatar
+                      username: item.post_owner_username || (item.sender === 'me' ? 'You' : recipientName),
+                      avatar_url: item.post_owner_avatar || recipientAvatar
                     }
                   };
                   
-                  // Navigate to ShortsScreen with posts array
-                  navigation.navigate('Shorts', { 
+                  // Navigate to ShortsScreen with the mock post
+                  navigation.navigate('Shorts', {
                     posts: [mockPost],
                     initialIndex: 0
                   });
-                } else {
+                } else if (item.media_type === 'image') {
                   // Use existing media press handler for images
                   onMediaPress(item.media_url, item.media_type);
                 }
@@ -1102,7 +1150,8 @@ const MessageScreen = () => {
               style={styles.mediaContainer}
             >
               {item.media_type === 'video' ? (
-                <View style={styles.videoThumbContainer}>
+                <View style={styles.videoContainer}>
+                  {/* Use Video component for thumbnail generation */}
                   <Video
                     source={{ uri: item.media_url }}
                     style={styles.messageImage}
@@ -1110,15 +1159,20 @@ const MessageScreen = () => {
                     shouldPlay={false}
                     isLooping={false}
                     useNativeControls={false}
-                    rate={1.0}
-                    onLoadStart={() => {}}
-                    onLoad={() => {}}
-                    onError={() => {
-                      console.log('Video thumbnail failed to load');
-                    }}
+                    positionMillis={1000} // Show frame at 1 second
                   />
-                  <View style={styles.playOverlay}>
-                    <Ionicons name="play-circle" size={40} color="#fff" />
+                  
+                  {/* Video overlay with play button */}
+                  <View style={styles.videoOverlay}>
+                    <View style={styles.videoPlayButton}>
+                      <Ionicons name="play" size={40} color="#fff" />
+                    </View>
+                    
+                    {/* Video indicator */}
+                    <View style={styles.videoIndicator}>
+                      <Ionicons name="videocam-outline" size={12} color="#fff" />
+                      <Text style={styles.videoText}>Video</Text>
+                    </View>
                   </View>
                 </View>
               ) : (
@@ -1147,8 +1201,7 @@ const MessageScreen = () => {
       </View>
     );
   });
-  
-  // Memoized renderItem function to prevent recreation on each render
+
   const renderMessage = React.useCallback(({ item }) => {
     return (
       <MessageItem 
@@ -1158,6 +1211,9 @@ const MessageScreen = () => {
         onMediaPress={(url, type) => {
           setPreviewMediaUrl(url);
           if (type === 'video') {
+            setPreviewVideoUrl(url);
+            setVideoPlaying(false);
+            setVideoLoaded(false);
             setShowVideoPreview(true);
           } else {
             setShowImagePreview(true);
@@ -1442,10 +1498,15 @@ const MessageScreen = () => {
               transparent={false}
               animationType="fade"
               onRequestClose={() => {
-                if (videoRef.current) {
-                  videoRef.current.pauseAsync();
-                }
+                try {
+                  if (videoRef?.current) {
+                    videoRef.current.pauseAsync();
+                  }
+                } catch {}
+                setVideoPlaying(false);
+                setVideoLoaded(false);
                 setShowVideoPreview(false);
+                setPreviewVideoUrl(null);
               }}
             >
               <View style={styles.previewContainer}>
@@ -1456,24 +1517,82 @@ const MessageScreen = () => {
                   <TouchableOpacity 
                     style={styles.previewCloseButton}
                     onPress={() => {
-                      if (videoRef.current) {
-                        videoRef.current.pauseAsync();
-                      }
+                      try {
+                        if (videoRef?.current) {
+                          videoRef.current.pauseAsync();
+                        }
+                      } catch {}
+                      setVideoPlaying(false);
+                      setVideoLoaded(false);
                       setShowVideoPreview(false);
+                      setPreviewVideoUrl(null);
                     }}
                   >
                     <Ionicons name="close" size={28} color="#fff" />
                   </TouchableOpacity>
-                  
-                  <Video
-                    ref={videoRef}
-                    source={{ uri: previewMediaUrl }}
-                    style={styles.previewVideo}
-                    resizeMode="contain"
-                    shouldPlay={true}
-                    isLooping={true}
-                    useNativeControls={true}
-                  />
+
+                  {previewVideoUrl ? (
+                    <>
+                      {!videoLoaded && (
+                        <ActivityIndicator size="large" color="#3399ff" />
+                      )}
+                      <Video
+                        ref={videoRef}
+                        source={{ uri: previewVideoUrl }}
+                        style={styles.previewVideo}
+                        resizeMode="contain"
+                        shouldPlay={videoPlaying}
+                        isLooping={true}
+                        useNativeControls={true}
+                        onLoad={async () => {
+                          setVideoLoaded(true);
+                          setVideoPlaying(true);
+                          try {
+                            if (videoRef.current) {
+                              await videoRef.current.playAsync();
+                            }
+                          } catch (e) {
+                            console.warn('Error starting video:', e);
+                          }
+                        }}
+                        onError={(e) => {
+                          console.error('Video error', e);
+                          Alert.alert('Error', 'Unable to play this video.');
+                          setVideoPlaying(false);
+                        }}
+                      />
+                      
+                      {/* Custom video controls */}
+                      <TouchableOpacity 
+                        style={styles.videoControlsOverlay}
+                        onPress={async () => {
+                          const next = !videoPlaying;
+                          setVideoPlaying(next);
+                          try {
+                            if (videoRef.current) {
+                              if (next) {
+                                await videoRef.current.playAsync();
+                              } else {
+                                await videoRef.current.pauseAsync();
+                              }
+                            }
+                          } catch (e) {
+                            console.warn('Toggle play error', e);
+                          }
+                        }}
+                      >
+                        <View style={styles.pausePlayButton}>
+                          <Ionicons 
+                            name={videoPlaying ? "pause" : "play"} 
+                            size={50} 
+                            color="rgba(255,255,255,0.8)" 
+                          />
+                        </View>
+                      </TouchableOpacity>
+                    </>
+                  ) : (
+                    <ActivityIndicator size="large" color="#3399ff" />
+                  )}
                 </LinearGradient>
               </View>
             </Modal>
@@ -1645,10 +1764,47 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 12,
   },
+  videoContainer: {
+    position: 'relative',
+    width: 200,
+    height: 200,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#000',
+  },
+  videoOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  videoPlayButton: {
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 25,
+    width: 50,
+    height: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  videoIndicator: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
   videoText: {
     color: '#fff',
-    marginTop: 8,
-    fontSize: 14,
+    fontSize: 10,
+    marginLeft: 4,
   },
   inputContainer: {
     flexDirection: 'row',
@@ -1858,6 +2014,80 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.6)',
     fontSize: 10,
     marginLeft: 4,
+  },
+  instagramVideoPreview: {
+    position: 'relative',
+    width: '100%',
+    height: '100%',
+  },
+  videoOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'space-between',
+    padding: 12,
+  },
+  videoHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  videoUserInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  videoUserAvatar: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    marginRight: 6,
+  },
+  videoUsername: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  videoPlayButton: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: [{ translateX: -15 }, { translateY: -15 }],
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 25,
+    width: 50,
+    height: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  videoIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+  },
+  videoText: {
+    color: '#fff',
+    fontSize: 10,
+    marginLeft: 4,
+  },
+  videoControlsOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pausePlayButton: {
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 50,
+    width: 80,
+    height: 80,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   sharedPostPreview: {
     width: '100%',

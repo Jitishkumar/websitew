@@ -195,14 +195,14 @@ const ShareUserSelectionScreen = () => {
         // Create message content with author info
         let messageContent = sharePayload.caption || '';
         
-        // For shared posts, format the content to include author info and post ID
+        // For shared posts, format the content to include author info
         if (sharePayload.author) {
           if (sharePayload.media_url) {
             // For media posts, keep the caption as is (author info will be shown in header)
             messageContent = messageContent;
           } else {
-            // For text-only posts, format with author info and include post ID for navigation
-            messageContent = `📝 Shared post from @${sharePayload.author.username}:\n\n${messageContent}\n\n[PostID:${sharePayload.postId}][From:${sharePayload.from}]`;
+            // For text-only posts, format with author info
+            messageContent = `📝 Shared post from @${sharePayload.author.username}:\n\n${messageContent}`;
           }
         }
 
