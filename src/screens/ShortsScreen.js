@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, FlatList, Dimensions, StyleSheet, TouchableOpacity, Text, ActivityIndicator, Alert, Share, Animated } from 'react-native';
+import { View, FlatList, Dimensions, StyleSheet, TouchableOpacity, Text, ActivityIndicator, Alert, Share, Animated, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { Video } from 'expo-av';
@@ -310,6 +310,11 @@ const ShortsScreen = ({ route }) => {
     }
   };
 
+  // Handle navigation to user profile
+  const handleUserPress = (userId) => {
+    navigation.navigate('UserProfileScreen', { userId });
+  };
+
   // Render each short video item
   const renderItem = ({ item, index }) => {
     // Only render video posts
@@ -318,6 +323,7 @@ const ShortsScreen = ({ route }) => {
     // Get like count
     const likeCount = item.likes?.[0]?.count || 0;
     const commentCount = item.comments?.[0]?.count || 0;
+    const user = item.profiles || {};
     
     return (
       <View style={styles.videoContainer}>
@@ -343,59 +349,118 @@ const ShortsScreen = ({ route }) => {
           />
           
           {/* User info overlay */}
-          <LinearGradient
-            colors={['rgba(0,0,0,0.3)', 'transparent', 'rgba(0,0,0,0.7)']}
-            style={styles.overlay}
+          <LinearGradient 
+            colors={['transparent', 'rgba(0,0,0,0.8)']} 
+            style={[styles.userInfoOverlay, { paddingBottom: insets.bottom + 20 }]}
           >
-            {/* Top controls */}
-            <View style={[styles.topControls, { paddingTop: insets.top }]}>
+            <View style={styles.userInfo}>
               <TouchableOpacity 
-                style={styles.backButton}
-                onPress={() => navigation.goBack()}
+                style={styles.userHeader}
+                onPress={() => handleUserPress(user.id)}
+                activeOpacity={0.7}
               >
-                <LinearGradient
-                  colors={['rgba(102, 126, 234, 0.8)', 'rgba(156, 136, 255, 0.6)']}
-                  style={styles.backButtonGradient}
+                <Image 
+                  source={{ uri: user.avatar_url || 'https://via.placeholder.com/100' }} 
+                  style={styles.avatar} 
+                />
+                <Text style={styles.username}>@{user.username || 'user'}</Text>
+              </TouchableOpacity>
+              <Text style={styles.caption}>{item.caption}</Text>
+            </View>
+            
+            {/* Social interaction buttons */}
+            <View style={styles.socialButtons}>
+              <TouchableOpacity 
+                style={styles.socialButton} 
+                onPress={() => handleLike(item.id)}
+              >
+                <LinearGradient 
+                  colors={item.is_liked ? ['#ff00ff', '#9900ff'] : ['rgba(0,0,0,0.5)', 'rgba(0,0,0,0.5)']}
+                  style={styles.socialButtonGradient}
                 >
-                  <Ionicons name="arrow-back" size={20} color="#fff" />
+                  <Ionicons name={item.is_liked ? 'heart' : 'heart-outline'} size={26} color="#fff" />
+                </LinearGradient>
+                <Text style={styles.socialButtonText}>{likeCount}</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.socialButton}
+                onPress={() => handleComment(item.id)}
+              >
+                <LinearGradient 
+                  colors={['rgba(0,0,0,0.5)', 'rgba(0,0,0,0.5)']}
+                  style={styles.socialButtonGradient}
+                >
+                  <Ionicons name="chatbubble-outline" size={24} color="#fff" />
+                </LinearGradient>
+                <Text style={styles.socialButtonText}>{commentCount}</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.socialButton}
+                onPress={() => handleShare(item)}
+              >
+                <LinearGradient 
+                  colors={['rgba(0,0,0,0.5)', 'rgba(0,0,0,0.5)']}
+                  style={styles.socialButtonGradient}
+                >
+                  <Ionicons name="share-social-outline" size={24} color="#fff" />
                 </LinearGradient>
               </TouchableOpacity>
             </View>
-            
-            {/* Bottom controls */}
-            <View style={styles.bottomControls}>
-              <View style={styles.timeContainer}>
-                <Text style={styles.timeText}>{formatTime(currentTime)}</Text>
-                <Text style={styles.timeText}>{formatTime(duration)}</Text>
+          </LinearGradient>
+
+          {/* Video controls */}
+          {showControls && (
+            <LinearGradient 
+              colors={['rgba(0,0,0,0.7)', 'transparent', 'rgba(0,0,0,0.7)']} 
+              style={styles.controlsOverlay}
+            >
+              {/* Top controls */}
+              <View style={[styles.topControls, { paddingTop: insets.top }]}>
+                <TouchableOpacity 
+                  style={styles.backButton} 
+                  onPress={() => navigation.goBack()}
+                >
+                  <Ionicons name="arrow-back" size={28} color="#fff" />
+                </TouchableOpacity>
               </View>
               
-              <View style={styles.seekbarContainer}>
-                <View style={styles.progressBackground} />
-                <View style={[styles.progressBar, { width: `${progress * 100}%` }]} />
-                <View style={styles.seekbarTouchable}>
-                  <TouchableOpacity 
-                    style={[styles.seekKnob, { left: `${progress * 100}%` }]}
-                  />
-                  <View 
-                    style={styles.seekbarTouchArea}
-                    onTouchStart={(event) => {
-                      const { locationX } = event.nativeEvent;
-                      const seekPosition = locationX / width;
-                      handleSeek(Math.max(0, Math.min(1, seekPosition)));
-                    }}
-                  />
+              {/* Bottom controls */}
+              <View style={styles.bottomControls}>
+                <View style={styles.timeContainer}>
+                  <Text style={styles.timeText}>{formatTime(currentTime)}</Text>
+                  <Text style={styles.timeText}>{formatTime(duration)}</Text>
+                </View>
+                
+                <View style={styles.seekbarContainer}>
+                  <View style={styles.progressBackground} />
+                  <View style={[styles.progressBar, { width: `${progress * 100}%` }]} />
+                  <View style={styles.seekbarTouchable}>
+                    <TouchableOpacity 
+                      style={[styles.seekKnob, { left: `${progress * 100}%` }]}
+                    />
+                    <View 
+                      style={styles.seekbarTouchArea}
+                      onTouchStart={(event) => {
+                        const { locationX } = event.nativeEvent;
+                        const seekPosition = locationX / width;
+                        handleSeek(Math.max(0, Math.min(1, seekPosition)));
+                      }}
+                    />
+                  </View>
                 </View>
               </View>
-            </View>
-          </LinearGradient>
+            </LinearGradient>
+          )}
+          
+          {/* Pause icon that appears briefly when video is paused */}
+          {showPauseIcon && index === currentIndex && (
+            <Animated.View style={[styles.pauseIconContainer, { opacity: fadeAnim }]}>
+              <Ionicons name="pause" size={50} color="#fff" />
+            </Animated.View>
+          )}
         </TouchableOpacity>
-        
-        {/* Pause icon that appears briefly when video is paused */}
-        {showPauseIcon && index === currentIndex && (
-          <Animated.View style={[styles.pauseIconContainer, { opacity: fadeAnim }]}>
-            <Ionicons name="pause" size={50} color="#fff" />
-          </Animated.View>
-        )}
       </View>
     );
   };
@@ -423,7 +488,7 @@ const ShortsScreen = ({ route }) => {
   }
 
   return (
-    <LinearGradient colors={['#1a1a2e', '#16213e', '#0f3460']} style={styles.container}>
+    <View style={styles.container}>
       <FlatList
         ref={flatListRef}
         data={posts.filter(post => post.type === 'video')}
@@ -441,33 +506,39 @@ const ShortsScreen = ({ route }) => {
         onScrollToIndexFailed={onScrollToIndexFailed}
         vertical
       />
-    </LinearGradient>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#0a0a0a',
   },
   centered: {
     justifyContent: 'center',
     alignItems: 'center',
   },
   emptyText: {
-    color: '#fff',
+    color: '#e5e5e5',
     fontSize: 18,
     marginBottom: 20,
+    fontWeight: '500',
   },
   backButtonText: {
-    color: '#ff00ff',
+    color: '#3b82f6',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '600',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    borderRadius: 20,
+    overflow: 'hidden',
   },
   videoContainer: {
     width,
     height,
-    backgroundColor: '#000',
+    backgroundColor: '#0a0a0a',
   },
   videoWrapper: {
     flex: 1,
@@ -483,15 +554,29 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    padding: 20,
+    padding: 16,
+    paddingBottom: 80,
+  },
+  userHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+    borderWidth: 2,
+    borderColor: 'rgba(59, 130, 246, 0.8)',
   },
   userInfo: {
     marginBottom: 20,
   },
   socialButtons: {
     position: 'absolute',
-    right: 10,
-    bottom: 80,
+    right: 16,
+    bottom: 100,
     alignItems: 'center',
   },
   socialButton: {
@@ -499,26 +584,38 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   socialButtonGradient: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 5,
+    marginBottom: 8,
+    backgroundColor: 'rgba(30, 30, 30, 0.7)',
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.2)',
   },
   socialButtonText: {
-    color: '#fff',
+    color: '#e5e5e5',
     fontSize: 12,
+    fontWeight: '600',
+    marginTop: 2,
   },
   username: {
-    color: '#fff',
+    color: '#ffffff',
     fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 5,
+    fontWeight: '600',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   },
   caption: {
-    color: '#fff',
-    fontSize: 14,
+    color: '#e5e5e5',
+    fontSize: 15,
+    lineHeight: 20,
+    marginLeft: 4,
+    textShadowColor: 'rgba(0, 0, 0, 0.7)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   },
   controlsOverlay: {
     position: 'absolute',
@@ -537,9 +634,11 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(30, 30, 30, 0.8)',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.2)',
   },
   playPauseButton: {
     alignSelf: 'center',
@@ -552,7 +651,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   bottomControls: {
-    padding: 20,
+    padding: 16,
+    paddingBottom: 20,
   },
   timeContainer: {
     flexDirection: 'row',
@@ -560,8 +660,11 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   timeText: {
-    color: '#fff',
+    color: '#e5e5e5',
     fontSize: 12,
+    marginHorizontal: 10,
+    fontVariant: ['tabular-nums'],
+    opacity: 0.8,
   },
   seekbarContainer: {
     height: 20,
@@ -571,17 +674,20 @@ const styles = StyleSheet.create({
   progressBackground: {
     position: 'absolute',
     left: 0,
-    right: 0,
     height: 3,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    borderRadius: 1.5,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    width: '100%',
+    borderRadius: 2,
   },
   progressBar: {
     position: 'absolute',
     left: 0,
     height: 3,
-    backgroundColor: '#ff00ff',
-    borderRadius: 1.5,
+    backgroundColor: '#3b82f6',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    zIndex: 1,
   },
   seekbarTouchable: {
     position: 'absolute',
@@ -590,13 +696,16 @@ const styles = StyleSheet.create({
     height: 20,
   },
   seekKnob: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#3b82f6',
     position: 'absolute',
-    width: 15,
-    height: 15,
-    borderRadius: 7.5,
-    backgroundColor: '#ff00ff',
-    transform: [{ translateX: -7.5 }],
-    top: -6,
+    top: -4.5,
+    marginLeft: -6,
+    zIndex: 2,
+    borderWidth: 2,
+    borderColor: '#ffffff',
   },
   seekbarTouchArea: {
     position: 'absolute',

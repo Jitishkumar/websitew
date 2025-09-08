@@ -192,28 +192,19 @@ const ShareUserSelectionScreen = () => {
         const participants = [currentUserId, recipientId].sort();
         const conversationId = `${participants[0]}_${participants[1]}`;
 
-        // Create message content with author info and navigation tags
+        // Create clean message content
         let messageContent = sharePayload.caption || '';
         
-        // For shared posts, format the content with hidden navigation tags
+        // Add context about the shared content
         if (sharePayload.author) {
           if (sharePayload.from === 'Confession' || sharePayload.from === 'ConfessionPerson') {
-            // For confessions, use confession emoji and format cleanly
             messageContent = `🤫 Shared confession from @${sharePayload.author.username}:\n\n${messageContent}`;
           } else if (sharePayload.media_url) {
-            // For media posts, add elegant prefix
             messageContent = `✨ Shared by @${sharePayload.author.username}:\n\n${messageContent}`;
           } else {
-            // For text-only posts, format with elegant styling
             messageContent = `💎 Shared by @${sharePayload.author.username}:\n\n${messageContent}`;
           }
         }
-        
-        // Add hidden navigation metadata at the end (invisible to users but needed for navigation)
-        const hiddenMetadata = `\u200B[PostID:${sharePayload.postId}]\u200B[From:${sharePayload.from}]` + 
-          (sharePayload.from === 'ConfessionPerson' ? `\u200B[PersonID:${sharePayload.author.user_id}]` : '') +
-          (sharePayload.locationId ? `\u200B[LocationID:${sharePayload.locationId}]` : '');
-        messageContent += hiddenMetadata;
 
         const messageData = {
           conversation_id: conversationId,

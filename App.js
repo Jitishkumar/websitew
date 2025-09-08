@@ -7,22 +7,25 @@ import { MessageProvider } from './src/context/MessageContext';
 import { NotificationProvider } from './src/context/NotificationContext';
 import { VideoProvider } from './src/context/VideoContext';
 import { StyleSheet, View, Platform } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 export default function App() {
   return (
-    <SafeAreaProvider style={styles.container}>
-      <AccountProvider>
-        <MessageProvider>
-          <NotificationProvider>
-            <VideoProvider>
-              <NavigationContainer>
-                <AppNavigator />
-              </NavigationContainer>
-            </VideoProvider>
-          </NotificationProvider>
-        </MessageProvider>
-      </AccountProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider style={styles.container}>
+        <AccountProvider>
+          <MessageProvider>
+            <NotificationProvider>
+              <VideoProvider>
+                <NavigationContainer>
+                  <AppNavigator />
+                </NavigationContainer>
+              </VideoProvider>
+            </NotificationProvider>
+          </MessageProvider>
+        </AccountProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 

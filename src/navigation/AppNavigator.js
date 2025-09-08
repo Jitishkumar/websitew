@@ -126,7 +126,7 @@ const TabNavigator = () => {
       }}
     />
     <Tab.Screen 
-      name="ConfessionButton" 
+      name="Confession" 
       component={ConfessionButtonScreen}
       options={{
         tabBarIcon: ({ color }) => (

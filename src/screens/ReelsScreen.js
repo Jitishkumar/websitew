@@ -16,6 +16,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect, CommonActions } from '@react-navigation/native';
 import { Video } from 'expo-av';
+import { TapGestureHandler, State } from 'react-native-gesture-handler';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useVideo } from '../context/VideoContext';
@@ -44,6 +45,8 @@ const ReelsScreen = () => {
   const [loadingMore, setLoadingMore] = useState(false);
   const [page, setPage] = useState(0);
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const lastTap = useRef(0);
+  const doubleTapAnim = useRef(new Animated.Value(0)).current;
   const controlsTimeout = useRef(null);
   const touchTimer = useRef(null);
   const isTouchHolding = useRef(false);
@@ -183,9 +186,61 @@ const loadReels = async (isInitialLoad = false) => {
     return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
   };
 
+  // Handle double tap to like
+  const handleDoubleTap = async (postId) => {
+    const now = Date.now();
+    const DOUBLE_TAP_DELAY = 300;
+    
+    if (lastTap.current && (now - lastTap.current) < DOUBLE_TAP_DELAY) {
+      // This is a double tap
+      handleLike(postId);
+      // Trigger heart animation
+      Animated.sequence([
+        Animated.timing(doubleTapAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.delay(200),
+        Animated.timing(doubleTapAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        })
+      ]).start();
+    } else {
+      lastTap.current = now;
+    }
+  };
+
   // Handle video press - show controls only (do not toggle play/pause)
-  const handleVideoPress = () => {
-    showVideoControls();
+  const handleVideoPress = (postId) => {
+    const now = Date.now();
+    const DOUBLE_TAP_DELAY = 300;
+    
+    if (lastTap.current && (now - lastTap.current) < DOUBLE_TAP_DELAY) {
+      // This is a double tap
+      handleLike(postId);
+      // Trigger heart animation
+      Animated.sequence([
+        Animated.timing(doubleTapAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.delay(200),
+        Animated.timing(doubleTapAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        })
+      ]).start();
+      lastTap.current = 0; // Reset to prevent multiple triggers
+    } else {
+      // Single tap - show controls
+      showVideoControls();
+      lastTap.current = now;
+    }
   };
   
   // Touch handlers for press-to-pause functionality
@@ -290,7 +345,7 @@ const loadReels = async (isInitialLoad = false) => {
   const handleLike = async (postId) => {
     try {
       if (!currentUser) {
-        Alert.alert('Login Required', 'Please log in to like posts');
+        // Don't show alert on double tap to prevent interrupting the user experience
         return;
       }
 
@@ -503,18 +558,47 @@ const loadReels = async (isInitialLoad = false) => {
 
   // Render each reel item
   const renderItem = ({ item, index }) => {
+    // Only render video posts
+    if (item.type !== 'video') return null;
+    
     const likeCount = item.likes?.[0]?.count || 0;
     const commentCount = item.comments?.[0]?.count || 0;
+    const user = item.profiles || {};
     
+    // Heart animation style
+    const heartScale = doubleTapAnim.interpolate({
+      inputRange: [0, 0.5, 1],
+      outputRange: [0, 1.5, 1],
+    });
+    
+    const heartOpacity = doubleTapAnim.interpolate({
+      inputRange: [0, 0.5, 1],
+      outputRange: [0, 0.8, 0],
+    });
+
     return (
       <View style={styles.videoContainer}>
         <TouchableOpacity 
           activeOpacity={1} 
           style={styles.videoWrapper} 
-          onPress={handleVideoPress}
+          onPress={() => handleVideoPress(item.id)}
           onPressIn={handleTouchStart}
           onPressOut={handleTouchEnd}
+          delayLongPress={350}
         >
+          {/* Double tap heart animation */}
+          <Animated.View 
+            style={[
+              styles.heartContainer,
+              {
+                opacity: heartOpacity,
+                transform: [{ scale: heartScale }]
+              }
+            ]}
+            pointerEvents="none"
+          >
+            <Ionicons name="heart" size={120} color="#fff" style={styles.heartIcon} />
+          </Animated.View>
           <Video
             ref={ref => { videoRefs.current[index] = ref }}
             source={{ uri: item.media_url }}
@@ -743,34 +827,46 @@ const loadReels = async (isInitialLoad = false) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#0a0a0a',
   },
   centered: {
     justifyContent: 'center',
     alignItems: 'center',
   },
   loadingText: {
-    color: '#fff',
+    color: '#e5e5e5',
     fontSize: 16,
-    marginTop: 10,
+    marginTop: 12,
+    opacity: 0.9,
   },
   emptyText: {
-    color: '#fff',
+    color: '#ffffff',
     fontSize: 18,
-    fontWeight: 'bold',
-    marginTop: 10,
-    marginBottom: 5,
+    fontWeight: '600',
+    marginTop: 12,
+    marginBottom: 8,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   },
   emptySubtext: {
-    color: '#999',
+    color: '#a0a0a0',
     fontSize: 14,
-    marginBottom: 20,
+    marginBottom: 24,
+    textAlign: 'center',
+    paddingHorizontal: 40,
+    lineHeight: 20,
   },
   createButton: {
-    backgroundColor: '#ff1744',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
+    backgroundColor: 'rgba(59, 130, 246, 0.9)',
+    paddingHorizontal: 28,
+    paddingVertical: 14,
     borderRadius: 25,
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
   },
   createButtonText: {
     color: '#fff',
@@ -780,7 +876,7 @@ const styles = StyleSheet.create({
   videoContainer: {
     width,
     height,
-    backgroundColor: '#000',
+    backgroundColor: '#0a0a0a',
   },
   videoWrapper: {
     flex: 1,
@@ -796,7 +892,8 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    padding: 20,
+    padding: 16,
+    paddingBottom: 80,
   },
   userInfo: {
     marginBottom: 20,
@@ -807,71 +904,91 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     marginRight: 12,
-    backgroundColor: '#333',
+    backgroundColor: '#1a1a1a',
+    borderWidth: 2,
+    borderColor: 'rgba(59, 130, 246, 0.7)',
   },
   userNameContainer: {
     flex: 1,
   },
   username: {
-    color: '#fff',
+    color: '#ffffff',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '600',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   },
   userHandle: {
-    color: '#999',
+    color: '#a0a0a0',
     fontSize: 13,
+    marginTop: 2,
   },
   followButton: {
-    backgroundColor: '#ff1744',
+    backgroundColor: 'rgba(59, 130, 246, 0.9)',
     paddingHorizontal: 16,
-    paddingVertical: 6,
+    paddingVertical: 8,
     borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.5)',
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   followingButton: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(30, 30, 30, 0.7)',
     borderWidth: 1,
-    borderColor: '#fff',
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   followButtonText: {
-    color: '#fff',
+    color: '#ffffff',
     fontSize: 12,
-    fontWeight: 'bold',
+    fontWeight: '600',
   },
   followingButtonText: {
-    color: '#fff',
+    color: '#e5e5e5',
   },
   caption: {
-    color: '#fff',
-    fontSize: 14,
-    lineHeight: 20,
-    paddingRight: 70,
+    color: '#e5e5e5',
+    fontSize: 15,
+    lineHeight: 22,
+    paddingRight: 80,
+    textShadowColor: 'rgba(0, 0, 0, 0.7)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   },
   socialButtons: {
     position: 'absolute',
-    right: 15,
-    bottom: 150,
+    right: 16,
+    bottom: 160,
     alignItems: 'center',
   },
   socialButton: {
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   socialButtonGradient: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 5,
+    marginBottom: 6,
+    backgroundColor: 'rgba(30, 30, 30, 0.7)',
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.2)',
   },
   socialButtonText: {
-    color: '#fff',
-    fontSize: 11,
+    color: '#e5e5e5',
+    fontSize: 12,
     fontWeight: '600',
+    marginTop: 2,
   },
   controlsOverlay: {
     position: 'absolute',
@@ -888,17 +1005,22 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(30, 30, 30, 0.8)',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.2)',
   },
   reelsTitle: {
-    color: '#fff',
+    color: '#ffffff',
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '600',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',    
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   },
   placeholder: {
     width: 40,
@@ -912,9 +1034,11 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   timeText: {
-    color: '#fff',
+    color: '#e5e5e5',
     fontSize: 12,
     fontWeight: '500',
+    fontVariant: ['tabular-nums'],
+    opacity: 0.9,
   },
   seekbarContainer: {
     height: 20,
@@ -926,14 +1050,14 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 3,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     borderRadius: 1.5,
   },
   progressBar: {
     position: 'absolute',
     left: 0,
     height: 3,
-    backgroundColor: '#ff1744',
+    backgroundColor: '#3b82f6',
     borderRadius: 1.5,
   },
   seekbarTouchArea: {
@@ -944,12 +1068,19 @@ const styles = StyleSheet.create({
   },
   seekKnob: {
     position: 'absolute',
-    width: 15,
-    height: 15,
-    borderRadius: 7.5,
-    backgroundColor: '#ff1744',
-    transform: [{ translateX: -7.5 }],
-    top: -6,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#3b82f6',
+    transform: [{ translateX: -7 }],
+    top: -5.5,
+    borderWidth: 2,
+    borderColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 2,
   },
   pauseIconContainer: {
     position: 'absolute',
@@ -971,7 +1102,20 @@ const styles = StyleSheet.create({
     height: 100,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#000',
+    backgroundColor: '#0a0a0a',
+  },
+  heartContainer: {
+    position: 'absolute',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+    height: '100%',
+    zIndex: 10,
+  },
+  heartIcon: {
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 2, height: 2 },
+    textShadowRadius: 10,
   },
 });
 

@@ -477,7 +477,7 @@ const TrendingScreen = () => {
           <Ionicons
             name={tab.icon}
             size={20}
-            color={activeTab === tab.id ? '#fff' : '#999'}
+            color={activeTab === tab.id ? '#ffffff' : '#888888'}
             style={styles.tabIcon}
           />
           <Text style={[
@@ -538,15 +538,15 @@ const TrendingScreen = () => {
 
           <View style={styles.postStats}>
             <View style={styles.statItem}>
-              <Ionicons name="heart" size={16} color="#ff00ff" />
+              <Ionicons name="heart" size={16} color="#ef4444" />
               <Text style={styles.statText}>{item.likes_count || 0}</Text>
             </View>
             <View style={styles.statItem}>
-              <Ionicons name="chatbubble" size={16} color="#ff66ff" />
+              <Ionicons name="chatbubble" size={16} color="#3b82f6" />
               <Text style={styles.statText}>{item.comments_count || 0}</Text>
             </View>
             <View style={styles.statItem}>
-              <Ionicons name="time" size={16} color="#999" />
+              <Ionicons name="time" size={16} color="#888888" />
               <Text style={styles.statText}>
                 {new Date(item.created_at).toLocaleDateString()}
               </Text>
@@ -558,11 +558,11 @@ const TrendingScreen = () => {
   );
 
   const renderTopicItem = ({ item, index }) => {
-    // Determine gradient colors based on trending rank
+    // Determine gradient colors based on trending rank - premium dark theme
     const getGradientColors = (rank) => {
-      if (rank >= 50) return ['#667eea', '#764ba2']; // High trending - blue to purple
-      if (rank >= 20) return ['#f093fb', '#f5576c']; // Medium trending - pink to red
-      return ['#4facfe', '#00f2fe']; // Low trending - blue to cyan
+      if (rank >= 50) return ['rgba(59, 130, 246, 0.8)', 'rgba(147, 51, 234, 0.8)']; // High trending - blue to purple
+      if (rank >= 20) return ['rgba(168, 85, 247, 0.8)', 'rgba(239, 68, 68, 0.8)']; // Medium trending - purple to red
+      return ['rgba(34, 197, 94, 0.8)', 'rgba(59, 130, 246, 0.8)']; // Low trending - green to blue
     };
 
     const getRankIcon = (rank) => {
@@ -623,7 +623,7 @@ const TrendingScreen = () => {
     if (loading) {
       return (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#ff66ff" />
+          <ActivityIndicator size="large" color="#3b82f6" />
           <Text style={styles.loadingText}>Loading trending content...</Text>
         </View>
       );
@@ -641,13 +641,13 @@ const TrendingScreen = () => {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={['#ff66ff']}
-              tintColor="#ff66ff"
+              colors={['#3b82f6']}
+              tintColor="#3b82f6"
             />
           }
           ListEmptyComponent={() => (
             <View style={styles.emptyContainer}>
-              <Ionicons name={isSearching ? 'search' : 'trending-up'} size={60} color="#666" />
+              <Ionicons name={isSearching ? 'search' : 'trending-up'} size={60} color="#666666" />
               <Text style={styles.emptyText}>
                 {isSearching 
                   ? `No hashtags found for "${searchQuery}"` 
@@ -678,8 +678,8 @@ const TrendingScreen = () => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={['#ff66ff']}
-            tintColor="#ff66ff"
+            colors={['#3b82f6']}
+            tintColor="#3b82f6"
           />
         }
         ListEmptyComponent={() => (
@@ -687,7 +687,7 @@ const TrendingScreen = () => {
             <Ionicons
               name={isSearching ? 'search' : (activeTab === 'videos' ? 'videocam' : 'document-text')}
               size={60}
-              color="#666"
+              color="#666666"
             />
             <Text style={styles.emptyText}>
               {isSearching 
@@ -710,12 +710,12 @@ const TrendingScreen = () => {
     <View style={styles.container}>
       {/* Header */}
       <LinearGradient
-        colors={['#330033', '#440044']}
+        colors={['rgba(15, 15, 15, 0.95)', 'rgba(25, 25, 25, 0.9)']}
         style={[styles.header, { paddingTop: insets.top > 0 ? insets.top : 50 }]}
       >
         <View style={styles.headerRow}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#ff66ff" />
+            <Ionicons name="arrow-back" size={24} color="#3b82f6" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Trending</Text>
           <View style={styles.betaTag}>
@@ -759,7 +759,7 @@ const TrendingScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#220022',
+    backgroundColor: '#0a0a0a',
   },
   header: {
     paddingBottom: 15,
@@ -774,37 +774,39 @@ const styles = StyleSheet.create({
     marginRight: 15,
   },
   headerTitle: {
-    color: 'white',
+    color: '#ffffff',
     fontSize: 24,
     fontWeight: 'bold',
     flex: 1,
   },
   betaTag: {
-    backgroundColor: '#ff66ff',
+    backgroundColor: 'rgba(59, 130, 246, 0.8)',
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
   betaText: {
-    color: 'white',
+    color: '#ffffff',
     fontSize: 10,
     fontWeight: 'bold',
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#440044',
+    backgroundColor: 'rgba(30, 30, 30, 0.8)',
     borderRadius: 25,
     paddingHorizontal: 15,
     paddingVertical: 12,
     marginBottom: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.2)',
   },
   searchIcon: {
     marginRight: 10,
   },
   searchInput: {
     flex: 1,
-    color: '#fff',
+    color: '#ffffff',
     fontSize: 16,
     paddingVertical: 0,
   },
@@ -813,9 +815,11 @@ const styles = StyleSheet.create({
   },
   tabContainer: {
     flexDirection: 'row',
-    backgroundColor: '#330033',
+    backgroundColor: 'rgba(20, 20, 20, 0.8)',
     borderRadius: 25,
     padding: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.15)',
   },
   tabButton: {
     flex: 1,
@@ -826,18 +830,18 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   activeTabButton: {
-    backgroundColor: '#ff00ff',
+    backgroundColor: 'rgba(59, 130, 246, 0.8)',
   },
   tabIcon: {
     marginRight: 6,
   },
   tabText: {
-    color: '#999',
+    color: '#888888',
     fontSize: 14,
     fontWeight: '600',
   },
   activeTabText: {
-    color: '#fff',
+    color: '#ffffff',
     fontWeight: 'bold',
   },
   content: {
@@ -849,7 +853,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
-    color: '#999',
+    color: '#888888',
     marginTop: 15,
     fontSize: 16,
   },
@@ -860,12 +864,12 @@ const styles = StyleSheet.create({
     padding: 15,
   },
   postCard: {
-    backgroundColor: '#330033',
+    backgroundColor: 'rgba(25, 25, 25, 0.9)',
     borderRadius: 15,
     margin: 5,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#440044',
+    borderColor: 'rgba(59, 130, 246, 0.1)',
     flex: 1,
   },
   postContent: {
@@ -880,13 +884,13 @@ const styles = StyleSheet.create({
   postVideo: {
     width: '100%',
     height: 180,
-    backgroundColor: '#440044',
+    backgroundColor: 'rgba(30, 30, 30, 0.8)',
   },
   postImage: {
     width: '100%',
     height: 200,
     borderRadius: 10,
-    backgroundColor: '#440044',
+    backgroundColor: 'rgba(30, 30, 30, 0.8)',
     marginBottom: 10,
   },
   playIconOverlay: {
@@ -916,12 +920,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   username: {
-    color: '#ff66ff',
+    color: '#3b82f6',
     fontSize: 14,
     fontWeight: 'bold',
   },
   postCaption: {
-    color: 'white',
+    color: '#e5e5e5',
     fontSize: 14,
     lineHeight: 20,
   },
@@ -935,7 +939,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   statText: {
-    color: '#999',
+    color: '#888888',
     fontSize: 12,
   },
   topicCard: {
@@ -968,12 +972,12 @@ const styles = StyleSheet.create({
     paddingVertical: 60,
   },
   emptyText: {
-    color: '#999',
+    color: '#888888',
     fontSize: 16,
     marginTop: 15,
   },
   emptySubText: {
-    color: '#666',
+    color: '#666666',
     fontSize: 14,
     marginTop: 8,
     textAlign: 'center',
@@ -995,7 +999,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   rankNumber: {
-    color: '#fff',
+    color: '#ffffff',
     fontSize: 14,
     fontWeight: 'bold',
   },
@@ -1008,7 +1012,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   hashtagText: {
-    color: '#fff',
+    color: '#ffffff',
     fontSize: 18,
     fontWeight: 'bold',
     marginLeft: 8,
@@ -1024,7 +1028,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   trendingScore: {
-    color: '#fff',
+    color: '#ffffff',
     fontSize: 12,
     fontWeight: 'bold',
   },

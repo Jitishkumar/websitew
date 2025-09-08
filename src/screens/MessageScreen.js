@@ -1144,28 +1144,18 @@ const MessageScreen = () => {
             >
               {item.media_type === 'video' ? (
                 <View style={styles.videoContainer}>
-                  {/* Use Video component for thumbnail generation */}
                   <Video
                     source={{ uri: item.media_url }}
-                    style={styles.messageImage}
+                    style={styles.messageVideo}
                     resizeMode="cover"
                     shouldPlay={false}
+                    isMuted={true}
                     isLooping={false}
                     useNativeControls={false}
-                    positionMillis={1000} // Show frame at 1 second
+                    positionMillis={1000}
                   />
-                  
-                  {/* Video overlay with play button */}
-                  <View style={styles.videoOverlay}>
-                    <View style={styles.videoPlayButton}>
-                      <Ionicons name="play" size={40} color="#fff" />
-                    </View>
-                    
-                    {/* Video indicator */}
-                    <View style={styles.videoIndicator}>
-                      <Ionicons name="videocam-outline" size={12} color="#fff" />
-                      <Text style={styles.videoText}>Video</Text>
-                    </View>
+                  <View style={styles.videoPlayButton}>
+                    <Ionicons name="play-circle" size={50} color="rgba(255,255,255,0.9)" />
                   </View>
                 </View>
               ) : (
@@ -1704,11 +1694,26 @@ const styles = StyleSheet.create({
   readStatus: {
     marginLeft: 4,
   },
-  mediaContainer: {
-    marginVertical: 4,
-    borderRadius: 12,
+  videoContainer: {
+    position: 'relative',
+    borderRadius: 15,
     overflow: 'hidden',
-    backgroundColor: '#222',
+    marginVertical: 5,
+    backgroundColor: '#1a1a1a',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  messageVideo: {
+    width: '100%',
+    height: 200,
+    opacity: 0.7,
+  },
+  videoPlayButton: {
+    position: 'absolute',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+    height: '100%',
   },
   messageImage: {
     width: 200,
