@@ -7,6 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import ProfileVisitsModal from './ProfileVisitsModal';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { donate } from '../lib/donate';
+import { LinearGradient } from 'expo-linear-gradient';
 
 
 
@@ -89,17 +90,24 @@ const Sidebar = ({ isVisible, onClose }) => {
       onRequestClose={onClose}
     >
       <View style={styles.container}>
-        <View style={[
-          styles.sidebar,
-          { 
-            paddingTop: insets.top > 0 ? insets.top : 20,
-            paddingLeft: insets.left + 20,
-            paddingRight: 20,
-            paddingBottom: insets.bottom > 0 ? insets.bottom : 20
-          }
-        ]}>
+        <LinearGradient
+          colors={['#1a1a2e', '#16213e', '#0f3460']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[
+            styles.sidebar,
+            { 
+              paddingTop: insets.top > 0 ? insets.top : 20,
+              paddingLeft: insets.left + 20,
+              paddingRight: 20,
+              paddingBottom: insets.bottom > 0 ? insets.bottom : 20
+            }
+          ]}
+        >
           <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-            <Ionicons name="close" size={24} color="#ff00ff" />
+            <View style={styles.closeButtonContainer}>
+              <Ionicons name="close" size={24} color="#ffd700" />
+            </View>
           </TouchableOpacity>
 
           <TouchableOpacity 
@@ -108,8 +116,14 @@ const Sidebar = ({ isVisible, onClose }) => {
               setShowConfessionInfoModal(true);
             }}
           >
-            <Ionicons name="heart" size={24} color="#ff00ff" />
-            <Text style={styles.menuText}>Confessions</Text>
+            <LinearGradient
+              colors={['rgba(255, 215, 0, 0.1)', 'rgba(255, 215, 0, 0.05)']}
+              style={styles.menuItemGradient}
+            >
+              <Ionicons name="heart" size={24} color="#ffd700" />
+              <Text style={styles.menuText}>Confessions</Text>
+              <Ionicons name="chevron-forward" size={16} color="rgba(255, 215, 0, 0.6)" />
+            </LinearGradient>
           </TouchableOpacity>
 
           {isFemaleProfle && (
@@ -117,8 +131,14 @@ const Sidebar = ({ isVisible, onClose }) => {
               style={styles.menuItem}
               onPress={() => setShowVisitsModal(true)}
             >
-              <Ionicons name="eye" size={24} color="#ff00ff" />
-              <Text style={styles.menuText}>Profile Visits</Text>
+              <LinearGradient
+                colors={['rgba(156, 136, 255, 0.1)', 'rgba(156, 136, 255, 0.05)']}
+                style={styles.menuItemGradient}
+              >
+                <Ionicons name="eye" size={24} color="#9c88ff" />
+                <Text style={styles.menuText}>Profile Visits</Text>
+                <Ionicons name="chevron-forward" size={16} color="rgba(156, 136, 255, 0.6)" />
+              </LinearGradient>
             </TouchableOpacity>
           )}
 
@@ -129,14 +149,26 @@ const Sidebar = ({ isVisible, onClose }) => {
               navigation.navigate('Settings');
             }}
           >
-            <Ionicons name="settings" size={24} color="#ff00ff" />
-            <Text style={styles.menuText}>Settings</Text>
+            <LinearGradient
+              colors={['rgba(102, 126, 234, 0.1)', 'rgba(102, 126, 234, 0.05)']}
+              style={styles.menuItemGradient}
+            >
+              <Ionicons name="settings" size={24} color="#667eea" />
+              <Text style={styles.menuText}>Settings</Text>
+              <Ionicons name="chevron-forward" size={16} color="rgba(102, 126, 234, 0.6)" />
+            </LinearGradient>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.menuItem} onPress={handleAddAccount}>
-             <Ionicons name="person-add" size={24} color="#ff00ff" />
-             <Text style={styles.menuText}>Add Account</Text>
-           </TouchableOpacity>
+            <LinearGradient
+              colors={['rgba(255, 107, 107, 0.1)', 'rgba(255, 107, 107, 0.05)']}
+              style={styles.menuItemGradient}
+            >
+              <Ionicons name="person-add" size={24} color="#ff6b6b" />
+              <Text style={styles.menuText}>Add Account</Text>
+              <Ionicons name="chevron-forward" size={16} color="rgba(255, 107, 107, 0.6)" />
+            </LinearGradient>
+          </TouchableOpacity>
 
            {/* Donate to Founder */}
            <TouchableOpacity
@@ -146,8 +178,14 @@ const Sidebar = ({ isVisible, onClose }) => {
                navigation.navigate('Donate');
              }}
            >
-             <Ionicons name="cash-outline" size={24} color="#ff00ff" />
-             <Text style={styles.menuText}>Donate to Founder</Text>
+             <LinearGradient
+               colors={['rgba(255, 215, 0, 0.15)', 'rgba(255, 215, 0, 0.08)']}
+               style={styles.menuItemGradient}
+             >
+               <Ionicons name="diamond" size={24} color="#ffd700" />
+               <Text style={styles.menuText}>Donate to Founder</Text>
+               <Ionicons name="chevron-forward" size={16} color="rgba(255, 215, 0, 0.6)" />
+             </LinearGradient>
            </TouchableOpacity>
 
            {/* Wealthiest Donors */}
@@ -158,16 +196,28 @@ const Sidebar = ({ isVisible, onClose }) => {
                navigation.navigate('WealthiestDonors');
              }}
            >
-             <Ionicons name="trophy-outline" size={24} color="#ff00ff" />
-             <Text style={styles.menuText}>Wealthiest Donors</Text>
+             <LinearGradient
+               colors={['rgba(255, 193, 7, 0.15)', 'rgba(255, 193, 7, 0.08)']}
+               style={styles.menuItemGradient}
+             >
+               <Ionicons name="trophy" size={24} color="#ffc107" />
+               <Text style={styles.menuText}>Wealthiest Donors</Text>
+               <Ionicons name="chevron-forward" size={16} color="rgba(255, 193, 7, 0.6)" />
+             </LinearGradient>
            </TouchableOpacity>
 
            {/* Logout */}
            <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
-            <Ionicons name="log-out" size={24} color="#ff00ff" />
-            <Text style={styles.menuText}>Logout</Text>
+            <LinearGradient
+              colors={['rgba(255, 82, 82, 0.1)', 'rgba(255, 82, 82, 0.05)']}
+              style={styles.menuItemGradient}
+            >
+              <Ionicons name="log-out" size={24} color="#ff5252" />
+              <Text style={styles.menuText}>Logout</Text>
+              <Ionicons name="chevron-forward" size={16} color="rgba(255, 82, 82, 0.6)" />
+            </LinearGradient>
           </TouchableOpacity>
-        </View>
+        </LinearGradient>
       </View>
       <ProfileVisitsModal
         visible={showVisitsModal}
@@ -182,7 +232,10 @@ const Sidebar = ({ isVisible, onClose }) => {
         onRequestClose={() => setShowConfessionInfoModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <LinearGradient
+            colors={['#1a1a2e', '#16213e', '#0f3460']}
+            style={styles.modalContent}
+          >
             <ScrollView>
               <Text style={styles.modalTitle}>How to Use Confessions</Text>
               <Text style={styles.modalText}>
@@ -214,19 +267,29 @@ const Sidebar = ({ isVisible, onClose }) => {
                 onPress={() => {
                   setShowConfessionInfoModal(false);
                   onClose();
-                  navigation.navigate('ConfessionButton'); // Navigate to the new ConfessionButtonScreen
+                  navigation.navigate('ConfessionButton');
                 }}
               >
-                <Text style={styles.modalButtonText}>Continue to Confessions</Text>
+                <LinearGradient
+                  colors={['#ffd700', '#ffb300']}
+                  style={styles.buttonGradient}
+                >
+                  <Text style={styles.modalButtonText}>Continue to Confessions</Text>
+                </LinearGradient>
               </TouchableOpacity>
               <TouchableOpacity 
                 style={[styles.modalButton, styles.cancelButton]} 
                 onPress={() => setShowConfessionInfoModal(false)}
               >
-                <Text style={styles.modalButtonText}>Close</Text>
+                <LinearGradient
+                  colors={['rgba(255, 255, 255, 0.1)', 'rgba(255, 255, 255, 0.05)']}
+                  style={styles.buttonGradient}
+                >
+                  <Text style={styles.modalButtonText}>Close</Text>
+                </LinearGradient>
               </TouchableOpacity>
             </View>
-          </View>
+          </LinearGradient>
         </View>
       </Modal>
     </Modal>
@@ -236,72 +299,120 @@ const Sidebar = ({ isVisible, onClose }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.8)',
   },
   sidebar: {
-    width: '70%',
+    width: '75%',
     height: '100%',
-    backgroundColor: '#330033',
+    shadowColor: '#000',
+    shadowOffset: { width: 4, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 10,
   },
   closeButton: {
-    marginBottom: 10,
+    marginBottom: 20,
+    alignSelf: 'flex-end',
+  },
+  closeButtonContainer: {
+    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+    borderRadius: 20,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 215, 0, 0.3)',
   },
   menuItem: {
+    marginVertical: 4,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  menuItemGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#440044',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: 'rgba(0,0,0,0.8)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
   modalContent: {
-    backgroundColor: '#330033',
-    borderRadius: 10,
-    padding: 20,
+    borderRadius: 20,
+    padding: 24,
     width: '90%',
     maxHeight: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 15,
   },
   modalTitle: {
-    color: '#ff00ff',
-    fontSize: 20,
+    color: '#ffd700',
+    fontSize: 22,
     fontWeight: 'bold',
-    marginBottom: 15,
+    marginBottom: 20,
     textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
   modalText: {
     color: '#ffffff',
     fontSize: 16,
-    marginBottom: 10,
-    lineHeight: 22,
+    marginBottom: 12,
+    lineHeight: 24,
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   modalButtonContainer: {
-    marginTop: 20,
+    marginTop: 24,
   },
   modalButton: {
-    backgroundColor: '#ff00ff',
-    padding: 12,
-    borderRadius: 5,
+    borderRadius: 12,
+    marginBottom: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  buttonGradient: {
+    padding: 16,
     alignItems: 'center',
-    marginBottom: 10,
+    borderRadius: 12,
   },
   cancelButton: {
-    backgroundColor: '#550055',
+    // No background needed as gradient handles it
   },
   modalButtonText: {
     color: '#ffffff',
     fontSize: 16,
     fontWeight: 'bold',
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   menuText: {
-    color: '#ff00ff',
+    color: '#ffffff',
     fontSize: 16,
-    marginLeft: 15,
+    marginLeft: 16,
+    flex: 1,
+    fontWeight: '500',
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
 });
 

@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const SignupScreen = () => {
   const navigation = useNavigation();
@@ -42,8 +43,8 @@ const SignupScreen = () => {
 
       if (data.user) {
         Alert.alert(
-          'Verify your email',
-          'We sent you a confirmation code. Please check your email and enter the code to verify your account.'
+          '✨ Almost There!',
+          'We sent you a premium verification code. Please check your email and enter the code to unlock your exclusive Flexx experience.'
         );
         navigation.navigate('OTPVerification', { email: lowerEmail });
       } else {
@@ -57,80 +58,208 @@ const SignupScreen = () => {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={[styles.header, { paddingTop: insets.top > 0 ? insets.top : 50 }]}>
+    <LinearGradient
+      colors={['#1a1a2e', '#16213e', '#0f3460']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.container}
+    >
+      <View style={[styles.header, { paddingTop: insets.top > 0 ? insets.top + 10 : 50 }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#3399ff" />
+          <LinearGradient
+            colors={['rgba(255, 215, 0, 0.1)', 'rgba(255, 215, 0, 0.05)']}
+            style={styles.backButtonGradient}
+          >
+            <Ionicons name="arrow-back" size={24} color="#ffd700" />
+          </LinearGradient>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Create Account</Text>
       </View>
 
       <View style={styles.content}>
-        <TextInput 
-          style={styles.input}
-          placeholder="Username"
-          placeholderTextColor="#666666"
-          value={username}
-          onChangeText={setUsername}
-          autoCapitalize="none"
-        />
-        <TextInput 
-          style={styles.input}
-          placeholder="Email (Gmail or Hotmail only)"
-          placeholderTextColor="#666666"
-          value={email}
-          onChangeText={setEmail}
-          autoCapitalize="none"
-          keyboardType="email-address"
-        />
-        <TextInput 
-          style={styles.input}
-          placeholder="Password"
-          placeholderTextColor="#666666"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          autoCapitalize="none"
-        />
-        <TouchableOpacity 
-          style={[styles.signupButton, loading && styles.buttonDisabled]}
-          onPress={handleSignup}
-          disabled={loading}
-        >
-          <Text style={styles.signupButtonText}>
-            {loading ? 'Creating Account...' : 'Sign Up'}
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.logoContainer}>
+          <LinearGradient
+            colors={['#ffd700', '#ffb300', '#ff8f00']}
+            style={styles.logoGradient}
+          >
+            <Text style={styles.logo}>✨ Join Flexx</Text>
+          </LinearGradient>
+          <Text style={styles.subtitle}>Premium Social Experience Awaits</Text>
+        </View>
+
+        <View style={styles.formContainer}>
+          <View style={styles.inputContainer}>
+            <Ionicons name="person-outline" size={20} color="#ffd700" style={styles.inputIcon} />
+            <TextInput 
+              style={styles.input}
+              placeholder="Username"
+              placeholderTextColor="rgba(255,255,255,0.5)"
+              value={username}
+              onChangeText={setUsername}
+              autoCapitalize="none"
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Ionicons name="mail-outline" size={20} color="#ffd700" style={styles.inputIcon} />
+            <TextInput 
+              style={styles.input}
+              placeholder="Email (Gmail or Hotmail only)"
+              placeholderTextColor="rgba(255,255,255,0.5)"
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Ionicons name="lock-closed-outline" size={20} color="#ffd700" style={styles.inputIcon} />
+            <TextInput 
+              style={styles.input}
+              placeholder="Password"
+              placeholderTextColor="rgba(255,255,255,0.5)"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              autoCapitalize="none"
+            />
+          </View>
+
+          <TouchableOpacity 
+            style={[styles.signupButton, loading && styles.buttonDisabled]}
+            onPress={handleSignup}
+            disabled={loading}
+          >
+            <LinearGradient
+              colors={['#ffd700', '#ffb300', '#ff8f00']}
+              style={styles.buttonGradient}
+            >
+              <Text style={styles.signupButtonText}>
+                {loading ? 'Creating Account...' : 'Sign Up'}
+              </Text>
+              {!loading && <Ionicons name="sparkles" size={20} color="#1a1a2e" style={styles.buttonIcon} />}
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
       </View>
       <View style={{ paddingBottom: insets.bottom }} />
-    </View>
+    </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000033' },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, paddingBottom: 15 },
-  backButton: { padding: 5 },
-  headerTitle: { color: '#3399ff', fontSize: 20, fontWeight: 'bold', marginLeft: 15 },
-  content: { flex: 1, padding: 20, justifyContent: 'center' },
-  input: {
-    backgroundColor: '#000066',
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 15,
-    color: '#ffffff',
+  container: { flex: 1 },
+  header: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingHorizontal: 20, 
+    paddingBottom: 20 
+  },
+  backButton: { 
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  backButtonGradient: {
+    padding: 12,
+    borderRadius: 12,
+  },
+  headerTitle: { 
+    color: '#ffd700', 
+    fontSize: 22, 
+    fontWeight: 'bold', 
+    marginLeft: 20,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  content: { 
+    flex: 1, 
+    padding: 24, 
+    justifyContent: 'center' 
+  },
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  logoGradient: {
+    paddingHorizontal: 28,
+    paddingVertical: 14,
+    borderRadius: 22,
+    shadowColor: '#ffd700',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  logo: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#1a1a2e',
+    textAlign: 'center',
+    letterSpacing: 1.5,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.7)',
+    textAlign: 'center',
+    marginTop: 10,
+    fontStyle: 'italic',
+    letterSpacing: 0.5,
+  },
+  formContainer: {
+    width: '100%',
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 16,
+    marginBottom: 18,
     borderWidth: 1,
-    borderColor: '#3399ff',
+    borderColor: 'rgba(255, 215, 0, 0.2)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  inputIcon: {
+    marginLeft: 16,
+    marginRight: 12,
+  },
+  input: {
+    flex: 1,
+    padding: 16,
+    color: '#ffffff',
+    fontSize: 16,
   },
   signupButton: {
-    backgroundColor: '#3399ff',
-    padding: 15,
-    borderRadius: 10,
-    alignItems: 'center',
+    borderRadius: 16,
     marginTop: 20,
+    shadowColor: '#ffd700',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  buttonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 18,
+    borderRadius: 16,
   },
   buttonDisabled: { opacity: 0.7 },
-  signupButtonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
+  signupButtonText: { 
+    color: '#1a1a2e', 
+    fontSize: 18, 
+    fontWeight: 'bold',
+    letterSpacing: 1,
+  },
+  buttonIcon: {
+    marginLeft: 8,
+  },
 });
 
 export default SignupScreen;

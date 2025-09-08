@@ -92,83 +92,175 @@ const LoginScreen = ({ navigation }) => {
 
   return (
     <LinearGradient
-      colors={['#0a0a2a', '#1a1a3a']}
+      colors={['#1a1a2e', '#16213e', '#0f3460']}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
     >
-      <Text style={styles.logo}>Flexx</Text>
+      <View style={styles.logoContainer}>
+        <LinearGradient
+          colors={['#ffd700', '#ffb300', '#ff8f00']}
+          style={styles.logoGradient}
+        >
+          <Text style={styles.logo}>✨ Flexx</Text>
+        </LinearGradient>
+        <Text style={styles.subtitle}>Premium Social Experience</Text>
+      </View>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Email or Username"
-        placeholderTextColor="#666"
-        value={identifier}
-        onChangeText={setIdentifier}
-        autoCapitalize="none"
-        keyboardType="email-address"
-      />
+      <View style={styles.formContainer}>
+        <View style={styles.inputContainer}>
+          <Ionicons name="person-outline" size={20} color="#ffd700" style={styles.inputIcon} />
+          <TextInput
+            style={styles.input}
+            placeholder="Email or Username"
+            placeholderTextColor="rgba(255,255,255,0.5)"
+            value={identifier}
+            onChangeText={setIdentifier}
+            autoCapitalize="none"
+            keyboardType="email-address"
+          />
+        </View>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Password"
-        placeholderTextColor="#666"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-        autoCapitalize="none"
-      />
+        <View style={styles.inputContainer}>
+          <Ionicons name="lock-closed-outline" size={20} color="#ffd700" style={styles.inputIcon} />
+          <TextInput
+            style={styles.input}
+            placeholder="Password"
+            placeholderTextColor="rgba(255,255,255,0.5)"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            autoCapitalize="none"
+          />
+        </View>
 
-      <TouchableOpacity
-        style={[styles.button, loading && { opacity: 0.7 }]}
-        onPress={handleLogin}
-        disabled={loading}
-      >
-        <Text style={styles.buttonText}>{loading ? 'Logging in...' : 'Login'}</Text>
-      </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.button, loading && { opacity: 0.7 }]}
+          onPress={handleLogin}
+          disabled={loading}
+        >
+          <LinearGradient
+            colors={['#ffd700', '#ffb300', '#ff8f00']}
+            style={styles.buttonGradient}
+          >
+            <Text style={styles.buttonText}>
+              {loading ? 'Logging in...' : 'Login'}
+            </Text>
+            {!loading && <Ionicons name="arrow-forward" size={20} color="#1a1a2e" style={styles.buttonIcon} />}
+          </LinearGradient>
+        </TouchableOpacity>
 
-      <TouchableOpacity style={styles.signupButton} onPress={() => navigation.navigate('Signup')}>
-        <Text style={styles.signupText}>Don't have an account? Sign up</Text>
-      </TouchableOpacity>
+        <TouchableOpacity style={styles.signupButton} onPress={() => navigation.navigate('Signup')}>
+          <Text style={styles.signupText}>Don't have an account? </Text>
+          <Text style={styles.signupTextBold}>Sign up</Text>
+        </TouchableOpacity>
+      </View>
     </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, justifyContent: 'center' },
+  container: { 
+    flex: 1, 
+    padding: 24, 
+    justifyContent: 'center',
+  },
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: 60,
+  },
+  logoGradient: {
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: 25,
+    shadowColor: '#ffd700',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 10,
+  },
   logo: {
-    fontSize: 40,
+    fontSize: 42,
     fontWeight: 'bold',
-    color: '#ff00ff',
+    color: '#1a1a2e',
     textAlign: 'center',
-    marginBottom: 40,
-    textShadowColor: 'rgba(255, 0, 255, 0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 8,
+    letterSpacing: 2,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.7)',
+    textAlign: 'center',
+    marginTop: 12,
+    fontStyle: 'italic',
+    letterSpacing: 1,
+  },
+  formContainer: {
+    width: '100%',
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 215, 0, 0.2)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  inputIcon: {
+    marginLeft: 16,
+    marginRight: 12,
   },
   input: {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderRadius: 20,
-    padding: 15,
-    marginBottom: 15,
+    flex: 1,
+    padding: 18,
     color: 'white',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 0, 255, 0.3)',
+    fontSize: 16,
   },
   button: {
-    backgroundColor: '#ff00ff',
-    padding: 15,
-    borderRadius: 20,
-    alignItems: 'center',
-    shadowColor: '#ff00ff',
-    shadowOffset: { width: 0, height: 2 },
+    borderRadius: 16,
+    marginTop: 12,
+    shadowColor: '#ffd700',
+    shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
+    shadowRadius: 16,
+    elevation: 10,
   },
-  buttonText: { color: 'white', fontWeight: 'bold' },
-  signupButton: { marginTop: 20, alignItems: 'center' },
-  signupText: { color: '#ff00ff', fontSize: 16 },
+  buttonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 18,
+    borderRadius: 16,
+  },
+  buttonText: { 
+    color: '#1a1a2e', 
+    fontWeight: 'bold',
+    fontSize: 18,
+    letterSpacing: 1,
+  },
+  buttonIcon: {
+    marginLeft: 8,
+  },
+  signupButton: { 
+    marginTop: 32, 
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  signupText: { 
+    color: 'rgba(255, 255, 255, 0.7)', 
+    fontSize: 16,
+  },
+  signupTextBold: {
+    color: '#ffd700',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
 });
 
 export default LoginScreen;

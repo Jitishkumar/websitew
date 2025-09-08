@@ -136,35 +136,62 @@ const SettingsScreen = () => {
 
   const renderSettingItem = (icon, title, description, value, onToggle) => (
     <View style={styles.settingItem}>
-      <View style={styles.settingIconContainer}>
-        <Ionicons name={icon} size={24} color="#ff00ff" />
-      </View>
-      <View style={styles.settingContent}>
-        <Text style={styles.settingTitle}>{title}</Text>
-        <Text style={styles.settingDescription}>{description}</Text>
-      </View>
-      <Switch
-        value={value}
-        onValueChange={onToggle}
-        trackColor={{ false: '#767577', true: '#ff00ff50' }}
-        thumbColor={value ? '#ff00ff' : '#f4f3f4'}
-      />
+      <LinearGradient
+        colors={['rgba(255, 215, 0, 0.08)', 'rgba(255, 215, 0, 0.04)']} 
+        style={styles.settingItemGradient}
+      >
+        <View style={styles.settingIconContainer}>
+          <LinearGradient
+            colors={['#ffd700', '#ffed4e']}
+            style={styles.iconGradient}
+          >
+            <Ionicons name={icon} size={20} color="#000" />
+          </LinearGradient>
+        </View>
+        <View style={styles.settingContent}>
+          <Text style={styles.settingTitle}>{title}</Text>
+          <Text style={styles.settingDescription}>{description}</Text>
+        </View>
+        <Switch
+          value={value}
+          onValueChange={onToggle}
+          trackColor={{ false: '#444', true: 'rgba(255, 215, 0, 0.3)' }}
+          thumbColor={value ? '#ffd700' : '#888'}
+          ios_backgroundColor="#444"
+        />
+      </LinearGradient>
     </View>
   );
 
   return (
-    <View style={styles.container}>
+    <LinearGradient colors={['#0f0f23', '#1a1a2e', '#16213e']} style={styles.container}>
       <LinearGradient
-        colors={['#330033', '#000000']}
+        colors={['rgba(255, 215, 0, 0.2)', 'rgba(255, 215, 0, 0.1)', 'transparent']}
         style={[styles.header, { paddingTop: insets.top > 0 ? insets.top : 50 }]}
       >
         <TouchableOpacity 
           onPress={() => navigation.goBack()}
           style={styles.backButton}
         >
-          <Ionicons name="arrow-back" size={24} color="#ff00ff" />
+          <LinearGradient
+            colors={['#ffd700', '#ffed4e']}
+            style={styles.backButtonGradient}
+          >
+            <Ionicons name="arrow-back" size={24} color="#000" />
+          </LinearGradient>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Settings</Text>
+        {isVerified && (
+          <View style={styles.headerVerifiedBadge}>
+            <LinearGradient
+              colors={['#ffd700', '#ffed4e']}
+              style={styles.headerVerifiedGradient}
+            >
+              <Ionicons name="checkmark-circle" size={12} color="#000" />
+              <Text style={styles.headerVerifiedText}>VERIFIED</Text>
+            </LinearGradient>
+          </View>
+        )}
       </LinearGradient>
 
       <ScrollView 
@@ -172,7 +199,12 @@ const SettingsScreen = () => {
         contentContainerStyle={[styles.contentContainer, { paddingBottom: insets.bottom > 0 ? insets.bottom : 20 }]}
       >
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Appearance</Text>
+          <LinearGradient
+            colors={['rgba(255, 215, 0, 0.15)', 'rgba(255, 215, 0, 0.08)']}
+            style={styles.sectionHeader}
+          >
+            <Text style={styles.sectionTitle}>✨ Appearance</Text>
+          </LinearGradient>
           {renderSettingItem(
             'moon',
             'Dark Mode',
@@ -183,7 +215,12 @@ const SettingsScreen = () => {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Privacy</Text>
+          <LinearGradient
+            colors={['rgba(255, 215, 0, 0.15)', 'rgba(255, 215, 0, 0.08)']}
+            style={styles.sectionHeader}
+          >
+            <Text style={styles.sectionTitle}>🔒 Privacy</Text>
+          </LinearGradient>
           {renderSettingItem(
             'lock-closed',
             'Private Account',
@@ -194,7 +231,12 @@ const SettingsScreen = () => {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Notifications</Text>
+          <LinearGradient
+            colors={['rgba(255, 215, 0, 0.15)', 'rgba(255, 215, 0, 0.08)']}
+            style={styles.sectionHeader}
+          >
+            <Text style={styles.sectionTitle}>🔔 Notifications</Text>
+          </LinearGradient>
           {renderSettingItem(
             'notifications',
             'Push Notifications',
@@ -205,7 +247,12 @@ const SettingsScreen = () => {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Content</Text>
+          <LinearGradient
+            colors={['rgba(255, 215, 0, 0.15)', 'rgba(255, 215, 0, 0.08)']}
+            style={styles.sectionHeader}
+          >
+            <Text style={styles.sectionTitle}>🎬 Content</Text>
+          </LinearGradient>
           {renderSettingItem(
             'play-circle',
             'Autoplay Videos',
@@ -216,7 +263,12 @@ const SettingsScreen = () => {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Account</Text>
+          <LinearGradient
+            colors={['rgba(255, 215, 0, 0.15)', 'rgba(255, 215, 0, 0.08)']}
+            style={styles.sectionHeader}
+          >
+            <Text style={styles.sectionTitle}>👤 Account</Text>
+          </LinearGradient>
           
           {/* Verification Status */}
           <TouchableOpacity 
@@ -229,60 +281,100 @@ const SettingsScreen = () => {
               }
             }}
           >
-            <View style={styles.settingIconContainer}>
-              <Ionicons name="checkmark-circle" size={24} color={isVerified ? "#ff0000" : "#ff00ff"} />
-            </View>
-            <View style={styles.settingContent}>
-              <View style={styles.verificationTitleContainer}>
-                <Text style={styles.settingTitle}>Verify Account</Text>
-                {isVerified && (
-                  <View style={styles.verifiedBadge}>
-                    <Text style={styles.verifiedText}>Verified</Text>
-                  </View>
-                )}
+            <LinearGradient
+              colors={['rgba(255, 215, 0, 0.08)', 'rgba(255, 215, 0, 0.04)']} 
+              style={styles.linkItemGradient}
+            >
+              <View style={styles.settingIconContainer}>
+                <LinearGradient
+                  colors={isVerified ? ['#ff4757', '#ff3838'] : ['#ffd700', '#ffed4e']}
+                  style={styles.iconGradient}
+                >
+                  <Ionicons name="checkmark-circle" size={20} color={isVerified ? "#fff" : "#000"} />
+                </LinearGradient>
               </View>
-              <Text style={styles.settingDescription}>
-                {isVerified 
-                  ? 'Your account is verified with a red badge' 
-                  : 'Get a red verification badge (₹70/month)'}
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#ff00ff" />
+              <View style={styles.settingContent}>
+                <View style={styles.verificationTitleContainer}>
+                  <Text style={styles.settingTitle}>Verify Account</Text>
+                  {isVerified && (
+                    <View style={styles.verifiedBadge}>
+                      <Text style={styles.verifiedText}>Verified</Text>
+                    </View>
+                  )}
+                </View>
+                <Text style={styles.settingDescription}>
+                  {isVerified 
+                    ? 'Your account is verified with a red badge' 
+                    : 'Get a red verification badge (₹70/month)'}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#ffd700" />
+            </LinearGradient>
           </TouchableOpacity>
           
           <TouchableOpacity style={styles.linkItem}>
-            <View style={styles.settingIconContainer}>
-              <Ionicons name="shield" size={24} color="#ff00ff" />
-            </View>
-            <View style={styles.settingContent}>
-              <Text style={styles.settingTitle}>Privacy Policy</Text>
-              <Text style={styles.settingDescription}>Read our privacy policy</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#ff00ff" />
+            <LinearGradient
+              colors={['rgba(255, 215, 0, 0.08)', 'rgba(255, 215, 0, 0.04)']} 
+              style={styles.linkItemGradient}
+            >
+              <View style={styles.settingIconContainer}>
+                <LinearGradient
+                  colors={['#ffd700', '#ffed4e']}
+                  style={styles.iconGradient}
+                >
+                  <Ionicons name="shield" size={20} color="#000" />
+                </LinearGradient>
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={styles.settingTitle}>Privacy Policy</Text>
+                <Text style={styles.settingDescription}>Read our privacy policy</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#ffd700" />
+            </LinearGradient>
           </TouchableOpacity>
           <TouchableOpacity 
             style={styles.linkItem}
             onPress={() => navigation.navigate('BlockedUsers')}
           >
-            <View style={styles.settingIconContainer}>
-              <Ionicons name="shield-outline" size={24} color="#ff00ff" />
-            </View>
-            <View style={styles.settingContent}>
-              <Text style={styles.settingTitle}>Blocked Users</Text>
-              <Text style={styles.settingDescription}>View and manage blocked users</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#ff00ff" />
+            <LinearGradient
+              colors={['rgba(255, 215, 0, 0.08)', 'rgba(255, 215, 0, 0.04)']} 
+              style={styles.linkItemGradient}
+            >
+              <View style={styles.settingIconContainer}>
+                <LinearGradient
+                  colors={['#ffd700', '#ffed4e']}
+                  style={styles.iconGradient}
+                >
+                  <Ionicons name="shield-outline" size={20} color="#000" />
+                </LinearGradient>
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={styles.settingTitle}>Blocked Users</Text>
+                <Text style={styles.settingDescription}>View and manage blocked users</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#ffd700" />
+            </LinearGradient>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.linkItem}>
-            <View style={styles.settingIconContainer}>
-              <Ionicons name="document-text" size={24} color="#ff00ff" />
-            </View>
-            <View style={styles.settingContent}>
-              <Text style={styles.settingTitle}>Terms of Service</Text>
-              <Text style={styles.settingDescription}>Read our terms of service</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#ff00ff" />
+            <LinearGradient
+              colors={['rgba(255, 215, 0, 0.08)', 'rgba(255, 215, 0, 0.04)']} 
+              style={styles.linkItemGradient}
+            >
+              <View style={styles.settingIconContainer}>
+                <LinearGradient
+                  colors={['#ffd700', '#ffed4e']}
+                  style={styles.iconGradient}
+                >
+                  <Ionicons name="document-text" size={20} color="#000" />
+                </LinearGradient>
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={styles.settingTitle}>Terms of Service</Text>
+                <Text style={styles.settingDescription}>Read our terms of service</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#ffd700" />
+            </LinearGradient>
           </TouchableOpacity>
 
           <TouchableOpacity 
@@ -304,83 +396,152 @@ const SettingsScreen = () => {
               );
             }}
           >
-            <View style={styles.settingIconContainer}>
-              <Ionicons name="trash" size={24} color="#ff3b30" />
-            </View>
-            <View style={styles.settingContent}>
-              <Text style={[styles.settingTitle, { color: '#ff3b30' }]}>Delete Account</Text>
-              <Text style={styles.settingDescription}>Permanently delete your account and data</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#ff3b30" />
+            <LinearGradient
+              colors={['rgba(255, 71, 87, 0.08)', 'rgba(255, 71, 87, 0.04)']} 
+              style={styles.linkItemGradient}
+            >
+              <View style={styles.settingIconContainer}>
+                <LinearGradient
+                  colors={['#ff4757', '#ff3838']}
+                  style={styles.iconGradient}
+                >
+                  <Ionicons name="trash" size={20} color="#fff" />
+                </LinearGradient>
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={[styles.settingTitle, { color: '#ff4757' }]}>Delete Account</Text>
+                <Text style={styles.settingDescription}>Permanently delete your account and data</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#ff4757" />
+            </LinearGradient>
           </TouchableOpacity>
         </View>
       </ScrollView>
-    </View>
+    </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 16,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 215, 0, 0.1)',
   },
   backButton: {
-    padding: 8,
+    marginRight: 15,
+  },
+  backButtonGradient: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#ffd700',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
   },
   headerTitle: {
     color: '#fff',
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
-    marginLeft: 16,
+    flex: 1,
+    textShadowColor: 'rgba(255, 215, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  headerVerifiedBadge: {
+    marginLeft: 10,
+  },
+  headerVerifiedGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    shadowColor: '#ffd700',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 3,
+  },
+  headerVerifiedText: {
+    color: '#000',
+    fontSize: 10,
+    fontWeight: 'bold',
+    marginLeft: 4,
   },
   content: {
     flex: 1,
   },
   contentContainer: {
-    padding: 16,
+    padding: 20,
   },
   section: {
-    marginBottom: 24,
-    backgroundColor: '#111',
-    borderRadius: 12,
+    marginBottom: 25,
+    borderRadius: 15,
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  sectionHeader: {
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 215, 0, 0.2)',
   },
   sectionTitle: {
-    color: '#ff00ff',
-    fontSize: 16,
+    color: '#fff',
+    fontSize: 18,
     fontWeight: 'bold',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#222',
+    textShadowColor: 'rgba(255, 215, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   settingItem: {
+    marginBottom: 2,
+  },
+  settingItemGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    padding: 18,
     borderBottomWidth: 1,
-    borderBottomColor: '#222',
+    borderBottomColor: 'rgba(255, 215, 0, 0.1)',
   },
   linkItem: {
+    marginBottom: 2,
+  },
+  linkItemGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    padding: 18,
     borderBottomWidth: 1,
-    borderBottomColor: '#222',
+    borderBottomColor: 'rgba(255, 215, 0, 0.1)',
   },
   settingIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#222',
+    marginRight: 16,
+  },
+  iconGradient: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    shadowColor: '#ffd700',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 4,
   },
   settingContent: {
     flex: 1,
@@ -390,11 +551,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   verifiedBadge: {
-    backgroundColor: '#ff0000',
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    backgroundColor: '#ff4757',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     marginLeft: 8,
+    shadowColor: '#ff4757',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 2,
   },
   verifiedText: {
     color: '#fff',
@@ -404,12 +570,13 @@ const styles = StyleSheet.create({
   settingTitle: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
+    marginBottom: 4,
   },
   settingDescription: {
-    color: '#999',
+    color: 'rgba(255, 255, 255, 0.7)',
     fontSize: 14,
-    marginTop: 4,
+    lineHeight: 20,
   },
 });
 
