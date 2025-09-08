@@ -9,7 +9,8 @@ import {
   FlatList,
   ActivityIndicator,
   Dimensions,
-  RefreshControl
+  RefreshControl,
+  TextInput
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -27,16 +28,20 @@ const TrendingScreen = () => {
   // State management
   const [activeTab, setActiveTab] = useState('all');
   const [trendingPosts, setTrendingPosts] = useState([]);
+  const [filteredPosts, setFilteredPosts] = useState([]);
   const [trendingTopics, setTrendingTopics] = useState([]);
+  const [filteredTopics, setFilteredTopics] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
   const videoRefs = useRef({});
 
   // Tab configuration
   const tabs = [
     { id: 'all', label: 'All', icon: 'apps' },
     { id: 'videos', label: 'Videos', icon: 'play-circle' },
-    { id: 'topics', label: 'Topics', icon: 'trending-up' }
+    { id: 'topics', label: 'hashtags', icon: 'trending-up' }
   ];
 
   useEffect(() => {
@@ -120,9 +125,21 @@ const TrendingScreen = () => {
         : processedPosts;
 
       setTrendingPosts(finalPosts);
+      setFilteredPosts(finalPosts);
     } catch (error) {
       console.error('Error fetching trending posts:', error);
     }
+  };
+
+  // Helper function to extract hashtags from text
+  const extractHashtags = (text) => {
+    if (!text) return [];
+    // More permissive regex to catch hashtags like #can, #power, etc.
+    const hashtagRegex = /#[a-zA-Z0-9_\u00c0-\u024f\u1e00-\u1eff]+/g;
+    const matches = text.match(hashtagRegex);
+    console.log('Extracting hashtags from:', text);
+    console.log('Found hashtags:', matches);
+    return matches ? matches.map(tag => tag.toLowerCase()) : [];
   };
 
   const fetchTrendingTopics = async () => {
@@ -147,7 +164,8 @@ const TrendingScreen = () => {
           id,
           caption,
           created_at,
-          user_id
+          user_id,
+          profiles!inner(username)
         `)
         .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
         .not('caption', 'is', null)
@@ -188,39 +206,71 @@ const TrendingScreen = () => {
 
       if (commentsError) throw commentsError;
 
-      // Process topics
-      const topicsMap = new Map();
+      // Extract and process hashtags
+      const hashtagsMap = new Map();
 
       posts.forEach(post => {
+        const hashtags = extractHashtags(post.caption);
         const likesCount = likesData.filter(like => like.post_id === post.id).length;
         const commentsCount = commentsData.filter(comment => comment.post_id === post.id).length;
+        const engagementScore = likesCount + commentsCount;
 
-        if (likesCount > 0) {
-          const caption = post.caption.length > 50
-            ? post.caption.substring(0, 47) + '...'
-            : post.caption;
+        // Process hashtags from all posts (remove engagement requirement for testing)
+        if (hashtags.length > 0) {
+          hashtags.forEach(hashtag => {
+            if (!hashtagsMap.has(hashtag)) {
+              hashtagsMap.set(hashtag, {
+                id: `hashtag_${hashtag.replace('#', '')}`,
+                hashtag: hashtag,
+                topic_name: hashtag,
+                post_count: 0,
+                engagement_score: 0,
+                recent_posts: [],
+                trending_rank: 0
+              });
+            }
 
-          if (!topicsMap.has(caption)) {
-            topicsMap.set(caption, {
-              id: `topic_${post.id}`,
-              topic_name: caption,
-              engagement_score: 0
-            });
-          }
-
-          const topic = topicsMap.get(caption);
-          topic.engagement_score += likesCount + commentsCount;
+            const hashtagData = hashtagsMap.get(hashtag);
+            hashtagData.post_count += 1;
+            hashtagData.engagement_score += engagementScore;
+            
+            // Store recent posts for preview (max 3)
+            if (hashtagData.recent_posts.length < 3) {
+              hashtagData.recent_posts.push({
+                id: post.id,
+                caption: post.caption.length > 100 ? post.caption.substring(0, 97) + '...' : post.caption,
+                username: post.profiles?.username || 'Unknown',
+                engagement: engagementScore
+              });
+            }
+          });
         }
       });
 
-      // Convert to array and sort by engagement
-      const topics = Array.from(topicsMap.values())
-        .sort((a, b) => b.engagement_score - a.engagement_score)
-        .slice(0, 15);
+      // Calculate trending score (engagement + recency + post count)
+      const now = Date.now();
+      const topics = Array.from(hashtagsMap.values())
+        .map(hashtag => {
+          // Calculate trending score based on multiple factors
+          const engagementWeight = hashtag.engagement_score * 2;
+          const postCountWeight = hashtag.post_count * 1.5;
+          const trendingScore = Math.max(1, engagementWeight + postCountWeight); // Ensure minimum score of 1
+          
+          return {
+            ...hashtag,
+            trending_rank: Math.round(trendingScore),
+            display_text: `${hashtag.post_count} post${hashtag.post_count !== 1 ? 's' : ''}`
+          };
+        })
+        .filter(hashtag => hashtag.post_count >= 1) // Show hashtags with at least 1 post
+        .sort((a, b) => b.trending_rank - a.trending_rank)
+        .slice(0, 20); // Show top 20 hashtags
 
+      console.log('Final hashtags for trending:', topics);
       setTrendingTopics(topics);
+      setFilteredTopics(topics);
     } catch (error) {
-      console.error('Error fetching trending topics:', error);
+      console.error('Error fetching trending hashtags:', error);
       setTrendingTopics([]);
     }
   };
@@ -302,9 +352,49 @@ const TrendingScreen = () => {
     }
   };
 
+  // Search functionality
+  const handleSearch = (query) => {
+    setSearchQuery(query);
+    setIsSearching(query.length > 0);
+    
+    if (query.length === 0) {
+      // Reset to original data when search is cleared
+      setFilteredPosts(trendingPosts);
+      setFilteredTopics(trendingTopics);
+      return;
+    }
+
+    const lowercaseQuery = query.toLowerCase();
+
+    if (activeTab === 'topics') {
+      // Filter hashtags
+      const filtered = trendingTopics.filter(topic => 
+        topic.hashtag.toLowerCase().includes(lowercaseQuery) ||
+        topic.recent_posts.some(post => 
+          post.caption.toLowerCase().includes(lowercaseQuery) ||
+          post.username.toLowerCase().includes(lowercaseQuery)
+        )
+      );
+      setFilteredTopics(filtered);
+    } else {
+      // Filter posts by caption, username, or hashtags
+      const filtered = trendingPosts.filter(post => {
+        const captionMatch = post.caption?.toLowerCase().includes(lowercaseQuery);
+        const usernameMatch = post.username?.toLowerCase().includes(lowercaseQuery);
+        const hashtagMatch = extractHashtags(post.caption || '').some(hashtag => 
+          hashtag.toLowerCase().includes(lowercaseQuery)
+        );
+        return captionMatch || usernameMatch || hashtagMatch;
+      });
+      setFilteredPosts(filtered);
+    }
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchTrendingPosts();
+    setSearchQuery('');
+    setIsSearching(false);
+    await fetchTrendingContent();
     setRefreshing(false);
   };
 
@@ -366,9 +456,10 @@ const TrendingScreen = () => {
   };
 
   const handleTopicPress = (topic) => {
-    navigation.navigate('TopicPosts', {
-      topic: topic.topic_name,
-      topicId: topic.id
+    // Navigate to search screen with hashtag query
+    navigation.navigate('Search', {
+      initialQuery: topic.hashtag,
+      searchType: 'hashtag'
     });
   };
 
@@ -466,25 +557,67 @@ const TrendingScreen = () => {
     </TouchableOpacity>
   );
 
-  const renderTopicItem = ({ item, index }) => (
-    <TouchableOpacity
-      style={styles.topicCard}
-      onPress={() => handleTopicPress(item)}
-    >
-      <LinearGradient
-        colors={['#ff00ff', '#cc00cc']}
-        style={styles.topicGradient}
+  const renderTopicItem = ({ item, index }) => {
+    // Determine gradient colors based on trending rank
+    const getGradientColors = (rank) => {
+      if (rank >= 50) return ['#667eea', '#764ba2']; // High trending - blue to purple
+      if (rank >= 20) return ['#f093fb', '#f5576c']; // Medium trending - pink to red
+      return ['#4facfe', '#00f2fe']; // Low trending - blue to cyan
+    };
+
+    const getRankIcon = (rank) => {
+      if (rank >= 50) return 'flame';
+      if (rank >= 20) return 'trending-up';
+      return 'pulse';
+    };
+
+    return (
+      <TouchableOpacity
+        style={[styles.topicCard, { marginBottom: 12 }]}
+        onPress={() => handleTopicPress(item)}
       >
-        <View style={styles.topicContent}>
-          <Ionicons name="trending-up" size={24} color="#fff" />
-          <Text style={styles.topicTitle}>{item.topic_name}</Text>
-          <Text style={styles.topicEngagement}>
-            {item.engagement_score} interactions
-          </Text>
-        </View>
-      </LinearGradient>
-    </TouchableOpacity>
-  );
+        <LinearGradient
+          colors={getGradientColors(item.trending_rank)}
+          style={styles.topicGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <View style={styles.topicHeader}>
+            <View style={styles.topicRank}>
+              <Text style={styles.rankNumber}>{index + 1}</Text>
+            </View>
+            <View style={styles.topicInfo}>
+              <View style={styles.hashtagRow}>
+                <Ionicons name={getRankIcon(item.trending_rank)} size={18} color="#fff" />
+                <Text style={styles.hashtagText}>{item.hashtag}</Text>
+              </View>
+              <Text style={styles.topicStats}>
+                {item.display_text} • {item.engagement_score} interactions
+              </Text>
+            </View>
+            <View style={styles.trendingBadge}>
+              <Text style={styles.trendingScore}>{item.trending_rank}</Text>
+            </View>
+          </View>
+          
+          {/* Preview of recent posts */}
+          {item.recent_posts && item.recent_posts.length > 0 && (
+            <View style={styles.previewContainer}>
+              <Text style={styles.previewLabel}>Recent posts:</Text>
+              {item.recent_posts.slice(0, 2).map((recentPost, idx) => (
+                <View key={idx} style={styles.previewPost}>
+                  <Text style={styles.previewUsername}>@{recentPost.username}</Text>
+                  <Text style={styles.previewCaption} numberOfLines={1}>
+                    {recentPost.caption.replace(/#\w+/g, '').trim()}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </LinearGradient>
+      </TouchableOpacity>
+    );
+  };
 
   const renderContent = () => {
     if (loading) {
@@ -499,7 +632,7 @@ const TrendingScreen = () => {
     if (activeTab === 'topics') {
       return (
         <FlatList
-          data={trendingTopics}
+          data={filteredTopics}
           renderItem={renderTopicItem}
           keyExtractor={(item) => item.id}
           numColumns={1}
@@ -514,8 +647,19 @@ const TrendingScreen = () => {
           }
           ListEmptyComponent={() => (
             <View style={styles.emptyContainer}>
-              <Ionicons name="trending-up" size={60} color="#666" />
-              <Text style={styles.emptyText}>No trending topics found</Text>
+              <Ionicons name={isSearching ? 'search' : 'trending-up'} size={60} color="#666" />
+              <Text style={styles.emptyText}>
+                {isSearching 
+                  ? `No hashtags found for "${searchQuery}"` 
+                  : 'No trending hashtags found'
+                }
+              </Text>
+              <Text style={styles.emptySubText}>
+                {isSearching 
+                  ? 'Try different keywords or clear the search'
+                  : 'Hashtags from posts in the last 7 days will appear here'
+                }
+              </Text>
             </View>
           )}
         />
@@ -524,7 +668,7 @@ const TrendingScreen = () => {
 
     return (
       <FlatList
-        data={trendingPosts}
+        data={filteredPosts}
         renderItem={renderPostItem}
         keyExtractor={(item) => item.id}
         numColumns={activeTab === 'videos' ? 2 : 1}
@@ -541,13 +685,21 @@ const TrendingScreen = () => {
         ListEmptyComponent={() => (
           <View style={styles.emptyContainer}>
             <Ionicons
-              name={activeTab === 'videos' ? 'videocam' : 'document-text'}
+              name={isSearching ? 'search' : (activeTab === 'videos' ? 'videocam' : 'document-text')}
               size={60}
               color="#666"
             />
             <Text style={styles.emptyText}>
-              No trending {activeTab === 'videos' ? 'videos' : 'posts'} found
+              {isSearching 
+                ? `No results found for "${searchQuery}"` 
+                : `No trending ${activeTab === 'videos' ? 'videos' : 'posts'} found`
+              }
             </Text>
+            {isSearching && (
+              <Text style={styles.emptySubText}>
+                Try different keywords or clear the search
+              </Text>
+            )}
           </View>
         )}
       />
@@ -572,13 +724,25 @@ const TrendingScreen = () => {
         </View>
 
         {/* Search Bar */}
-        <TouchableOpacity
-          style={styles.searchContainer}
-          onPress={() => navigation.navigate('Search')}
-        >
+        <View style={styles.searchContainer}>
           <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
-          <Text style={styles.searchPlaceholder}>Search for posts, users or feeds</Text>
-        </TouchableOpacity>
+          <TextInput
+            style={styles.searchInput}
+            placeholder={activeTab === 'topics' ? 'Search hashtags...' : 'Search posts, captions...'}
+            placeholderTextColor="#666"
+            value={searchQuery}
+            onChangeText={handleSearch}
+            returnKeyType="search"
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity 
+              onPress={() => handleSearch('')}
+              style={styles.clearButton}
+            >
+              <Ionicons name="close-circle" size={20} color="#666" />
+            </TouchableOpacity>
+          )}
+        </View>
 
         {/* Tab Buttons */}
         {renderTabButtons()}
@@ -638,9 +802,14 @@ const styles = StyleSheet.create({
   searchIcon: {
     marginRight: 10,
   },
-  searchPlaceholder: {
-    color: '#999999',
+  searchInput: {
+    flex: 1,
+    color: '#fff',
     fontSize: 16,
+    paddingVertical: 0,
+  },
+  clearButton: {
+    padding: 4,
   },
   tabContainer: {
     flexDirection: 'row',
@@ -802,6 +971,87 @@ const styles = StyleSheet.create({
     color: '#999',
     fontSize: 16,
     marginTop: 15,
+  },
+  emptySubText: {
+    color: '#666',
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: 'center',
+    paddingHorizontal: 20,
+  },
+  // Search and hashtag-specific styles
+  topicHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  topicRank: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  rankNumber: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  topicInfo: {
+    flex: 1,
+  },
+  hashtagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  hashtagText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginLeft: 8,
+  },
+  topicStats: {
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 13,
+  },
+  trendingBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  trendingScore: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  previewContainer: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  previewLabel: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 12,
+    marginBottom: 6,
+    fontWeight: '600',
+  },
+  previewPost: {
+    marginBottom: 4,
+  },
+  previewUsername: {
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  previewCaption: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 11,
+    marginTop: 2,
   },
 });
 

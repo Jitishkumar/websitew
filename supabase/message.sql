@@ -266,3 +266,20 @@ using (
 );
 
 
+
+
+UPDATE public.messages 
+SET media_type = CASE 
+  WHEN media_url ILIKE '%.mp4%' OR 
+       (media_url ILIKE 'res.cloudinary.com/%/video/%') OR
+       (media_url ILIKE '%/upload/%/v%/%') THEN 'video'
+  WHEN media_url ILIKE '%.jpg%' OR 
+       media_url ILIKE '%.jpeg%' OR 
+       media_url ILIKE '%.png%' OR 
+       media_url ILIKE '%.gif%' OR
+       media_url ILIKE '%.webp%' OR
+       (media_url ILIKE 'res.cloudinary.com/%/image/%') OR
+       (media_url ILIKE '%/upload/%/i%/%') THEN 'image'
+  ELSE 'image'
+END
+WHERE media_url IS NOT NULL;

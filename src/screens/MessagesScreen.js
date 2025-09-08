@@ -19,6 +19,7 @@ const MessagesScreen = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewMessageButton, setShowNewMessageButton] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
   const [onlineStatus, setOnlineStatus] = useState({});
   
   // Cache keys
@@ -484,62 +485,62 @@ const MessagesScreen = () => {
   };
 
   return (
-    <LinearGradient colors={['#0f0f23', '#1a1a2e', '#16213e']} style={[styles.container, { paddingTop: insets.top }]}>
+    <LinearGradient colors={['#1a1a2e', '#16213e', '#0f3460']} style={[styles.container, { paddingTop: insets.top }]}>
       <LinearGradient
-        colors={['rgba(255, 215, 0, 0.2)', 'rgba(255, 215, 0, 0.1)', 'transparent']}
+        colors={['rgba(102, 126, 234, 0.3)', 'rgba(156, 136, 255, 0.2)', 'transparent']}
         style={styles.header}
       >
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <LinearGradient
-            colors={['#ffd700', '#ffed4e']}
+            colors={['rgba(102, 126, 234, 0.8)', 'rgba(156, 136, 255, 0.6)']}
             style={styles.backButtonGradient}
           >
-            <Ionicons name="arrow-back" size={20} color="#000" />
+            <Ionicons name="arrow-back" size={20} color="#fff" />
           </LinearGradient>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Messages</Text>
+        <Text style={styles.headerTitle}>💬 Messages</Text>
         <TouchableOpacity 
           style={styles.refreshButton}
           onPress={handleRefresh}
           disabled={refreshing}
         >
           <LinearGradient
-            colors={['#ffd700', '#ffed4e']}
+            colors={['rgba(255, 107, 107, 0.8)', 'rgba(255, 82, 82, 0.6)']}
             style={styles.headerIconGradient}
           >
             <Ionicons 
               name={refreshing ? "refresh" : "refresh-outline"} 
               size={20} 
-              color="#000" 
+              color="#fff" 
               style={refreshing ? { transform: [{ rotate: '180deg' }] } : {}}
             />
           </LinearGradient>
         </TouchableOpacity>
       </LinearGradient>
 
-      <View style={styles.searchContainer}>
         <LinearGradient
-          colors={['rgba(255, 215, 0, 0.15)', 'rgba(255, 215, 0, 0.08)']}
-          style={styles.searchInputContainer}
-        >  
+          colors={['rgba(102, 126, 234, 0.1)', 'rgba(156, 136, 255, 0.05)']}
+          start={{x: 0, y: 0}}
+          end={{x: 1, y: 1}}
+          style={styles.searchContainer}
+        >
           <LinearGradient
-            colors={['#ffd700', '#ffed4e']}
-            style={styles.searchIconContainer}
+            colors={['rgba(255, 255, 255, 0.08)', 'rgba(255, 255, 255, 0.04)']}
+            style={styles.searchInputContainer}
           >
-            <Ionicons name="search" size={16} color="#000" />
+            <Ionicons name="search" size={20} color="rgba(255,255,255,0.6)" style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="🔍 Search conversations..."
+              placeholderTextColor="rgba(255,255,255,0.4)"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            {searchLoading && (
+              <ActivityIndicator size="small" color="#667eea" style={styles.searchLoader} />
+            )}
           </LinearGradient>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search conversations..."
-            placeholderTextColor="rgba(255, 255, 255, 0.7)"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-          {refreshing && (
-            <ActivityIndicator size="small" color="#ffd700" style={styles.searchLoader} />
-          )}
         </LinearGradient>
-      </View>
 
         <ScrollView 
           style={styles.messagesList}
@@ -548,7 +549,7 @@ const MessagesScreen = () => {
         >
           {loading ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#ffd700" />
+              <ActivityIndicator size="large" color="#667eea" />
               <Text style={styles.loadingText}>Loading conversations...</Text>
             </View>
           ) : filteredConversations.length > 0 ? (
@@ -565,6 +566,12 @@ const MessagesScreen = () => {
                   });
                 }}
               >
+                <LinearGradient
+                  colors={conversation.unread > 0 ? 
+                    ['rgba(102, 126, 234, 0.2)', 'rgba(156, 136, 255, 0.1)'] : 
+                    ['rgba(255, 255, 255, 0.05)', 'rgba(255, 255, 255, 0.02)']}
+                  style={styles.messageItemGradient}
+                >
                 <View style={styles.avatarContainer}>
                   <Image 
                     source={{ uri: conversation.avatar || 'https://via.placeholder.com/50' }} 
@@ -594,25 +601,42 @@ const MessagesScreen = () => {
                   </View>
                 </View>
                 {conversation.unread > 0 && (
-                  <View style={styles.unreadBadge}>
+                  <LinearGradient
+                    colors={['rgba(255, 107, 107, 0.9)', 'rgba(255, 82, 82, 0.8)']}
+                    style={styles.unreadBadge}
+                  >
                     <Text style={styles.unreadText}>
                       {conversation.unread > 99 ? '99+' : conversation.unread}
                     </Text>
-                  </View>
+                  </LinearGradient>
                 )}
+                </LinearGradient>
               </TouchableOpacity>
             ))
           ) : (
-            <View style={styles.emptyContainer}>
-              <Ionicons name="chatbubbles-outline" size={48} color="rgba(255,255,255,0.2)" />
+            <LinearGradient
+              colors={['rgba(102, 126, 234, 0.1)', 'rgba(156, 136, 255, 0.05)']}
+              style={styles.emptyContainer}
+            >
+              <LinearGradient
+                colors={['rgba(102, 126, 234, 0.3)', 'rgba(156, 136, 255, 0.2)']}
+                style={styles.emptyIconContainer}
+              >
+                <Ionicons name="chatbubbles-outline" size={32} color="#fff" />
+              </LinearGradient>
               <Text style={styles.emptyText}>No conversations yet</Text>
               <Text style={styles.emptySubtext}>Start connecting with people!</Text>
               {!loading && !refreshing && (
-                <TouchableOpacity style={styles.retryButton} onPress={handleRefresh}>
-                  <Text style={styles.retryButtonText}>Refresh</Text>
+                <TouchableOpacity onPress={handleRefresh}>
+                  <LinearGradient
+                    colors={['rgba(255, 107, 107, 0.8)', 'rgba(255, 82, 82, 0.6)']}
+                    style={styles.retryButton}
+                  >
+                    <Text style={styles.retryButtonText}>🔄 Refresh</Text>
+                  </LinearGradient>
                 </TouchableOpacity>
               )}
-            </View>
+            </LinearGradient>
           )}
         </ScrollView>
       
@@ -625,10 +649,10 @@ const MessagesScreen = () => {
           }}
         >
           <LinearGradient
-            colors={['#ffd700', '#ffed4e']}
+            colors={['rgba(102, 126, 234, 0.9)', 'rgba(156, 136, 255, 0.8)']}
             style={styles.gradientButton}
           >
-            <Ionicons name="create" size={24} color="#000" />
+            <Ionicons name="create" size={24} color="#fff" />
           </LinearGradient>
         </TouchableOpacity>
       )}
@@ -650,7 +674,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 215, 0, 0.2)',
+    borderBottomColor: 'rgba(102, 126, 234, 0.3)',
   },
   backButtonGradient: {
     width: 36,
@@ -658,7 +682,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#ffd700',
+    shadowColor: '#667eea',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
@@ -670,7 +694,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#ffd700',
+    shadowColor: '#ff6b6b',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
@@ -684,25 +708,33 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#fff',
     textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: -1, height: 1 },
+    textShadowRadius: 10,
     flex: 1,
-    textShadowColor: 'rgba(255, 215, 0, 0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
   },
   refreshButton: {
     padding: 5,
   },
   searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 15,
     marginHorizontal: 20,
     marginVertical: 15,
+    borderRadius: 15,
+    overflow: 'hidden',
+    shadowColor: '#667eea',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  searchInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 15,
     height: 45,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(102, 126, 234, 0.3)',
+    borderRadius: 15,
   },
   searchIcon: {
     marginRight: 10,
@@ -720,15 +752,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   messageItem: {
+    marginHorizontal: 10,
+    marginVertical: 2,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  messageItemGradient: {
     flexDirection: 'row',
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.06)',
-    backgroundColor: 'rgba(255,255,255,0.02)',
-    marginHorizontal: 10,
-    marginVertical: 2,
-    borderRadius: 12,
   },
   avatarContainer: {
     marginRight: 15,
@@ -746,9 +780,14 @@ const styles = StyleSheet.create({
     width: 15,
     height: 15,
     borderRadius: 10,
-    backgroundColor: '#34C759',
+    backgroundColor: '#00ff88',
     borderWidth: 2,
     borderColor: '#fff',
+    shadowColor: '#00ff88',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 3,
+    elevation: 3,
   },
   messageContent: {
     flex: 1,
@@ -768,8 +807,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   unreadName: {
-    color: '#8a5cf5',
+    color: '#9c88ff',
     fontWeight: '700',
+    textShadowColor: 'rgba(156, 136, 255, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   time: {
     fontSize: 13,
@@ -794,7 +836,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   unreadBadge: {
-    backgroundColor: '#6c3fd8',
     borderRadius: 12,
     minWidth: 24,
     height: 24,
@@ -803,6 +844,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     marginLeft: 8,
     alignSelf: 'center',
+    shadowColor: '#ff6b6b',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 3,
+    elevation: 3,
   },
   unreadText: {
     color: '#fff',
@@ -814,7 +860,7 @@ const styles = StyleSheet.create({
     bottom: 25,
     right: 25,
     elevation: 8,
-    shadowColor: '#6c3fd8',
+    shadowColor: '#667eea',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.5,
     shadowRadius: 8,
@@ -830,12 +876,24 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 30,
-    backgroundColor: 'rgba(255,255,255,0.02)',
-    margin: 20,
+    paddingHorizontal: 40,
+    paddingVertical: 60,
+    marginHorizontal: 20,
+    marginVertical: 40,
     borderRadius: 20,
-    paddingVertical: 40,
-    minHeight: 300,
+  },
+  emptyIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+    shadowColor: '#667eea',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
   },
   emptyText: {
     fontSize: 20,
@@ -844,6 +902,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     fontWeight: '600',
     marginTop: 20,
+    textShadowColor: 'rgba(102, 126, 234, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   emptySubtext: {
     fontSize: 16,
@@ -852,10 +913,14 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   retryButton: {
-    backgroundColor: '#6c3fd8',
     paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderRadius: 20,
+    shadowColor: '#ff6b6b',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
     marginTop: 10,
   },
   retryButtonText: {

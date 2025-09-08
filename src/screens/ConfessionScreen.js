@@ -56,7 +56,7 @@ const ConfessionsHeader = React.memo(({
   return (
     <View>
       <LinearGradient
-        colors={['#0a0a2a', '#1a1a3a']}
+        colors={['rgba(26, 26, 46, 0.95)', 'rgba(22, 33, 62, 0.9)', 'rgba(15, 52, 96, 0.85)']}
         start={{x: 0, y: 0}}
         end={{x: 1, y: 1}}
         style={styles.header}
@@ -65,21 +65,26 @@ const ConfessionsHeader = React.memo(({
           onPress={() => navigation.goBack()}
           style={styles.backButton}
         >
-          <Ionicons name="arrow-back" size={24} color="#ff00ff" />
+          <LinearGradient
+            colors={['rgba(102, 126, 234, 0.8)', 'rgba(156, 136, 255, 0.6)']}
+            style={styles.backButtonGradient}
+          >
+            <Ionicons name="arrow-back" size={20} color="#fff" />
+          </LinearGradient>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Confessions</Text>
+        <Text style={styles.headerTitle}>💭 Confessions</Text>
       </LinearGradient>
 
       <LinearGradient
-        colors={['#1a1a3a', '#0d0d2a']}
+        colors={['rgba(102, 126, 234, 0.1)', 'rgba(156, 136, 255, 0.05)']}
         start={{x: 0, y: 0}}
         end={{x: 1, y: 1}}
         style={styles.searchContainer}
       >
         <TextInput
           style={styles.searchInput}
-          placeholder="Search for a place, institution, company..."
-          placeholderTextColor="#999"
+          placeholder="🔍 Search for a place, institution, company..."
+          placeholderTextColor="rgba(255,255,255,0.4)"
           value={searchQuery}
           onChangeText={(text) => {
             setSearchQuery(text);
@@ -2693,7 +2698,7 @@ const styles = StyleSheet.create({
     height: 60,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: "#ff00ff",
+    shadowColor: "#667eea",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.5,
     shadowRadius: 8,
@@ -2714,10 +2719,10 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   videoBadge: {
-    backgroundColor: 'rgba(255, 0, 255, 0.8)', // Pink/Purple gradient start
+    backgroundColor: 'rgba(255, 107, 107, 0.8)',
   },
   imageBadge: {
-    backgroundColor: 'rgba(0, 255, 255, 0.8)', // Teal
+    backgroundColor: 'rgba(102, 126, 234, 0.8)',
   },
   mediaBadgeText: {
     color: '#fff',
@@ -2759,14 +2764,14 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     marginHorizontal: 15,
     zIndex: 10,
-    shadowColor: "#00ffff",
+    shadowColor: "#9c88ff",
     shadowOffset: { width: 0, height: 5 },
     shadowOpacity: 0.4,
     shadowRadius: 8,
     elevation: 10,
   },
   searchOverlayLoadingText: {
-    color: '#00ffff',
+    color: '#9c88ff',
     marginTop: 5,
     fontSize: 14,
     fontWeight: 'bold',
@@ -2780,8 +2785,11 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   mentionText: {
-    color: '#00ffff',
+    color: '#9c88ff',
     fontWeight: 'bold',
+    textShadowColor: 'rgba(156, 136, 255, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   loadingContainer: {
     flexDirection: 'row',

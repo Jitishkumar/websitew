@@ -471,6 +471,7 @@ const HomeScreen = () => {
               />
             }
             viewabilityConfigCallbackPairs={viewabilityConfigCallbackPairs.current}
+            contentContainerStyle={styles.flatListContent}
           />
         )}
 
@@ -880,6 +881,9 @@ const styles = StyleSheet.create({
   postButtonText: {
     color: '#fff',
     fontWeight: 'bold',
+  },
+  flatListContent: {
+    paddingBottom: 100, // Add padding to prevent bottom navigation overlap
   },
 });
 

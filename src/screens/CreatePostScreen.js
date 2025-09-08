@@ -19,6 +19,7 @@ import { useNavigation } from '@react-navigation/native';
 import { PostsService } from '../services/PostsService';
 import { supabase } from '../lib/supabase';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const CreatePostScreen = () => {
   const navigation = useNavigation();
@@ -136,107 +137,160 @@ const CreatePostScreen = () => {
     if (!uploading) return null;
     
     return (
-      <View style={styles.progressContainer}>
+      <LinearGradient
+        colors={['rgba(102, 126, 234, 0.2)', 'rgba(156, 136, 255, 0.1)']}
+        style={styles.progressContainer}
+      >
         <View style={styles.progressBarContainer}>
-          <View style={[styles.progressBar, { width: `${uploadProgress * 100}%` }]} />
+          <LinearGradient
+            colors={['#667eea', '#9c88ff']}
+            style={[styles.progressBar, { width: `${uploadProgress * 100}%` }]}
+          />
         </View>
         <Text style={styles.progressText}>
-          {uploadProgress < 1 ? 'Uploading...' : 'Processing...'}
+          ⏳ {uploadProgress < 1 ? 'Uploading...' : 'Processing...'}
         </Text>
-      </View>
+      </LinearGradient>
     );
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    <LinearGradient
+      colors={['#1a1a2e', '#16213e', '#0f3460']}
       style={styles.container}
     >
-      <View style={[styles.header, { paddingTop: insets.top > 0 ? insets.top : 15 }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="close" size={24} color="#fff" />
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.postButton, (!selectedMedia && !postText.trim()) && styles.disabledButton]}
-          onPress={handleCreatePost}
-          disabled={!selectedMedia && !postText.trim() || uploading}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardContainer}
+      >
+        <LinearGradient
+          colors={['rgba(102, 126, 234, 0.15)', 'rgba(156, 136, 255, 0.1)']}
+          style={[styles.header, { paddingTop: insets.top > 0 ? insets.top : 15 }]}
         >
-          {uploading ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Text style={styles.postButtonText}>Post</Text>
-          )}
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <LinearGradient
+              colors={['rgba(255, 107, 107, 0.8)', 'rgba(255, 82, 82, 0.6)']}
+              style={styles.closeButtonGradient}
+            >
+              <Ionicons name="close" size={20} color="#fff" />
+            </LinearGradient>
+          </TouchableOpacity>
+          
+          <Text style={styles.headerTitle}>✨ Create Post</Text>
+          
+          <TouchableOpacity 
+            onPress={handleCreatePost}
+            disabled={!selectedMedia && !postText.trim() || uploading}
+          >
+            <LinearGradient
+              colors={(!selectedMedia && !postText.trim()) || uploading ? 
+                ['rgba(102, 102, 102, 0.6)', 'rgba(85, 85, 85, 0.4)'] :
+                ['rgba(102, 126, 234, 0.9)', 'rgba(156, 136, 255, 0.8)']}
+              style={styles.postButton}
+            >
+              {uploading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.postButtonText}>📤 Post</Text>
+              )}
+            </LinearGradient>
+          </TouchableOpacity>
+        </LinearGradient>
 
       {renderUploadProgress()}
       
-      {errorMessage ? (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{errorMessage}</Text>
-        </View>
-      ) : null}
+        {errorMessage ? (
+          <LinearGradient
+            colors={['rgba(255, 107, 107, 0.2)', 'rgba(255, 82, 82, 0.1)']}
+            style={styles.errorContainer}
+          >
+            <Ionicons name="warning" size={16} color="#ff6b6b" style={styles.errorIcon} />
+            <Text style={styles.errorText}>{errorMessage}</Text>
+          </LinearGradient>
+        ) : null}
 
-      <ScrollView style={styles.content}>
-        <View style={styles.inputContainer}>
-          <TextInput
-            style={styles.input}
-            placeholder="What's happening?"
-            placeholderTextColor="#666"
-            multiline
-            value={postText}
-            onChangeText={setPostText}
-            color="#ffffff"
-            editable={!uploading}
-          />
-        </View>
+        <ScrollView style={styles.content}>
+          <LinearGradient
+            colors={['rgba(255, 255, 255, 0.08)', 'rgba(255, 255, 255, 0.04)']}
+            style={styles.inputContainer}
+          >
+            <TextInput
+              style={styles.input}
+              placeholder="💭 What's on your mind?"
+              placeholderTextColor="rgba(255,255,255,0.4)"
+              multiline
+              value={postText}
+              onChangeText={setPostText}
+              color="#ffffff"
+              editable={!uploading}
+            />
+          </LinearGradient>
 
-        {selectedMedia && (
-          <View style={styles.mediaPreview}>
-            {selectedMedia.type === 'video' ? (
-              <Video
-                source={{ uri: selectedMedia.uri }}
-                style={styles.previewMedia}
-                resizeMode="contain"
-                play={false}
-                controls
-              />
-            ) : (
-              <Image
-                source={{ uri: selectedMedia.uri }}
-                style={styles.previewMedia}
-                resizeMode="contain"
-              />
-            )}
-            <TouchableOpacity 
-              style={styles.removeMediaButton}
-              onPress={() => setSelectedMedia(null)}
-              disabled={uploading}
+          {selectedMedia && (
+            <LinearGradient
+              colors={['rgba(102, 126, 234, 0.1)', 'rgba(156, 136, 255, 0.05)']}
+              style={styles.mediaPreview}
             >
-              <Ionicons name="close-circle" size={24} color="#fff" />
-            </TouchableOpacity>
-          </View>
-        )}
-      </ScrollView>
+              {selectedMedia.type === 'video' ? (
+                <Video
+                  source={{ uri: selectedMedia.uri }}
+                  style={styles.previewMedia}
+                  resizeMode="contain"
+                  play={false}
+                  controls
+                />
+              ) : (
+                <Image
+                  source={{ uri: selectedMedia.uri }}
+                  style={styles.previewMedia}
+                  resizeMode="contain"
+                />
+              )}
+              <TouchableOpacity 
+                onPress={() => setSelectedMedia(null)}
+                disabled={uploading}
+              >
+                <LinearGradient
+                  colors={['rgba(255, 107, 107, 0.9)', 'rgba(255, 82, 82, 0.7)']}
+                  style={styles.removeMediaButton}
+                >
+                  <Ionicons name="close-circle" size={20} color="#fff" />
+                </LinearGradient>
+              </TouchableOpacity>
+            </LinearGradient>
+          )}
+        </ScrollView>
 
-      <View style={[styles.footer, { paddingBottom: insets.bottom > 0 ? insets.bottom : 15 }]}>
-        <TouchableOpacity 
-          style={styles.mediaButton}
-          onPress={handleMediaPicker}
-          disabled={uploading}
+        <LinearGradient
+          colors={['rgba(102, 126, 234, 0.15)', 'rgba(156, 136, 255, 0.1)']}
+          style={[styles.footer, { paddingBottom: insets.bottom > 0 ? insets.bottom : 15 }]}
         >
-          <Ionicons name="images" size={24} color={uploading ? "#666" : "#ff00ff"} />
-          <Text style={[styles.mediaButtonText, uploading && styles.disabledText]}>Gallery</Text>
-        </TouchableOpacity>
-      </View>
-    </KeyboardAvoidingView>
+          <TouchableOpacity 
+            onPress={handleMediaPicker}
+            disabled={uploading}
+          >
+            <LinearGradient
+              colors={uploading ? 
+                ['rgba(102, 102, 102, 0.4)', 'rgba(85, 85, 85, 0.2)'] :
+                ['rgba(255, 107, 107, 0.8)', 'rgba(255, 82, 82, 0.6)']}
+              style={styles.mediaButton}
+            >
+              <Ionicons name="images" size={20} color="#fff" />
+              <Text style={styles.mediaButtonText}>🖼️ Gallery</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </LinearGradient>
+      </KeyboardAvoidingView>
+    </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#050505',
+  },
+  keyboardContainer: {
+    flex: 1,
   },
   header: {
     flexDirection: 'row',
@@ -244,13 +298,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#333',
+    borderBottomColor: 'rgba(102, 126, 234, 0.3)',
+  },
+  closeButtonGradient: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#ff6b6b',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff',
+    textAlign: 'center',
+    flex: 1,
+    textShadowColor: 'rgba(102, 126, 234, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   postButton: {
-    backgroundColor: '#ff00ff',
     paddingHorizontal: 20,
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderRadius: 20,
+    shadowColor: '#667eea',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
+    elevation: 4,
   },
   disabledButton: {
     backgroundColor: '#666',
@@ -258,18 +338,31 @@ const styles = StyleSheet.create({
   postButtonText: {
     color: '#fff',
     fontWeight: 'bold',
+    fontSize: 16,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   content: {
     flex: 1,
   },
   inputContainer: {
-    padding: 15,
+    margin: 15,
+    borderRadius: 15,
+    overflow: 'hidden',
+    shadowColor: '#667eea',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   input: {
     fontSize: 16,
     minHeight: 100,
     textAlignVertical: 'top',
     color: '#fff',
+    padding: 15,
+    lineHeight: 22,
   },
   mediaPreview: {
     margin: 15,
@@ -278,8 +371,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#1a1a3a',
     position: 'relative',
     borderWidth: 1,
-    borderColor: 'rgba(255, 0, 255, 0.2)',
-    shadowColor: '#6600cc',
+    borderColor: 'rgba(102, 126, 234, 0.3)',
+    shadowColor: '#667eea',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 12,
@@ -298,23 +391,39 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 10,
     right: 10,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     borderRadius: 15,
     padding: 5,
+    shadowColor: '#ff6b6b',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 3,
+    elevation: 3,
   },
   footer: {
-    padding: 15,
     borderTopWidth: 1,
-    borderTopColor: '#333',
+    borderTopColor: 'rgba(102, 126, 234, 0.3)',
+    padding: 15,
   },
   mediaButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 25,
+    shadowColor: '#ff6b6b',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
+    elevation: 4,
   },
   mediaButtonText: {
-    color: '#ff00ff',
+    color: '#fff',
     fontSize: 16,
+    fontWeight: '600',
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   disabledText: {
     color: '#666',
@@ -331,25 +440,41 @@ const styles = StyleSheet.create({
   },
   progressBar: {
     height: '100%',
-    backgroundColor: '#ff00ff',
+    borderRadius: 2,
   },
   progressText: {
     color: '#fff',
     fontSize: 12,
     marginTop: 5,
     textAlign: 'center',
+    fontWeight: '600',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   errorContainer: {
-    backgroundColor: 'rgba(255, 0, 0, 0.1)',
-    padding: 10,
-    borderRadius: 5,
     margin: 10,
+    borderRadius: 10,
+    padding: 12,
     borderLeftWidth: 3,
-    borderLeftColor: '#ff0000',
+    borderLeftColor: '#ff6b6b',
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#ff6b6b',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   errorText: {
-    color: '#ff6666',
+    color: '#ff6b6b',
     fontSize: 14,
+    flex: 1,
+    marginLeft: 8,
+    fontWeight: '500',
+  },
+  errorIcon: {
+    marginRight: 4,
   },
 });
 

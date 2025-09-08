@@ -699,9 +699,12 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   username: {
-    color: '#ff00ff',
+    color: '#9c88ff',
     fontWeight: 'bold',
     marginBottom: 5,
+    textShadowColor: 'rgba(156, 136, 255, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   commentText: {
     color: '#fff',
@@ -709,8 +712,11 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   mentionText: {
-    color: '#00ffff',
+    color: '#667eea',
     fontWeight: 'bold',
+    textShadowColor: 'rgba(102, 126, 234, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   timestamp: {
     color: '#666',
@@ -725,7 +731,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 0, 255, 0.2)',
+    borderTopColor: 'rgba(102, 126, 234, 0.3)',
   },
   inputRow: {
     flexDirection: 'row',
@@ -743,12 +749,12 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   sendButton: {
-    backgroundColor: '#ff00ff',
     width: 44,
     height: 44,
     borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
   },
   disabledButton: {
     backgroundColor: '#666',
@@ -774,22 +780,25 @@ const styles = StyleSheet.create({
     marginLeft: 10,
   },
   replyButtonText: {
-    color: '#00ffff',
+    color: '#667eea',
     fontSize: 12,
+    fontWeight: '600',
   },
   toggleRepliesButton: {
     marginLeft: 10,
   },
   toggleRepliesText: {
-    color: '#ff00ff',
+    color: '#9c88ff',
     fontSize: 12,
+    fontWeight: '600',
   },
   deleteButton: {
     marginLeft: 10,
   },
   deleteButtonText: {
-    color: '#ff3333',
+    color: '#ff6b6b',
     fontSize: 12,
+    fontWeight: '600',
   },
   repliesContainer: {
     marginTop: 10,
@@ -808,13 +817,13 @@ const styles = StyleSheet.create({
   taggedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#00ffff',
     borderRadius: 10,
     paddingHorizontal: 6,
     paddingVertical: 3,
     marginLeft: 10,
     marginTop: 5,
     alignSelf: 'flex-start',
+    overflow: 'hidden',
   },
   taggedText: {
     color: '#0a0a2a',

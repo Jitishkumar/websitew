@@ -598,15 +598,12 @@ const PostItem = ({ post, onOptionsPress }) => {
         {/* Post Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={handleProfilePress} style={styles.profileContainer}>
-            <LinearGradient
-              colors={['rgba(102, 126, 234, 0.3)', 'rgba(156, 136, 255, 0.2)']}
-              style={styles.avatarGradient}
-            >
+            <View style={styles.avatarContainer}>
               <Image 
                 source={{ uri: getAvatarUrl() }}
                 style={styles.avatar}
               />
-            </LinearGradient>
+            </View>
             <View style={styles.userInfo}>
               <Text style={styles.username}>{post?.profiles?.username || 'Unknown'}</Text>
               <Text style={styles.timestamp}>{formatTimestamp(post?.created_at)}</Text>
@@ -636,11 +633,23 @@ const PostItem = ({ post, onOptionsPress }) => {
         {post.caption && (
           <View style={styles.captionContainer}>
             <Text style={styles.caption}>
-              {post.caption.split(/(https?:\/\/[^\s]+)/g).map((part, index) => {
+              {post.caption.split(/(https?:\/\/[^\s]+|#[\w\u00c0-\u024f\u1e00-\u1eff]+)/g).map((part, index) => {
                 if (part.match(/^https?:\/\//)) {
                   return (
                     <TouchableOpacity key={index} onPress={() => Linking.openURL(part)}>
                       <Text style={styles.link}>{part}</Text>
+                    </TouchableOpacity>
+                  );
+                } else if (part.match(/^#[\w\u00c0-\u024f\u1e00-\u1eff]+/)) {
+                  return (
+                    <TouchableOpacity 
+                      key={index} 
+                      onPress={() => navigation.navigate('Search', { 
+                        initialQuery: part, 
+                        searchType: 'hashtag' 
+                      })}
+                    >
+                      <Text style={styles.hashtag}>{part}</Text>
                     </TouchableOpacity>
                   );
                 }
@@ -1105,8 +1114,12 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   link: {
-    color: '#00ffff',
+    color: '#667eea',
     textDecorationLine: 'underline',
+  },
+  hashtag: {
+    color: '#9c88ff',
+    fontWeight: 'bold',
   },
   loadingIndicator: {
     marginTop: 20,
@@ -1131,6 +1144,15 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 5,
+  },
+  avatarContainer: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    padding: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   avatar: {
     width: 38,

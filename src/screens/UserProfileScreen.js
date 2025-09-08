@@ -7,6 +7,7 @@ import ProfileViewBlinker from '../components/ProfileViewBlinker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useVideo } from '../context/VideoContext';
 import { Video } from 'expo-av';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const UserProfileScreen = () => {
   const [userProfile, setUserProfile] = useState(null);
