@@ -29,6 +29,30 @@ import CommentScreen from '../screens/CommentScreen';
 
 const { width } = Dimensions.get('window');
 
+// Helper function to format timestamp
+const formatTimestamp = (timestamp) => {
+  if (!timestamp) return '';
+  
+  const now = new Date();
+  const postDate = new Date(timestamp);
+  const diffInSeconds = Math.floor((now - postDate) / 1000);
+  
+  if (diffInSeconds < 60) {
+    return 'Just now';
+  } else if (diffInSeconds < 3600) {
+    const minutes = Math.floor(diffInSeconds / 60);
+    return `${minutes}m ago`;
+  } else if (diffInSeconds < 86400) {
+    const hours = Math.floor(diffInSeconds / 3600);
+    return `${hours}h ago`;
+  } else if (diffInSeconds < 604800) {
+    const days = Math.floor(diffInSeconds / 86400);
+    return `${days}d ago`;
+  } else {
+    return postDate.toLocaleDateString();
+  }
+};
+
 const PostItem = ({ post, onOptionsPress }) => {
   const [isLiked, setIsLiked] = useState(post.is_liked || false);
   const [likesCount, setLikesCount] = useState(post.likes?.[0]?.count || 0);
@@ -567,26 +591,25 @@ const PostItem = ({ post, onOptionsPress }) => {
   };
   
   return (
-    <>
-      <LinearGradient
-        colors={['#1a1a3a', '#0d0d2a']}
-        style={styles.container}
-      >
+    <LinearGradient
+      colors={['#1a1a2e', '#16213e', '#0f3460']}
+      style={styles.container}
+    >
         {/* Post Header */}
         <View style={styles.header}>
-          <TouchableOpacity style={styles.headerLeft} onPress={handleProfilePress}>
-            <LinearGradient colors={['#ff00ff', '#00ffff']} style={styles.avatarBorder}>
-              <Image
+          <TouchableOpacity onPress={handleProfilePress} style={styles.profileContainer}>
+            <LinearGradient
+              colors={['rgba(102, 126, 234, 0.3)', 'rgba(156, 136, 255, 0.2)']}
+              style={styles.avatarGradient}
+            >
+              <Image 
                 source={{ uri: getAvatarUrl() }}
                 style={styles.avatar}
-                defaultSource={require('../../assets/defaultavatar.png')}
               />
             </LinearGradient>
-            <View style={styles.headerInfo}>
-              <Text style={styles.username}>{post?.profiles?.username || 'Anonymous User'}</Text>
-              <Text style={styles.timestamp}>
-                {new Date(post?.created_at || Date.now()).toLocaleDateString()}
-              </Text>
+            <View style={styles.userInfo}>
+              <Text style={styles.username}>{post?.profiles?.username || 'Unknown'}</Text>
+              <Text style={styles.timestamp}>{formatTimestamp(post?.created_at)}</Text>
             </View>
           </TouchableOpacity>
           {currentUser && currentUser.id === post?.user_id && (
@@ -626,7 +649,6 @@ const PostItem = ({ post, onOptionsPress }) => {
             </Text>
           </View>
         )}
-
 
 
         {/* Post Media */}
@@ -762,31 +784,38 @@ const PostItem = ({ post, onOptionsPress }) => {
         {/* Post Actions */}
         <LinearGradient colors={['rgba(26, 26, 58, 0.8)', 'rgba(13, 13, 42, 0.9)']} style={styles.actions}>
           <TouchableOpacity 
-            style={[styles.actionButton, isLiking && styles.disabledButton]} 
+            style={[styles.actionButton, isLiked && styles.likedButton]} 
             onPress={handleLike}
             disabled={isLiking}
           >
-            <LinearGradient colors={isLiked ? ['#ff00ff', '#9900ff'] : ['transparent', 'transparent']} style={isLiked ? styles.likedIconBackground : {}}>
-              {isLiking ? (
-                <ActivityIndicator size="small" color={isLiked ? '#fff' : '#e0e0ff'} />
-              ) : (
-                <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={26} color={isLiked ? '#fff' : '#e0e0ff'} />
-              )}
+            <LinearGradient
+              colors={isLiked ? ['#ff6b6b', '#ff5252'] : ['rgba(255, 107, 107, 0.2)', 'rgba(255, 107, 107, 0.1)']}
+              style={styles.actionButtonGradient}
+            >
+              <Ionicons 
+                name={isLiked ? "heart" : "heart-outline"} 
+                size={20} 
+                color={isLiked ? "#fff" : "#ff6b6b"} 
+              />
             </LinearGradient>
-            <Text style={[styles.actionText, isLiked && styles.likedText]}>
-              {likesCount}
-            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.actionButton} onPress={handleComment}>
-            <Ionicons name="chatbubble-outline" size={24} color="#e0e0ff" />
-            <Text style={styles.actionText}>
-              {commentsCount}
-            </Text>
+            <LinearGradient
+              colors={['rgba(102, 126, 234, 0.2)', 'rgba(102, 126, 234, 0.1)']}
+              style={styles.actionButtonGradient}
+            >
+              <Ionicons name="chatbubble-outline" size={20} color="#667eea" />
+            </LinearGradient>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.actionButton} onPress={handleShare}>
-            <Ionicons name="share-social-outline" size={24} color="#e0e0ff" />
+            <LinearGradient
+              colors={['rgba(156, 136, 255, 0.2)', 'rgba(156, 136, 255, 0.1)']}
+              style={styles.actionButtonGradient}
+            >
+              <Ionicons name="share-outline" size={20} color="#9c88ff" />
+            </LinearGradient>
           </TouchableOpacity>
         </LinearGradient>
 
@@ -832,7 +861,6 @@ const PostItem = ({ post, onOptionsPress }) => {
             </View>
           </View>
         </Modal>
-      </LinearGradient>
 
       {/* Edit Caption Modal */}
       <Modal
@@ -865,6 +893,24 @@ const PostItem = ({ post, onOptionsPress }) => {
             >
               <Text style={styles.editButtonText}>Save Changes</Text>
             </TouchableOpacity>
+            <View style={styles.stats}>
+              <TouchableOpacity onPress={handleShowLikes}>
+                <LinearGradient
+                  colors={['rgba(255, 107, 107, 0.15)', 'rgba(255, 107, 107, 0.05)']}
+                  style={styles.statGradient}
+                >
+                  <Text style={styles.likesText}>{likesCount} likes</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleComment}>
+                <LinearGradient
+                  colors={['rgba(102, 126, 234, 0.15)', 'rgba(102, 126, 234, 0.05)']}
+                  style={styles.statGradient}
+                >
+                  <Text style={styles.commentsText}>{commentsCount} comments</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -992,7 +1038,7 @@ const PostItem = ({ post, onOptionsPress }) => {
           </LinearGradient>
         </Modal>
       )}
-    </>
+    </LinearGradient>
   );
 };
 
@@ -1030,16 +1076,22 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(26, 26, 46, 0.9)',
   },
   modalContent: {
-    backgroundColor: '#1a1a3a',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    minHeight: '50%',
-    maxHeight: '80%',
+    borderRadius: 20,
     padding: 20,
+    width: '90%',
+    maxHeight: '80%',
+    shadowColor: '#667eea',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(102, 126, 234, 0.3)',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1068,10 +1120,22 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   likeAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 10,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    marginRight: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#9c88ff',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  avatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
   },
   likeUsername: {
     fontSize: 16,
@@ -1079,11 +1143,12 @@ const styles = StyleSheet.create({
   },
   actions: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
+    paddingHorizontal: 15,
     paddingVertical: 10,
-    borderTopWidth: 0.5,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    borderRadius: 12,
+    marginHorizontal: 10,
+    marginBottom: 10,
   },
   likedIconBackground: {
     padding: 8,
@@ -1091,9 +1156,6 @@ const styles = StyleSheet.create({
   },
   likedText: {
     color: '#ff00ff',
-  },
-  disabledButton: {
-    opacity: 0.6,
   },
   actionButtons: {
     flexDirection: 'row',
@@ -1125,15 +1187,32 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 5,
   },
-  container: { marginBottom: 20, borderRadius: 10, overflow: 'hidden' },
+  container: {
+    marginBottom: 20,
+    borderRadius: 15,
+    overflow: 'hidden',
+    shadowColor: '#667eea',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(102, 126, 234, 0.2)',
+  },
   header: { flexDirection: 'row', alignItems: 'center', padding: 10, justifyContent: 'space-between' },
   headerLeft: { flexDirection: 'row', alignItems: 'center' },
   headerInfo: { marginLeft: 10 },
-  username: { fontSize: 16, fontWeight: 'bold', color: '#fff' },
+  username: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff',
+    textShadowColor: 'rgba(102, 126, 234, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
   timestamp: { fontSize: 12, color: '#aaa' },
   optionsButton: { padding: 5 },
   avatarBorder: { width: 50, height: 50, borderRadius: 25, padding: 2 },
-  avatar: { width: 46, height: 46, borderRadius: 23 },
   captionContainer: { padding: 10 },
   caption: { color: '#ddd' },
   mediaContainer: { width: '100%', aspectRatio: 1 },
@@ -1146,7 +1225,8 @@ const styles = StyleSheet.create({
   actionText: { marginTop: 2, color: '#e0e0ff', fontSize: 12 },
   likedIconBackground: { borderRadius: 20, padding: 5 },
   likedText: { color: '#ff00ff' },
-  videoControls: { position: 'absolute', bottom: 0, width: '100%', padding: 10, paddingBottom: 30 },  timeContainer: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 },
+  videoControls: { position: 'absolute', bottom: 0, width: '100%', padding: 10, paddingBottom: 30 },
+  timeContainer: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 },
   timeText: { color: '#fff', fontSize: 12, fontWeight: '500' },
   seekbarContainer: { height: 20, justifyContent: 'center', width: '100%', marginBottom: 20 },
   progressBackground: { position: 'absolute', height: 4, width: '100%', backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: 2 },
@@ -1241,7 +1321,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: '100%',
     height: 30,
-    marginBottom: 20 // Increased bottom margin to prevent collision with buttons
+    marginBottom: 20
   },
   fullscreenSeekbarTouchArea: {
     position: 'absolute',
@@ -1255,7 +1335,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around', 
     alignItems: 'center',
     paddingHorizontal: 20,
-    marginTop: 20 // Add vertical spacing between seekbar and control buttons
+    marginTop: 20
   },
   fullscreenControlButton: { 
     padding: 12,
@@ -1277,6 +1357,38 @@ const styles = StyleSheet.create({
     justifyContent: 'center', 
     alignItems: 'center', 
     borderRadius: 30 
+  },
+  stats: {
+    flexDirection: 'row',
+    paddingHorizontal: 15,
+    paddingBottom: 15,
+    gap: 10,
+  },
+  statGradient: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 15,
+    marginRight: 10,
+    shadowColor: 'rgba(102, 126, 234, 0.2)',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  actionButton: {
+    marginRight: 15,
+  },
+  actionButtonGradient: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: 'rgba(102, 126, 234, 0.4)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   closeButton: { 
     position: 'absolute', 

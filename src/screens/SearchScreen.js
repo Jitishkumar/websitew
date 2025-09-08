@@ -186,36 +186,47 @@ const SearchScreen = () => {
   );
 
   return (
-    <View style={styles.container}>
+    <LinearGradient colors={['#0f0f23', '#1a1a2e', '#16213e']} style={styles.container}>
       <LinearGradient
-        colors={['#330033', '#550055']}
-        start={{x: 0, y: 0}}
-        end={{x: 1, y: 1}}
+        colors={['rgba(255, 215, 0, 0.2)', 'rgba(255, 215, 0, 0.1)', 'transparent']}
         style={[styles.header, { paddingTop: insets.top > 0 ? insets.top : 50 }]}
       >
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color="#ff00ff" />
+          <LinearGradient
+            colors={['#ffd700', '#ffed4e']}
+            style={styles.backButtonGradient}
+          >
+            <Ionicons name="arrow-back" size={20} color="#000" />
+          </LinearGradient>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Search</Text>
+        <Text style={styles.headerTitle}>🔍 Search</Text>
       </LinearGradient>
-      
-      <View style={styles.searchContainer}>
-        <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search for users..."
-          placeholderTextColor="#666"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          autoCapitalize="none"
-        />
-        {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <Ionicons name="close-circle" size={20} color="#666" />
-          </TouchableOpacity>
-        )}
+      <View style={styles.searchInputContainer}>
+        <LinearGradient
+          colors={['rgba(255, 215, 0, 0.15)', 'rgba(255, 215, 0, 0.08)']}
+          style={styles.searchInputGradient}
+        >
+          <LinearGradient
+            colors={['#ffd700', '#ffed4e']}
+            style={styles.searchIconContainer}
+          >
+            <Ionicons name="search" size={16} color="#000" />
+          </LinearGradient>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search users..."
+            placeholderTextColor="rgba(255, 255, 255, 0.7)"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            autoFocus
+          />
+        </LinearGradient>
       </View>
-
+      {searchQuery.length > 0 && (
+        <TouchableOpacity onPress={() => setSearchQuery('')}>
+          <Ionicons name="close-circle" size={20} color="#666" />
+        </TouchableOpacity>
+      )}
       {loading ? (
         <ActivityIndicator size="large" color="#ff00ff" style={styles.loader} />
       ) : (
@@ -223,54 +234,109 @@ const SearchScreen = () => {
           data={searchResults}
           renderItem={renderUserItem}
           keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
           ListEmptyComponent={
-            searchQuery.length > 0 ? (
-              <Text style={styles.emptyText}>No users found</Text>
+            searchQuery.trim().length > 0 && !loading ? (
+              <View style={styles.emptyContainer}>
+                <LinearGradient
+                  colors={['#ffd700', '#ffed4e']}
+                  style={styles.emptyIconContainer}
+                >
+                  <Ionicons name="person-outline" size={30} color="#000" />
+                </LinearGradient>
+                <Text style={styles.emptyText}>No users found</Text>
+              </View>
             ) : null
           }
-          contentContainerStyle={{ paddingBottom: insets.bottom }}
+          ListFooterComponent={
+            loading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#ffd700" />
+              </View>
+            ) : null
+          }
         />
       )}
-    </View>
+    </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#330033',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#ff00ff40',
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: 'white',
-    marginLeft: 20,
+  backButtonGradient: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#ffd700',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+    marginRight: 15,
   },
-  searchContainer: {
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginLeft: 20,
+    textShadowColor: 'rgba(255, 215, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  searchInputContainer: {
+    marginHorizontal: 20,
+    marginBottom: 20,
+  },
+  searchInputGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderRadius: 20,
-    margin: 16,
+    borderRadius: 25,
     paddingHorizontal: 15,
+    paddingVertical: 12,
     borderWidth: 1,
-    borderColor: '#ff00ff60',
+    borderColor: 'rgba(255, 215, 0, 0.3)',
+    shadowColor: '#ffd700',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  searchIconContainer: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+    shadowColor: '#ffd700',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 2,
   },
   searchIcon: {
     marginRight: 10,
   },
   searchInput: {
     flex: 1,
-    height: 50,
-    color: 'white',
+    color: '#fff',
     fontSize: 16,
+    textShadowColor: 'rgba(255, 215, 0, 0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 1,
   },
   userItem: {
     flexDirection: 'row',
@@ -300,9 +366,12 @@ const styles = StyleSheet.create({
     marginLeft: 5,
   },
   username: {
-    color: 'white',
+    color: '#fff',
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: 'bold',
+    textShadowColor: 'rgba(255, 215, 0, 0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 1,
   },
   fullName: {
     color: '#999',
@@ -318,5 +387,4 @@ const styles = StyleSheet.create({
     marginTop: 50,
   },
 });
-
 export default SearchScreen;

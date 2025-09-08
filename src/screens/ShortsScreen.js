@@ -343,108 +343,59 @@ const ShortsScreen = ({ route }) => {
           />
           
           {/* User info overlay */}
-          <LinearGradient 
-            colors={['transparent', 'rgba(0,0,0,0.7)']} 
-            style={[styles.userInfoOverlay, { paddingBottom: insets.bottom + 20 }]}
+          <LinearGradient
+            colors={['rgba(0,0,0,0.3)', 'transparent', 'rgba(0,0,0,0.7)']}
+            style={styles.overlay}
           >
-            <View style={styles.userInfo}>
-              <Text style={styles.username}>{item.profiles?.username || 'User'}</Text>
-              <Text style={styles.caption}>{item.caption}</Text>
+            {/* Top controls */}
+            <View style={[styles.topControls, { paddingTop: insets.top }]}>
+              <TouchableOpacity 
+                style={styles.backButton}
+                onPress={() => navigation.goBack()}
+              >
+                <LinearGradient
+                  colors={['rgba(102, 126, 234, 0.8)', 'rgba(156, 136, 255, 0.6)']}
+                  style={styles.backButtonGradient}
+                >
+                  <Ionicons name="arrow-back" size={20} color="#fff" />
+                </LinearGradient>
+              </TouchableOpacity>
             </View>
             
-            {/* Social interaction buttons */}
-            <View style={styles.socialButtons}>
-              <TouchableOpacity 
-                style={styles.socialButton} 
-                onPress={() => handleLike(item.id)}
-              >
-                <LinearGradient 
-                  colors={item.is_liked ? ['#ff00ff', '#9900ff'] : ['rgba(0,0,0,0.5)', 'rgba(0,0,0,0.5)']}
-                  style={styles.socialButtonGradient}
-                >
-                  <Ionicons name={item.is_liked ? 'heart' : 'heart-outline'} size={26} color="#fff" />
-                </LinearGradient>
-                <Text style={styles.socialButtonText}>{likeCount}</Text>
-              </TouchableOpacity>
+            {/* Bottom controls */}
+            <View style={styles.bottomControls}>
+              <View style={styles.timeContainer}>
+                <Text style={styles.timeText}>{formatTime(currentTime)}</Text>
+                <Text style={styles.timeText}>{formatTime(duration)}</Text>
+              </View>
               
-              <TouchableOpacity 
-                style={styles.socialButton}
-                onPress={() => handleComment(item.id)}
-              >
-                <LinearGradient 
-                  colors={['rgba(0,0,0,0.5)', 'rgba(0,0,0,0.5)']}
-                  style={styles.socialButtonGradient}
-                >
-                  <Ionicons name="chatbubble-outline" size={24} color="#fff" />
-                </LinearGradient>
-                <Text style={styles.socialButtonText}>{commentCount}</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.socialButton}
-                onPress={() => handleShare(item)}
-              >
-                <LinearGradient 
-                  colors={['rgba(0,0,0,0.5)', 'rgba(0,0,0,0.5)']}
-                  style={styles.socialButtonGradient}
-                >
-                  <Ionicons name="share-social-outline" size={24} color="#fff" />
-                </LinearGradient>
-              </TouchableOpacity>
+              <View style={styles.seekbarContainer}>
+                <View style={styles.progressBackground} />
+                <View style={[styles.progressBar, { width: `${progress * 100}%` }]} />
+                <View style={styles.seekbarTouchable}>
+                  <TouchableOpacity 
+                    style={[styles.seekKnob, { left: `${progress * 100}%` }]}
+                  />
+                  <View 
+                    style={styles.seekbarTouchArea}
+                    onTouchStart={(event) => {
+                      const { locationX } = event.nativeEvent;
+                      const seekPosition = locationX / width;
+                      handleSeek(Math.max(0, Math.min(1, seekPosition)));
+                    }}
+                  />
+                </View>
+              </View>
             </View>
           </LinearGradient>
-
-          {/* Video controls */}
-          {showControls && (
-            <LinearGradient 
-              colors={['rgba(0,0,0,0.7)', 'transparent', 'rgba(0,0,0,0.7)']} 
-              style={styles.controlsOverlay}
-            >
-              {/* Top controls */}
-              <View style={[styles.topControls, { paddingTop: insets.top }]}>
-                <TouchableOpacity 
-                  style={styles.backButton} 
-                  onPress={() => navigation.goBack()}
-                >
-                  <Ionicons name="arrow-back" size={28} color="#fff" />
-                </TouchableOpacity>
-              </View>
-              
-              {/* Bottom controls */}
-              <View style={styles.bottomControls}>
-                <View style={styles.timeContainer}>
-                  <Text style={styles.timeText}>{formatTime(currentTime)}</Text>
-                  <Text style={styles.timeText}>{formatTime(duration)}</Text>
-                </View>
-                
-                <View style={styles.seekbarContainer}>
-                  <View style={styles.progressBackground} />
-                  <View style={[styles.progressBar, { width: `${progress * 100}%` }]} />
-                  <View style={styles.seekbarTouchable}>
-                    <TouchableOpacity 
-                      style={[styles.seekKnob, { left: `${progress * 100}%` }]}
-                    />
-                    <View 
-                      style={styles.seekbarTouchArea}
-                      onTouchStart={(event) => {
-                        const { locationX } = event.nativeEvent;
-                        const seekPosition = locationX / width;
-                        handleSeek(Math.max(0, Math.min(1, seekPosition)));
-                      }}
-                    />
-                  </View>
-                </View>
-              </View>
-            </LinearGradient>
-          )}
-          
-          {/* Pause icon that appears briefly when video is paused */}
-          {showPauseIcon && index === currentIndex && (
-            <Animated.View style={[styles.pauseIconContainer, { opacity: fadeAnim }]}>
-              <Ionicons name="pause" size={50} color="#fff" />
-            </Animated.View>
-          )}
         </TouchableOpacity>
+        
+        {/* Pause icon that appears briefly when video is paused */}
+        {showPauseIcon && index === currentIndex && (
+          <Animated.View style={[styles.pauseIconContainer, { opacity: fadeAnim }]}>
+            <Ionicons name="pause" size={50} color="#fff" />
+          </Animated.View>
+        )}
       </View>
     );
   };
@@ -472,7 +423,7 @@ const ShortsScreen = ({ route }) => {
   }
 
   return (
-    <View style={styles.container}>
+    <LinearGradient colors={['#1a1a2e', '#16213e', '#0f3460']} style={styles.container}>
       <FlatList
         ref={flatListRef}
         data={posts.filter(post => post.type === 'video')}
@@ -490,7 +441,7 @@ const ShortsScreen = ({ route }) => {
         onScrollToIndexFailed={onScrollToIndexFailed}
         vertical
       />
-    </View>
+    </LinearGradient>
   );
 };
 

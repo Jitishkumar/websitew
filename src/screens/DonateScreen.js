@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { donate } from '../lib/donate';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const DonateScreen = () => {
   const [amount, setAmount] = useState('');
@@ -61,22 +62,30 @@ const DonateScreen = () => {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <LinearGradient colors={['#1a1a2e', '#16213e', '#0f3460']} style={styles.safeArea}>
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardAvoidingView}
       >
         <ScrollView contentContainerStyle={styles.scrollContainer}>
           <View style={styles.container}>
-            <View style={styles.header}>
+            <LinearGradient
+              colors={['rgba(102, 126, 234, 0.3)', 'rgba(156, 136, 255, 0.2)', 'transparent']}
+              style={styles.header}
+            >
               <TouchableOpacity 
                 style={styles.backButton} 
                 onPress={() => navigation.goBack()}
               >
-                <Ionicons name="arrow-back" size={24} color="#ff00ff" />
+                <LinearGradient
+                  colors={['rgba(102, 126, 234, 0.8)', 'rgba(156, 136, 255, 0.6)']}
+                  style={styles.backButtonGradient}
+                >
+                  <Ionicons name="arrow-back" size={20} color="#fff" />
+                </LinearGradient>
               </TouchableOpacity>
-              <Text style={styles.title}>Support the Founder</Text>
-            </View>
+              <Text style={styles.title}>💎 Support the Founder</Text>
+            </LinearGradient>
             
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Your Name</Text>
@@ -102,12 +111,17 @@ const DonateScreen = () => {
             </View>
 
             <TouchableOpacity style={styles.donateButton} onPress={handleDonation}>
-              <Text style={styles.donateButtonText}>Donate Now</Text>
+              <LinearGradient
+                colors={['rgba(255, 107, 107, 0.8)', 'rgba(255, 82, 82, 0.9)']}
+                style={styles.donateButtonGradient}
+              >
+                <Text style={styles.donateButtonText}>💝 Donate Now</Text>
+              </LinearGradient>
             </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </LinearGradient>
   );
 };
 

@@ -1358,18 +1358,21 @@ const UserProfileScreen = () => {
   };
 
   return (
-    <View style={styles.container}>
+    <LinearGradient colors={['#1a1a2e', '#16213e', '#0f3460']} style={styles.container}>
       <ProfileViewBlinker 
         gender={userProfile?.gender} 
         viewerGender={viewerGender} 
       />
       {/* Add back button at the top */}
-      <View style={[styles.header, { paddingTop: insets.top > 0 ? insets.top : 50 }]}>
+      <LinearGradient
+        colors={['rgba(102, 126, 234, 0.3)', 'rgba(156, 136, 255, 0.2)', 'transparent']}
+        style={[styles.header, { paddingTop: insets.top + 10 }]}
+      >
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color="white" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Profile</Text>
-      </View>
+      </LinearGradient>
       
       {loading ? (
         <View style={[styles.container, styles.centered]}>
@@ -1457,7 +1460,7 @@ const UserProfileScreen = () => {
         connections={following}
         isLoading={loadingConnections}
       />
-    </View>
+    </LinearGradient>
   );
 };
 

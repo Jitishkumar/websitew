@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, 
 import { supabase } from '../lib/supabase';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const WealthiestDonorsScreen = () => {
   const [donors, setDonors] = useState([]);
@@ -32,39 +33,64 @@ const WealthiestDonorsScreen = () => {
   };
 
   const renderDonorItem = ({ item, index }) => (
-    <View style={styles.donorItem}>
-      <Text style={styles.rank}>#{index + 1}</Text>
+    <LinearGradient
+      colors={index === 0 ? ['rgba(255, 215, 0, 0.3)', 'rgba(255, 193, 7, 0.2)'] : 
+             index === 1 ? ['rgba(192, 192, 192, 0.3)', 'rgba(169, 169, 169, 0.2)'] :
+             index === 2 ? ['rgba(205, 127, 50, 0.3)', 'rgba(184, 115, 51, 0.2)'] :
+             ['rgba(102, 126, 234, 0.2)', 'rgba(156, 136, 255, 0.1)']}
+      style={styles.donorItem}
+    >
+      <LinearGradient
+        colors={index < 3 ? ['rgba(255, 107, 107, 0.8)', 'rgba(255, 82, 82, 0.6)'] : ['rgba(102, 126, 234, 0.6)', 'rgba(156, 136, 255, 0.4)']}
+        style={styles.rankBadge}
+      >
+        <Text style={styles.rank}>#{index + 1}</Text>
+      </LinearGradient>
       <View style={styles.donorInfo}>
         <Text style={styles.donorName}>{item.donor_name}</Text>
-        <Text style={styles.donationAmount}>₹{item.amount.toLocaleString()}</Text>
+        <Text style={styles.donationAmount}>💎 ₹{item.amount.toLocaleString()}</Text>
       </View>
-    </View>
+      {index < 3 && (
+        <Ionicons 
+          name={index === 0 ? 'trophy' : index === 1 ? 'medal' : 'ribbon'} 
+          size={24} 
+          color={index === 0 ? '#FFD700' : index === 1 ? '#C0C0C0' : '#CD7F32'} 
+        />
+      )}
+    </LinearGradient>
   );
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.safeArea}>
+      <LinearGradient colors={['#1a1a2e', '#16213e', '#0f3460']} style={styles.safeArea}>
         <View style={styles.container}>
-          <ActivityIndicator size="large" color="#ff00ff" />
+          <ActivityIndicator size="large" color="#667eea" />
+          <Text style={styles.loadingText}>Loading donors...</Text>
         </View>
-      </SafeAreaView>
+      </LinearGradient>
     );
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <LinearGradient colors={['#1a1a2e', '#16213e', '#0f3460']} style={styles.safeArea}>
       <View style={styles.container}>
-        <View style={styles.header}>
+        <LinearGradient
+          colors={['rgba(102, 126, 234, 0.3)', 'rgba(156, 136, 255, 0.2)', 'transparent']}
+          style={styles.header}
+        >
           <TouchableOpacity 
             style={styles.backButton} 
             onPress={() => navigation.goBack()}
           >
-            <Ionicons name="arrow-back" size={24} color="#ff00ff" />
+            <LinearGradient
+              colors={['rgba(102, 126, 234, 0.8)', 'rgba(156, 136, 255, 0.6)']}
+              style={styles.backButtonGradient}
+            >
+              <Ionicons name="arrow-back" size={20} color="#fff" />
+            </LinearGradient>
           </TouchableOpacity>
-          <Text style={styles.title}>Wealthiest Donors</Text>
-          <Text style={styles.subtitle}>(Verified donations only)</Text>
-          <Text style={styles.rankingInfo}>Ranked by highest donation amount</Text>
-        </View>
+          <Text style={styles.title}>🏆 Wealthiest Donors</Text>
+        </LinearGradient>
         
         {donors.length === 0 && !loading ? (
           <View style={styles.emptyContainer}>
@@ -82,19 +108,20 @@ const WealthiestDonorsScreen = () => {
             data={donors}
             renderItem={renderDonorItem}
             keyExtractor={(item) => item.id.toString()}
-            contentContainerStyle={styles.listContainer}
+            style={styles.list}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.listContent}
           />
         )}
       </View>
-    </SafeAreaView>
+    </LinearGradient>    
   );
 };
 
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#000033',
-    paddingTop: Platform.OS === 'ios' ? 50 : 30, // Additional padding for camera notch
+    paddingTop: Platform.OS === 'ios' ? 50 : 30,
   },
   container: {
     flex: 1,
@@ -106,31 +133,79 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   backButton: {
-    position: 'absolute',
-    left: 0,
-    top: 5,
-    padding: 5,
-    zIndex: 1,
+    marginRight: 16,
   },
   title: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#ff00ff',
+    color: '#ffffff',
     textAlign: 'center',
-    marginBottom: 5,
+    flex: 1,
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: -1, height: 1 },
+    textShadowRadius: 10,
   },
-  subtitle: {
+  backButtonGradient: {
+    padding: 8,
+    borderRadius: 20,
+  },
+  loadingText: {
+    color: '#fff',
+    fontSize: 16,
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  listContent: {
+    paddingBottom: 20,
+  },
+  donorItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    marginVertical: 6,
+    borderRadius: 15,
+    marginHorizontal: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  rankBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  rank: {
     fontSize: 14,
-    color: '#cccccc',
-    textAlign: 'center',
-    marginBottom: 5,
+    fontWeight: 'bold',
+    color: '#fff',
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: -1, height: 1 },
+    textShadowRadius: 10,
   },
-  rankingInfo: {
-    fontSize: 12,
-    color: '#888888',
-    textAlign: 'center',
-    marginBottom: 10,
-    fontStyle: 'italic',
+  donorInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  donorName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: -1, height: 1 },
+    textShadowRadius: 10,
+  },
+  donationAmount: {
+    fontSize: 14,
+    color: '#9c88ff',
+    marginTop: 2,
+    fontWeight: '600',
   },
   emptyContainer: {
     flex: 1,
@@ -157,44 +232,15 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     width: '80%',
-    marginBottom: 20, // Added bottom margin
+    marginBottom: 20, 
   },
   donateButtonText: {
     color: '#ffffff',
     fontSize: 18,
     fontWeight: 'bold',
   },
-  listContainer: {
-    paddingBottom: 80, // Increased bottom padding
-  },
-  donorItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#330033',
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 10,
-  },
-  rank: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#ff00ff',
-    marginRight: 15,
-  },
-  donorInfo: {
+  list: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  donorName: {
-    fontSize: 16,
-    color: '#ffffff',
-  },
-  donationAmount: {
-    fontSize: 16,
-    color: '#00ff00',
-    fontWeight: 'bold',
   },
 });
 
