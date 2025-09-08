@@ -195,25 +195,25 @@ const ShareUserSelectionScreen = () => {
         // Create message content with author info and navigation tags
         let messageContent = sharePayload.caption || '';
         
-        // For shared posts, format the content to include author info and navigation tags
+        // For shared posts, format the content with hidden navigation tags
         if (sharePayload.author) {
           if (sharePayload.from === 'Confession' || sharePayload.from === 'ConfessionPerson') {
-            // For confessions, use confession emoji and format with person/place info
-            const entityInfo = sharePayload.from === 'ConfessionPerson' 
-              ? `[PersonID:${sharePayload.author.user_id}]` 
-              : sharePayload.locationId ? `[LocationID:${sharePayload.locationId}]` : '';
-            messageContent = `🤫 Shared confession from @${sharePayload.author.username}:\n\n${messageContent}\n\n[PostID:${sharePayload.postId}]\n[From:${sharePayload.from}]\n${entityInfo}`;
+            // For confessions, use confession emoji and format cleanly
+            messageContent = `🤫 Shared confession from @${sharePayload.author.username}:\n\n${messageContent}`;
           } else if (sharePayload.media_url) {
-            // For media posts, keep the caption as is (author info will be shown in header)
-            messageContent = `${messageContent}\n\n[PostID:${sharePayload.postId}]\n[From:${sharePayload.from || 'Post'}]`;
+            // For media posts, add elegant prefix
+            messageContent = `✨ Shared by @${sharePayload.author.username}:\n\n${messageContent}`;
           } else {
-            // For text-only posts, format with author info
-            messageContent = `📝 Shared post from @${sharePayload.author.username}:\n\n${messageContent}\n\n[PostID:${sharePayload.postId}]\n[From:${sharePayload.from || 'Post'}]`;
+            // For text-only posts, format with elegant styling
+            messageContent = `💎 Shared by @${sharePayload.author.username}:\n\n${messageContent}`;
           }
-        } else {
-          // Fallback for posts without author info
-          messageContent = `${messageContent}\n\n[PostID:${sharePayload.postId}]\n[From:${sharePayload.from || 'Post'}]`;
         }
+        
+        // Add hidden navigation metadata at the end (invisible to users but needed for navigation)
+        const hiddenMetadata = `\u200B[PostID:${sharePayload.postId}]\u200B[From:${sharePayload.from}]` + 
+          (sharePayload.from === 'ConfessionPerson' ? `\u200B[PersonID:${sharePayload.author.user_id}]` : '') +
+          (sharePayload.locationId ? `\u200B[LocationID:${sharePayload.locationId}]` : '');
+        messageContent += hiddenMetadata;
 
         const messageData = {
           conversation_id: conversationId,

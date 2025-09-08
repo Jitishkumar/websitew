@@ -961,11 +961,11 @@ const MessageScreen = () => {
                   const usernameMatch = item.text.match(/@(\w+):/);
                   const username = usernameMatch ? usernameMatch[1] : 'Unknown User';
                   
-                  // Extract post ID, source, and entity info from the message
-                  const postIdMatch = item.text.match(/\[PostID:([^\]]+)\]/);
-                  const fromMatch = item.text.match(/\[From:([^\]]+)\]/);
-                  const personIdMatch = item.text.match(/\[PersonID:([^\]]+)\]/);
-                  const locationIdMatch = item.text.match(/\[LocationID:([^\]]+)\]/);
+                  // Extract post ID, source, and entity info from hidden metadata
+                  const postIdMatch = item.text.match(/\u200B\[PostID:([^\]]+)\]/);
+                  const fromMatch = item.text.match(/\u200B\[From:([^\]]+)\]/);
+                  const personIdMatch = item.text.match(/\u200B\[PersonID:([^\]]+)\]/);
+                  const locationIdMatch = item.text.match(/\u200B\[LocationID:([^\]]+)\]/);
                   
                   const postId = postIdMatch ? postIdMatch[1] : null;
                   const fromSource = fromMatch ? fromMatch[1] : null;
@@ -1023,95 +1023,80 @@ const MessageScreen = () => {
                 item.text.startsWith('📝 Shared post from') && styles.sharedConfessionContainer
               ]}
             >
-              {item.text.startsWith('📝 Shared post from') ? (
-                // Check if this is a confession or regular post
+{item.text.startsWith('📝 Shared post from') || item.text.startsWith('🤫 Shared confession from') || item.text.startsWith('✨ Shared by') || item.text.startsWith('💎 Shared by') ? (
                 (() => {
-                  const fromMatch = item.text.match(/\[From:([^\]]+)\]/);
-                  const fromSource = fromMatch ? fromMatch[1] : null;
-                  const isConfession = fromSource === 'Confession' || fromSource === 'ConfessionPerson' || item.text.includes('@Anonymous');
+                  // Clean the text by removing hidden metadata
+                  const cleanText = item.text.replace(/\u200B\[PostID:[^\]]+\]/g, '')
+                                            .replace(/\u200B\[From:[^\]]+\]/g, '')
+                                            .replace(/\u200B\[PersonID:[^\]]+\]/g, '')
+                                            .replace(/\u200B\[LocationID:[^\]]+\]/g, '');
                   
-                  if (isConfession) {
-                    // Render confession card preview
+                  if (item.text.startsWith('🤫 Shared confession from')) {
+                    // This is a confession
                     return (
-                      <View style={styles.confessionCardPreview}>
+                      <View style={styles.premiumSharedContent}>
                         <LinearGradient
                           colors={['#1a1a2e', '#16213e', '#0f3460']}
                           start={{ x: 0, y: 0 }}
                           end={{ x: 1, y: 1 }}
-                          style={styles.confessionCardGradient}
+                          style={styles.premiumGradient}
                         >
-                          {/* Header with user info */}
-                          <View style={styles.confessionCardHeader}>
-                            <View style={styles.confessionUserInfo}>
-                              <View style={styles.confessionAvatar}>
-                                <Text style={styles.confessionAvatarText}>
-                                  {item.text.includes('@Anonymous') ? '🎭' : '👤'}
-                                </Text>
-                              </View>
-                              <Text style={styles.confessionUsername}>
-                                {item.text.match(/@(\w+):/)?.[1] || 'Anonymous'}
-                              </Text>
-                            </View>
+                          <View style={styles.premiumHeader}>
                             <View style={styles.confessionBadge}>
-                              <Text style={styles.confessionBadgeText}>Confession</Text>
+                              <Text style={styles.confessionBadgeText}>🤫 CONFESSION</Text>
                             </View>
                           </View>
-                          
-                          {/* Confession content */}
-                          <View style={styles.confessionContent}>
-                            <Text style={styles.confessionText} numberOfLines={4}>
-                              {item.text.split(':\n\n')[1]?.split('\n\n[PostID:')[0] || item.text}
-                            </Text>
+                          <Text style={styles.premiumSharedText}>{cleanText}</Text>
+                          <View style={styles.premiumFooter}>
+                            <View style={styles.tapIndicator}>
+                              <Ionicons name="diamond-outline" size={12} color="#ffd700" />
+                              <Text style={styles.tapIndicatorText}>Tap to view</Text>
+                            </View>
                           </View>
-                          
-                          {/* Footer */}
-                          <View style={styles.confessionCardFooter}>
-                            <View style={styles.tapToViewIndicator}>
-                              <Ionicons name="open-outline" size={14} color="rgba(255,255,255,0.6)" />
-                              <Text style={styles.tapToViewText}>Tap to view full confession</Text>
+                        </LinearGradient>
+                      </View>
+                    );
+                  } else if (item.text.startsWith('✨ Shared by') || item.text.startsWith('💎 Shared by')) {
+                    // This is a premium shared post
+                    const isMedia = item.text.startsWith('✨');
+                    return (
+                      <View style={styles.premiumSharedContent}>
+                        <LinearGradient
+                          colors={isMedia ? ['#ff6b6b', '#ee5a24', '#e55039'] : ['#9c88ff', '#8c7ae6', '#7158e2']}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                          style={styles.premiumGradient}
+                        >
+                          <View style={styles.premiumHeader}>
+                            <View style={styles.postBadge}>
+                              <Text style={styles.postBadgeText}>{isMedia ? '✨ MEDIA' : '💎 POST'}</Text>
+                            </View>
+                          </View>
+                          <Text style={styles.premiumSharedText}>{cleanText}</Text>
+                          <View style={styles.premiumFooter}>
+                            <View style={styles.tapIndicator}>
+                              <Ionicons name="diamond-outline" size={12} color="#ffd700" />
+                              <Text style={styles.tapIndicatorText}>Tap to view</Text>
                             </View>
                           </View>
                         </LinearGradient>
                       </View>
                     );
                   } else {
-                    // Render regular post preview
-                    const username = item.text.match(/@(\w+):/)?.[1] || 'Unknown User';
-                    const content = item.text.split(':\n\n')[1]?.split('\n\n[PostID:')[0] || item.text;
-                    
+                    // Legacy shared post format
                     return (
-                      <View style={styles.sharedPostPreview}>
+                      <View style={styles.premiumSharedContent}>
                         <LinearGradient
-                          colors={['#2a2a2a', '#1a1a1a']}
+                          colors={['#667eea', '#764ba2']}
                           start={{ x: 0, y: 0 }}
                           end={{ x: 1, y: 1 }}
-                          style={styles.sharedPostGradient}
+                          style={styles.premiumGradient}
                         >
-                          {/* Header with user info */}
-                          <View style={styles.sharedPostHeader}>
-                            <View style={styles.sharedPostUserInfo}>
-                              <View style={styles.sharedPostAvatar}>
-                                <Text style={styles.sharedPostAvatarText}>📝</Text>
-                              </View>
-                              <Text style={styles.sharedPostUsername}>@{username}</Text>
-                            </View>
-                            <View style={styles.sharedPostBadge}>
-                              <Text style={styles.sharedPostBadgeText}>Post</Text>
-                            </View>
-                          </View>
-                          
-                          {/* Post content */}
-                          <View style={styles.sharedPostContent}>
-                            <Text style={styles.sharedPostText} numberOfLines={3}>
-                              {content}
-                            </Text>
-                          </View>
-                          
-                          {/* Footer */}
-                          <View style={styles.sharedPostFooter}>
-                            <View style={styles.tapToViewIndicator}>
-                              <Ionicons name="open-outline" size={14} color="rgba(255,255,255,0.6)" />
-                              <Text style={styles.tapToViewText}>Tap to view post</Text>
+                          <Text style={styles.premiumSharedText}>{cleanText}</Text>
+                          <View style={styles.premiumFooter}>
+                            <View style={styles.tapIndicator}>
+                              <Ionicons name="diamond-outline" size={12} color="#ffd700" />
+                              <Text style={styles.tapIndicatorText}>Tap to view</Text>
                             </View>
                           </View>
                         </LinearGradient>
@@ -1120,10 +1105,7 @@ const MessageScreen = () => {
                   }
                 })()
               ) : (
-                // Regular text message
-                <Text style={styles.messageText}>
-                  {item.text}
-                </Text>
+                <Text style={styles.messageText}>{item.text}</Text>
               )}
             </TouchableOpacity>
           ) : null}
@@ -2191,6 +2173,85 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.7)',
     fontSize: 12,
     marginLeft: 4,
+  },
+  // Premium shared content styles
+  premiumSharedContent: {
+    marginVertical: 4,
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  premiumGradient: {
+    padding: 16,
+    borderRadius: 16,
+    minHeight: 80,
+  },
+  premiumHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  premiumSharedText: {
+    color: '#ffffff',
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '400',
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+    marginBottom: 12,
+  },
+  premiumFooter: {
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    paddingTop: 8,
+  },
+  confessionBadge: {
+    backgroundColor: 'rgba(255, 215, 0, 0.15)',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 215, 0, 0.3)',
+  },
+  confessionBadgeText: {
+    color: '#ffd700',
+    fontSize: 11,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+  },
+  postBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  postBadgeText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+  },
+  tapIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  tapIndicatorText: {
+    color: '#ffd700',
+    fontSize: 11,
+    fontWeight: '600',
+    marginLeft: 4,
+    letterSpacing: 0.3,
   },
 });
 
