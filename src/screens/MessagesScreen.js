@@ -484,46 +484,62 @@ const MessagesScreen = () => {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <LinearGradient colors={['#0f0f23', '#1a1a2e', '#16213e']} style={[styles.container, { paddingTop: insets.top }]}>
       <LinearGradient
-        colors={['#1a0f2e', '#2a1f3e']}
-        style={styles.gradient}
+        colors={['rgba(255, 215, 0, 0.2)', 'rgba(255, 215, 0, 0.1)', 'transparent']}
+        style={styles.header}
       >
-        <View style={styles.header}>
-          <TouchableOpacity 
-            onPress={() => navigation.goBack()} 
-            style={styles.backButton}
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <LinearGradient
+            colors={['#ffd700', '#ffed4e']}
+            style={styles.backButtonGradient}
           >
-            <Ionicons name="arrow-back" size={24} color="#fff" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Messages</Text>
-          <TouchableOpacity 
-            style={styles.refreshButton}
-            onPress={handleRefresh}
-            disabled={refreshing}
+            <Ionicons name="arrow-back" size={20} color="#000" />
+          </LinearGradient>
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Messages</Text>
+        <TouchableOpacity 
+          style={styles.refreshButton}
+          onPress={handleRefresh}
+          disabled={refreshing}
+        >
+          <LinearGradient
+            colors={['#ffd700', '#ffed4e']}
+            style={styles.headerIconGradient}
           >
             <Ionicons 
               name={refreshing ? "refresh" : "refresh-outline"} 
-              size={24} 
-              color="#fff" 
+              size={20} 
+              color="#000" 
               style={refreshing ? { transform: [{ rotate: '180deg' }] } : {}}
             />
-          </TouchableOpacity>
-        </View>
+          </LinearGradient>
+        </TouchableOpacity>
+      </LinearGradient>
 
-        <View style={styles.searchContainer}>
-          <Ionicons name="search" size={20} color="rgba(255,255,255,0.5)" style={styles.searchIcon} />
+      <View style={styles.searchContainer}>
+        <LinearGradient
+          colors={['rgba(255, 215, 0, 0.15)', 'rgba(255, 215, 0, 0.08)']}
+          style={styles.searchInputContainer}
+        >  
+          <LinearGradient
+            colors={['#ffd700', '#ffed4e']}
+            style={styles.searchIconContainer}
+          >
+            <Ionicons name="search" size={16} color="#000" />
+          </LinearGradient>
           <TextInput
             style={styles.searchInput}
             placeholder="Search conversations..."
-            placeholderTextColor="rgba(255,255,255,0.4)"
+            placeholderTextColor="rgba(255, 255, 255, 0.7)"
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
           {refreshing && (
-            <ActivityIndicator size="small" color="#6c3fd8" style={styles.searchLoader} />
+            <ActivityIndicator size="small" color="#ffd700" style={styles.searchLoader} />
           )}
-        </View>
+        </LinearGradient>
+      </View>
 
         <ScrollView 
           style={styles.messagesList}
@@ -532,7 +548,7 @@ const MessagesScreen = () => {
         >
           {loading ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#6c3fd8" />
+              <ActivityIndicator size="large" color="#ffd700" />
               <Text style={styles.loadingText}>Loading conversations...</Text>
             </View>
           ) : filteredConversations.length > 0 ? (
@@ -599,7 +615,6 @@ const MessagesScreen = () => {
             </View>
           )}
         </ScrollView>
-      </LinearGradient>
       
       {showNewMessageButton && (
         <TouchableOpacity 
@@ -610,21 +625,20 @@ const MessagesScreen = () => {
           }}
         >
           <LinearGradient
-            colors={['#8a5cf5', '#6c3fd8']}
+            colors={['#ffd700', '#ffed4e']}
             style={styles.gradientButton}
           >
-            <Ionicons name="create" size={24} color="#fff" />
+            <Ionicons name="create" size={24} color="#000" />
           </LinearGradient>
         </TouchableOpacity>
       )}
-    </View>
+    </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a0f2e',
   },
   gradient: {
     flex: 1,
@@ -636,19 +650,44 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
-    backgroundColor: 'rgba(26,15,46,0.98)',
+    borderBottomColor: 'rgba(255, 215, 0, 0.2)',
+  },
+  backButtonGradient: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#ffd700',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  headerIconGradient: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#ffd700',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
   },
   backButton: {
     padding: 5,
   },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: '700',
+    fontSize: 22,
+    fontWeight: 'bold',
     color: '#fff',
-    flex: 1,
     textAlign: 'center',
-    letterSpacing: 1,
+    flex: 1,
+    textShadowColor: 'rgba(255, 215, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   refreshButton: {
     padding: 5,

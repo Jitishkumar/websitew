@@ -281,9 +281,9 @@ const ProfileScreen = () => {
             </Text>
             <View style={styles.gridItemFooter}>
               <View style={styles.gridItemStats}>
-                <Ionicons name="heart" size={14} color="#ff00ff" />
+                <Ionicons name="heart" size={14} color="#ffd700" />
                 <Text style={styles.gridItemStatsText}>{item.likes?.[0]?.count || 0}</Text>
-                <Ionicons name="chatbubble" size={14} color="#ff00ff" style={{ marginLeft: 8 }} />
+                <Ionicons name="chatbubble" size={14} color="#ffd700" style={{ marginLeft: 8 }} />
                 <Text style={styles.gridItemStatsText}>{item.comments?.[0]?.count || 0}</Text>
               </View>
             </View>
@@ -342,14 +342,27 @@ const ProfileScreen = () => {
 
   const renderHeader = () => (
     <>
-      <View style={styles.header}>
+      <LinearGradient
+        colors={['#0f0f23', '#1a1a2e', '#16213e']}
+        style={styles.header}
+      >
         <TouchableOpacity onPress={() => setSidebarVisible(true)}>
-          <Ionicons name="menu" size={24} color="#ff00ff" />
+          <LinearGradient
+            colors={['#ffd700', '#ffed4e']}
+            style={styles.headerIconContainer}
+          >
+            <Ionicons name="menu" size={20} color="#000" />
+          </LinearGradient>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => setAccountSwitcherVisible(true)}>
-          <Ionicons name="add-circle-outline" size={24} color="#ff00ff" />
+          <LinearGradient
+            colors={['#ffd700', '#ffed4e']}
+            style={styles.headerIconContainer}
+          >
+            <Ionicons name="add-circle-outline" size={20} color="#000" />
+          </LinearGradient>
         </TouchableOpacity>
-      </View>
+      </LinearGradient>
 
       <View style={styles.profileSection}>
         <View style={styles.coverPhotoContainer}>
@@ -402,12 +415,12 @@ const ProfileScreen = () => {
           )}
         </View>
         <LinearGradient
-          colors={['#ff00ff', '#00ff00']}
+          colors={['#ffd700', '#ffed4e']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
           style={styles.rankBadge}
         >
-          <Ionicons name="trophy-outline" size={16} color="#FFD700" />
+          <Ionicons name="trophy-outline" size={16} color="#000" />
           <Text style={styles.rankNumber}>
             {userProfile?.rank 
               ? `Rank #${userProfile.rank} ${userProfile.rank === 1 ? '(First Member!)' : ''}`
@@ -435,12 +448,12 @@ const ProfileScreen = () => {
           onPress={() => navigation.navigate('EditProfile')}
         >
           <LinearGradient
-            colors={['#ff00ff', '#9400d3']}
+            colors={['#ffd700', '#ffed4e']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
-            style={{ borderRadius: 25 }}
+            style={styles.editButtonGradient}
           >
-            <Text style={styles.editButtonText}>EDIT PROFILE</Text>
+            <Text style={[styles.editButtonText, { color: '#000' }]}>EDIT PROFILE</Text>
           </LinearGradient>
         </TouchableOpacity>
 
@@ -1096,7 +1109,7 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#0f0f23',
   },
   header: {
     flexDirection: 'row',
@@ -1185,10 +1198,18 @@ const styles = StyleSheet.create({
     width: '60%',
     alignSelf: 'center',
     elevation: 3,
-    shadowColor: '#ff00ff',
+    shadowColor: '#ffd700',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
+  },
+  editButtonGradient: {
+    borderRadius: 25,
+    shadowColor: '#ffd700',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
   },
   editButtonText: {
     color: 'white',
@@ -1206,9 +1227,8 @@ const styles = StyleSheet.create({
     width: '100%',
     marginTop: 20,
     paddingVertical: 15,
-    borderTopWidth: 1,
     borderBottomWidth: 1,
-    borderColor: '#1a1a1a',
+    borderColor: 'rgba(255, 215, 0, 0.2)',
   },
   stat: {
     alignItems: 'center',
@@ -1229,7 +1249,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
     marginTop: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#1a1a1a',
+    borderBottomColor: 'rgba(255, 215, 0, 0.2)',
   },
   tabButton: {
     marginRight: 30,
@@ -1243,10 +1263,10 @@ const styles = StyleSheet.create({
   },
   activeTab: {
     borderBottomWidth: 2,
-    borderBottomColor: '#faf7f8',
+    borderBottomColor: '#ffd700',
   },
   activeTabText: {
-    color: '#1DA1F2',
+    color: '#ffd700',
   },
   gridContainer: {
     padding: 4,

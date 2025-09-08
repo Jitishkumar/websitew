@@ -252,22 +252,27 @@ const HomeScreen = () => {
   const renderHeader = () => (
     <>
       <LinearGradient
-        colors={['#0a0a2a', '#1a1a3a']}
+        colors={['#0f0f23', '#1a1a2e', '#16213e']}
         start={{x: 0, y: 0}}
         end={{x: 1, y: 1}}
         style={styles.header}
       >
-        <Text style={styles.logo}>Flexx</Text>
+        <LinearGradient
+          colors={['#ffd700', '#ffed4e']}
+          style={styles.logoGradient}
+        >
+          <Text style={styles.logo}>Flexx</Text>
+        </LinearGradient>
         <View style={styles.headerIcons}>
           <TouchableOpacity 
             style={styles.iconButton}
             onPress={() => navigation.navigate('Notifications')}
           >
             <LinearGradient
-              colors={['#ff6600', '#ff3300']}
+              colors={['#ffd700', '#ffed4e']}
               style={styles.iconBackground}
             >
-              <Ionicons name="notifications-outline" size={22} color="#fff" />
+              <Ionicons name="notifications-outline" size={22} color="#000" />
               {notificationUnreadCount > 0 && (
                 <View style={[styles.notificationBadge, {
                   width: notificationUnreadCount > 99 ? 20 : notificationUnreadCount > 9 ? 18 : 16,
@@ -287,10 +292,10 @@ const HomeScreen = () => {
             onPress={() => navigation.navigate('Trending')}
           >
             <LinearGradient
-              colors={['#ff00ff', '#9900ff']}
+              colors={['#ffd700', '#ffed4e']}
               style={styles.iconBackground}
             >
-              <Ionicons name="trending-up" size={22} color="#fff" />
+              <Ionicons name="trending-up" size={22} color="#000" />
             </LinearGradient>
           </TouchableOpacity>
           
@@ -299,10 +304,10 @@ const HomeScreen = () => {
             onPress={() => navigation.navigate('Search')}
           >
             <LinearGradient
-              colors={['#00ffff', '#0099ff']}
+              colors={['#ffd700', '#ffed4e']}
               style={styles.iconBackground}
             >
-              <Ionicons name="search-outline" size={22} color="#fff" />
+              <Ionicons name="search-outline" size={22} color="#000" />
             </LinearGradient>
           </TouchableOpacity>
           <TouchableOpacity style={styles.iconButton}
@@ -316,24 +321,24 @@ const HomeScreen = () => {
              }}
             >
             <LinearGradient
-              colors={['#ff66cc', '#ff3399']}
+              colors={['#ffd700', '#ffed4e']}
               style={styles.iconBackground}
             >
-              <Ionicons name="videocam-outline" size={22} color="#fff" />
+              <Ionicons name="videocam-outline" size={22} color="#000" />
             </LinearGradient>
           </TouchableOpacity>
         </View>
       </LinearGradient>
 
       <LinearGradient
-        colors={['#1a1a3a', '#0d0d2a']}
+        colors={['rgba(255, 215, 0, 0.1)', 'rgba(255, 215, 0, 0.05)', 'transparent']}
         start={{x: 0, y: 0}}
         end={{x: 1, y: 1}}
         style={styles.createPost}
       >
         <View style={styles.postInputContainer}>
           <LinearGradient
-            colors={['#ff00ff', '#00ffff']}
+            colors={['#ffd700', '#ffed4e']}
             style={styles.avatarBorder}
           >
             <Image
@@ -354,18 +359,18 @@ const HomeScreen = () => {
             onPress={handleCreatePost}
           >
             <LinearGradient
-              colors={['#ff00ff', '#9900ff']}
+              colors={['#ffd700', '#ffed4e']}
               style={styles.createPostButton}
             >
-              <Ionicons name="create" size={18} color="#fff" />
-              <Text style={styles.createPostText}>Create Post</Text>
+              <Ionicons name="create" size={18} color="#000" />
+              <Text style={[styles.createPostText, { color: '#000' }]}>Create Post</Text>
             </LinearGradient>
           </TouchableOpacity>
         </View>
       </LinearGradient>
 
       <LinearGradient
-        colors={['#0a0a2a', '#151540']}
+        colors={['rgba(255, 215, 0, 0.08)', 'rgba(255, 215, 0, 0.04)', 'transparent']}
         start={{x: 0, y: 0}}
         end={{x: 1, y: 1}}
         style={styles.stories}
@@ -380,13 +385,13 @@ const HomeScreen = () => {
               return (
                 <TouchableOpacity style={styles.storyItem} onPress={handleAddStory} disabled={uploading}>
                   <LinearGradient
-                    colors={['#1a1a3a', '#0d0d2a']}
+                    colors={['rgba(255, 215, 0, 0.15)', 'rgba(255, 215, 0, 0.1)']}
                     style={styles.addStoryButton}
                   >
                     {uploading ? (
-                      <ActivityIndicator size="small" color="#ff00ff" />
+                      <ActivityIndicator size="small" color="#ffd700" />
                     ) : (
-                      <Ionicons name="add" size={24} color="#ff00ff" />
+                      <Ionicons name="add" size={24} color="#ffd700" />
                     )}
                   </LinearGradient>
                   <Text style={styles.storyText}>Your story</Text>
@@ -399,7 +404,7 @@ const HomeScreen = () => {
                 onPress={() => handleStoryPress(item)}
               >
                 <LinearGradient
-                  colors={item.has_unviewed ? ['#ff00ff', '#00ffff', '#ff00ff'] : ['#888888', '#aaaaaa', '#888888']}
+                  colors={item.has_unviewed ? ['#ffd700', '#ffed4e', '#ffd700'] : ['#666666', '#888888', '#666666']}
                   start={{x: 0, y: 0}}
                   end={{x: 1, y: 1}}
                   style={styles.storyRing}
@@ -583,11 +588,11 @@ const HomeScreen = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#0a0a2a',
+    backgroundColor: '#0f0f23',
   },
   container: {
     flex: 1,
-    backgroundColor: '#0a0a2a',
+    backgroundColor: '#0f0f23',
   },
   loadingContainer: {
     flex: 1,
@@ -616,15 +621,23 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 0, 255, 0.2)',
   },
-  logo: {
-    fontSize: 30,
-    fontFamily: 'Poppins_700Bold',
-    color: '#ff00ff',
-    letterSpacing: 1,
-    textShadowColor: 'rgba(255, 0, 255, 0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 8,
+  logoGradient: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
     marginRight: 20,
+    shadowColor: '#ffd700',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  logo: {
+    fontSize: 28,
+    fontFamily: 'Poppins_700Bold',
+    color: '#000',
+    letterSpacing: 1,
+    fontWeight: 'bold',
   },
   headerIcons: {
     flexDirection: 'row',
@@ -640,17 +653,17 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
+    shadowColor: '#ffd700',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 6,
   },
   notificationBadge: {
     position: 'absolute',
     top: -3,
     right: -6,
-    backgroundColor: '#ff00ff',
+    backgroundColor: '#ffd700',
     borderRadius: 10,
     height: 16,
     justifyContent: 'center',
@@ -666,13 +679,13 @@ const styles = StyleSheet.create({
     margin: 15,
     borderRadius: 16,
     padding: 15,
-    shadowColor: '#6600cc',
+    shadowColor: 'rgba(255, 215, 0, 0.3)',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 6,
     borderWidth: 1,
-    borderColor: 'rgba(255, 0, 255, 0.2)',
+    borderColor: 'rgba(255, 215, 0, 0.2)',
   },
   postInputContainer: {
     flexDirection: 'row',
@@ -697,14 +710,14 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 46,
     padding: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: 'rgba(255, 215, 0, 0.08)',
     borderRadius: 23,
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255, 0, 255, 0.3)',
+    borderColor: 'rgba(255, 215, 0, 0.3)',
   },
   postInputPlaceholder: {
-    color: '#b8b8ff',
+    color: 'rgba(255, 255, 255, 0.8)',
     fontSize: 15,
   },
   postOptions: {
@@ -746,8 +759,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#ff00ff',
-    shadowColor: '#ff00ff',
+    borderColor: '#ffd700',
+    shadowColor: '#ffd700',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
@@ -776,7 +789,7 @@ const styles = StyleSheet.create({
   storyText: {
     marginTop: 8,
     fontSize: 12,
-    color: '#e0e0ff',
+    color: 'rgba(255, 255, 255, 0.9)',
     textAlign: 'center',
     maxWidth: 70,
     fontWeight: '500',

@@ -527,16 +527,21 @@ const NotificationsScreen = () => {
   };
 
   return (
-    <View style={styles.container}>
+    <LinearGradient colors={['#0f0f23', '#1a1a2e', '#16213e']} style={styles.container}>
       {/* Header */}
       <LinearGradient
-        colors={['#050505', '#050505']}
+        colors={['rgba(255, 215, 0, 0.2)', 'rgba(255, 215, 0, 0.1)', 'transparent']}
         style={[styles.header, { paddingTop: insets.top > 0 ? insets.top : 50 }]}
       >
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#ff00ff" />
+          <LinearGradient
+            colors={['#ffd700', '#ffed4e']}
+            style={styles.backButtonGradient}
+          >
+            <Ionicons name="arrow-back" size={20} color="#000" />
+          </LinearGradient>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Notifications</Text>
+        <Text style={styles.headerTitle}>🔔 Notifications</Text>
       </LinearGradient>
 
       <FlatList
@@ -546,6 +551,7 @@ const NotificationsScreen = () => {
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom }]}
         refreshing={loading}
         onRefresh={fetchNotifications}
+        showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Ionicons name="notifications-off-outline" size={60} color="#666" />
@@ -562,18 +568,29 @@ const NotificationsScreen = () => {
           ) : null
         }
       />
-    </View>
+    </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000033',
   },
   header: {
     paddingBottom: 15,
     paddingHorizontal: 15,
+  },
+  backButtonGradient: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#ffd700',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
   },
   backButton: {
     marginBottom: 10,
@@ -583,6 +600,9 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 10,
+    textShadowColor: 'rgba(255, 215, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   listContent: {
     padding: 15,
@@ -602,16 +622,26 @@ const styles = StyleSheet.create({
   notificationItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0a0a2a',
-    borderRadius: 12,
-    marginBottom: 10,
     padding: 15,
-    position: 'relative',
+    marginBottom: 10,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 215, 0, 0.2)',
+    backgroundColor: 'rgba(26, 26, 46, 0.8)',
+    shadowColor: '#ffd700',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   unreadItem: {
-    backgroundColor: 'rgba(255, 0, 255, 0.1)',
-    borderLeftWidth: 3,
-    borderLeftColor: '#ff00ff',
+    borderColor: '#ffd700',
+    backgroundColor: 'rgba(255, 215, 0, 0.1)',
+    shadowColor: '#ffd700',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 5,
   },
   avatarContainer: {
     position: 'relative',
@@ -658,11 +688,18 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   acceptButton: {
-    backgroundColor: '#00cc99',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 4,
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
     marginRight: 10,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#00cc99',
+    shadowColor: '#00cc99',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   acceptButtonText: {
     color: '#fff',
@@ -670,10 +707,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   declineButton: {
-    backgroundColor: '#f0f0f0',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 4,
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#ff4444',
+    shadowColor: '#ff4444',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   declineButtonText: {
     color: '#666',
@@ -690,15 +734,18 @@ const styles = StyleSheet.create({
     right: 15,
   },
   emptyContainer: {
-    alignItems: 'center',
+    flex: 1,
     justifyContent: 'center',
-    padding: 40,
-    marginTop: 40,
+    alignItems: 'center',
+    paddingVertical: 50,
   },
   emptyText: {
-    color: '#666',
+    color: 'rgba(255, 255, 255, 0.7)',
     fontSize: 16,
     marginTop: 10,
+    textShadowColor: 'rgba(255, 215, 0, 0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 1,
   },
   chevronIcon: {
     position: 'absolute',
