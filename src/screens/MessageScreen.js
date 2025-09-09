@@ -16,6 +16,7 @@ import {
   Dimensions
 } from 'react-native';
 import { Video } from 'expo-av';
+import { Audio } from 'expo-av';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
@@ -25,6 +26,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMessages } from '../context/MessageContext';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
+import { cloudinaryConfig } from '../config/cloudinary';
 
 const MessageScreen = () => {
   const insets = useSafeAreaInsets();
@@ -46,6 +48,12 @@ const MessageScreen = () => {
   const isMarkingAsRead = useRef(false);
   const hasMarkedOnFocus = useRef(false);
   
+  // Pagination states
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [hasMoreMessages, setHasMoreMessages] = useState(true);
+  const [currentPage, setCurrentPage] = useState(0);
+  const MESSAGES_PER_PAGE = 50;
+  
   // Media preview states
   const [selectedMedia, setSelectedMedia] = useState(null);
   const [showMediaPicker, setShowMediaPicker] = useState(false);
@@ -57,6 +65,85 @@ const MessageScreen = () => {
   const videoRef = useRef(null);
   const [videoLoaded, setVideoLoaded] = useState(false);
   const [hasCameraPermission, setHasCameraPermission] = useState(null);
+  
+  // Voice recording states
+  const [recording, setRecording] = useState(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const [hasAudioPermission, setHasAudioPermission] = useState(null);
+  const recordingTimer = useRef(null);
+  
+  // Audio playback states
+  const [playingAudio, setPlayingAudio] = useState(null);
+  const [audioPositions, setAudioPositions] = useState({});
+  const audioRefs = useRef({});
+
+  // Helper function to get relative time
+  const getRelativeTime = (dateString) => {
+    const messageDate = new Date(dateString);
+    const now = new Date();
+    const diffInMs = now - messageDate;
+    const diffInHours = diffInMs / (1000 * 60 * 60);
+    const diffInDays = diffInMs / (1000 * 60 * 60 * 24);
+    
+    if (diffInHours < 24) {
+      return 'Today';
+    } else if (diffInDays < 7) {
+      return `${Math.floor(diffInDays)} day${Math.floor(diffInDays) > 1 ? 's' : ''} ago`;
+    } else if (diffInDays < 30) {
+      return `${Math.floor(diffInDays / 7)} week${Math.floor(diffInDays / 7) > 1 ? 's' : ''} ago`;
+    } else {
+      return `${Math.floor(diffInDays / 30)} month${Math.floor(diffInDays / 30) > 1 ? 's' : ''} ago`;
+    }
+  };
+
+  // Add date separators to messages
+  const addDateSeparators = (messages) => {
+    if (!messages || messages.length === 0) return [];
+    
+    const messagesWithSeparators = [];
+    let lastDateGroup = null;
+    
+    messages.forEach((message, index) => {
+      const currentDateGroup = getRelativeTime(message.created_at);
+      
+      // Add date separator if this is a new date group
+      if (currentDateGroup !== lastDateGroup) {
+        messagesWithSeparators.push({
+          id: `date-separator-${index}`,
+          type: 'date-separator',
+          dateText: currentDateGroup,
+          created_at: message.created_at
+        });
+        lastDateGroup = currentDateGroup;
+      }
+      
+      messagesWithSeparators.push(message);
+    });
+    
+    return messagesWithSeparators;
+  };
+
+  // Request audio permissions
+  useEffect(() => {
+    const getAudioPermissions = async () => {
+      try {
+        const { status } = await Audio.requestPermissionsAsync();
+        setHasAudioPermission(status === 'granted');
+        
+        if (status === 'granted') {
+          await Audio.setAudioModeAsync({
+            allowsRecordingIOS: true,
+            playsInSilentModeIOS: true,
+          });
+        }
+      } catch (error) {
+        console.error('Error requesting audio permissions:', error);
+      }
+    };
+    
+    getAudioPermissions();
+  }, []);
 
   // Get current user and set up conversation
   useEffect(() => {
@@ -467,7 +554,7 @@ const MessageScreen = () => {
     }
   };
 
-  const loadMessages = async (convId, currentUserId = null) => {
+  const loadMessages = async (convId, currentUserId = null, page = 0, isLoadingOlder = false) => {
     let actualUserId = currentUserId || userId;
     if (!actualUserId) {
         const { data: { user } } = await supabase.auth.getUser();
@@ -502,30 +589,39 @@ const MessageScreen = () => {
       console.error('Error checking blocked status:', blockCheckError);
     }
 
-    // Try to load from cache first for instant loading
-    try {
-      const storedMessages = await AsyncStorage.getItem(`conversation_${convId}`);
-      if (storedMessages) {
-          const parsedMessages = JSON.parse(storedMessages);
-          const updatedMessages = parsedMessages.map(msg => ({
-              ...msg,
-              sender: msg.sender_id === actualUserId ? 'me' : 'them'
-          }));
-          setMessages(updatedMessages);
-          setLoading(false); // Stop loading immediately when cache is available
-          console.log('Loaded messages from cache:', updatedMessages.length);
-      }
-    } catch (cacheError) {
-      console.error('Error loading from cache:', cacheError);
+    // Set loading state for older messages
+    if (isLoadingOlder) {
+      setLoadingOlder(true);
     }
 
-    // Fetch latest messages from network
+    // Try to load from cache first for instant loading (only for initial load)
+    if (page === 0 && !isLoadingOlder) {
+      try {
+        const storedMessages = await AsyncStorage.getItem(`conversation_${convId}`);
+        if (storedMessages) {
+            const parsedMessages = JSON.parse(storedMessages);
+            const updatedMessages = parsedMessages.slice(-MESSAGES_PER_PAGE).map(msg => ({
+                ...msg,
+                sender: msg.sender_id === actualUserId ? 'me' : 'them'
+            }));
+            setMessages(updatedMessages);
+            setLoading(false);
+            console.log('Loaded messages from cache:', updatedMessages.length);
+        }
+      } catch (cacheError) {
+        console.error('Error loading from cache:', cacheError);
+      }
+    }
+
+    // Fetch messages from network with pagination
     try {
-        const { data, error } = await supabase
+        const offset = page * MESSAGES_PER_PAGE;
+        const { data, error, count } = await supabase
             .from('messages')
-            .select('*')
+            .select('*', { count: 'exact' })
             .eq('conversation_id', convId)
-            .order('created_at', { ascending: true });
+            .order('created_at', { ascending: false })
+            .range(offset, offset + MESSAGES_PER_PAGE - 1);
 
         if (error) {
             console.error('Error fetching messages:', error);
@@ -533,7 +629,10 @@ const MessageScreen = () => {
             return;
         }
 
-        let formattedMessages = data.map(msg => ({
+        // Check if there are more messages to load
+        setHasMoreMessages(count > offset + MESSAGES_PER_PAGE);
+
+        let formattedMessages = data.reverse().map(msg => ({
             id: msg.id,
             text: msg.content,
             sender: msg.sender_id === actualUserId ? 'me' : 'them',
@@ -542,7 +641,8 @@ const MessageScreen = () => {
             read: msg.read || false,
             media_url: msg.media_url || null,
             media_type: msg.media_type || null,
-            cloudinary_public_id: msg.cloudinary_public_id || null
+            cloudinary_public_id: msg.cloudinary_public_id || null,
+            created_at: msg.created_at
         }));
 
         // Enrich shared media messages with original post owner info (username, avatar)
@@ -581,16 +681,332 @@ const MessageScreen = () => {
           console.warn('Failed to enrich messages with post owner info:', e);
         }
 
-        setMessages(formattedMessages);
+        if (isLoadingOlder) {
+          // Prepend older messages to existing ones
+          setMessages(prevMessages => [...formattedMessages, ...prevMessages]);
+          setCurrentPage(page);
+        } else {
+          // Set new messages for initial load
+          setMessages(formattedMessages);
+          setCurrentPage(0);
+          
+          // Scroll to bottom after initial load
+          setTimeout(() => {
+            if (flatListRef.current && formattedMessages.length > 0) {
+              flatListRef.current.scrollToEnd({ animated: false });
+            }
+          }, 200);
+        }
         
-        // Update cache
-        await AsyncStorage.setItem(`conversation_${convId}`, JSON.stringify(formattedMessages));
-        console.log('Messages updated from network and cached:', formattedMessages.length);
+        // Update cache only for initial load
+        if (!isLoadingOlder) {
+          await AsyncStorage.setItem(`conversation_${convId}`, JSON.stringify(formattedMessages));
+          console.log('Messages updated from network and cached:', formattedMessages.length);
+        }
     } catch (error) {
         console.error('Error loading messages:', error);
     } finally {
         setLoading(false);
+        setLoadingOlder(false);
     }
+  };
+
+  // Load older messages when scrolling up
+  const loadOlderMessages = async () => {
+    if (loadingOlder || !hasMoreMessages) return;
+    
+    const nextPage = currentPage + 1;
+    await loadMessages(conversationId, userId, nextPage, true);
+  };
+
+  // Start voice recording
+  const startRecording = async () => {
+    if (!hasAudioPermission) {
+      Alert.alert('Permission Required', 'Please grant microphone permission to record voice messages.');
+      return;
+    }
+
+    try {
+      // Clean up any existing recording first
+      if (recording) {
+        try {
+          await recording.stopAndUnloadAsync();
+        } catch (cleanupError) {
+          console.log('Cleanup error (expected):', cleanupError);
+        }
+        setRecording(null);
+      }
+
+      // Set audio mode before creating recording
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      const recordingOptions = {
+        android: {
+          extension: '.m4a',
+          outputFormat: Audio.RECORDING_OPTION_ANDROID_OUTPUT_FORMAT_MPEG_4,
+          audioEncoder: Audio.RECORDING_OPTION_ANDROID_AUDIO_ENCODER_AAC,
+          sampleRate: 44100,
+          numberOfChannels: 1, // Changed to mono for better compatibility
+          bitRate: 128000,
+        },
+        ios: {
+          extension: '.m4a',
+          outputFormat: Audio.RECORDING_OPTION_IOS_OUTPUT_FORMAT_MPEG4AAC,
+          audioQuality: Audio.RECORDING_OPTION_IOS_AUDIO_QUALITY_HIGH,
+          sampleRate: 44100,
+          numberOfChannels: 1, // Changed to mono for better compatibility
+          bitRate: 128000,
+          linearPCMBitDepth: 16,
+          linearPCMIsBigEndian: false,
+          linearPCMIsFloat: false,
+        },
+      };
+
+      console.log('Creating recording with options:', recordingOptions);
+      const { recording: newRecording } = await Audio.Recording.createAsync(recordingOptions);
+      
+      console.log('Recording created, starting...');
+      setRecording(newRecording);
+      setIsRecording(true);
+      setRecordingDuration(0);
+
+      // Start timer for recording duration
+      recordingTimer.current = setInterval(() => {
+        setRecordingDuration(prev => prev + 1);
+      }, 1000);
+
+      await newRecording.startAsync();
+      console.log('Recording started successfully');
+    } catch (error) {
+      console.error('Failed to start recording:', error);
+      setIsRecording(false);
+      setRecording(null);
+      
+      if (recordingTimer.current) {
+        clearInterval(recordingTimer.current);
+        recordingTimer.current = null;
+      }
+      
+      Alert.alert('Recording Error', `Failed to start recording: ${error.message}. Please check microphone permissions and try again.`);
+    }
+  };
+
+  // Stop voice recording and send
+  const stopRecordingAndSend = async () => {
+    if (!recording) return;
+
+    try {
+      setIsRecording(false);
+      
+      if (recordingTimer.current) {
+        clearInterval(recordingTimer.current);
+        recordingTimer.current = null;
+      }
+
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      
+      if (uri && recordingDuration > 0) {
+        await sendVoiceMessage(uri, recordingDuration);
+      }
+
+      setRecording(null);
+      setRecordingDuration(0);
+    } catch (error) {
+      console.error('Failed to stop recording:', error);
+      Alert.alert('Error', 'Failed to process voice message. Please try again.');
+    }
+  };
+
+  // Send voice message
+  const sendVoiceMessage = async (audioUri, duration) => {
+    try {
+      if (!userId || !conversationId) {
+        console.error('Missing user ID or conversation ID');
+        return;
+      }
+
+      // Upload audio to Cloudinary
+      const formData = new FormData();
+      formData.append('file', {
+        uri: audioUri,
+        type: 'audio/m4a',
+        name: `voice_${Date.now()}.m4a`,
+      });
+      formData.append('upload_preset', 'connect_app_preset');
+
+      const cloudinaryResponse = await fetch(
+        `https://api.cloudinary.com/v1_1/${cloudinaryConfig.cloudName}/auto/upload`,
+        {
+          method: 'POST',
+          body: formData,
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        }
+      );
+
+      const cloudinaryData = await cloudinaryResponse.json();
+      
+      if (!cloudinaryData.secure_url) {
+        throw new Error('Failed to upload audio');
+      }
+
+      const tempId = Date.now().toString();
+      const newMessage = {
+        id: tempId,
+        text: `🎤 Voice message (${Math.floor(duration / 60)}:${(duration % 60).toString().padStart(2, '0')})`,
+        sender: 'me',
+        sender_id: userId,
+        timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+        read: false,
+        media_url: cloudinaryData.secure_url,
+        media_type: 'audio',
+        cloudinary_public_id: cloudinaryData.public_id,
+        created_at: new Date().toISOString(),
+        audio_duration: duration
+      };
+
+      const updatedMessages = [...messages, newMessage];
+      setMessages(updatedMessages);
+
+      // Update cache immediately
+      await AsyncStorage.setItem(`conversation_${conversationId}`, JSON.stringify(updatedMessages));
+
+      // Scroll to bottom after sending
+      setTimeout(() => {
+        if (flatListRef.current) {
+          flatListRef.current.scrollToEnd({ animated: false });
+        }
+      }, 100);
+
+      const { data, error } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id: conversationId,
+          sender_id: userId,
+          receiver_id: recipientId,
+          content: newMessage.text,
+          media_url: cloudinaryData.secure_url,
+          media_type: 'audio',
+          cloudinary_public_id: cloudinaryData.public_id,
+          created_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error sending voice message:', error);
+        // Remove failed message
+        setMessages(prevMessages => prevMessages.filter(msg => msg.id !== tempId));
+        const failedMessages = messages.filter(msg => msg.id !== tempId);
+        await AsyncStorage.setItem(`conversation_${conversationId}`, JSON.stringify(failedMessages));
+      } else {
+        // Update message with real ID
+        setMessages(prevMessages => 
+          prevMessages.map(msg => 
+            msg.id === tempId ? { ...msg, id: data.id } : msg
+          )
+        );
+
+        const finalMessages = updatedMessages.map(msg => 
+          msg.id === tempId ? { ...msg, id: data.id } : msg
+        );
+        await AsyncStorage.setItem(`conversation_${conversationId}`, JSON.stringify(finalMessages));
+      }
+    } catch (error) {
+      console.error('Error sending voice message:', error);
+      Alert.alert('Error', 'Failed to send voice message. Please try again.');
+    }
+  };
+
+  // Audio playback functions
+  const playAudio = async (messageId, audioUrl) => {
+    try {
+      // Stop any currently playing audio
+      if (playingAudio && playingAudio !== messageId) {
+        await stopAudio(playingAudio);
+      }
+
+      if (playingAudio === messageId) {
+        // If same audio is playing, pause it
+        await stopAudio(messageId);
+        return;
+      }
+
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: audioUrl },
+        { shouldPlay: true }
+      );
+
+      audioRefs.current[messageId] = sound;
+      setPlayingAudio(messageId);
+
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded) {
+          setAudioPositions(prev => ({
+            ...prev,
+            [messageId]: {
+              position: status.positionMillis,
+              duration: status.durationMillis
+            }
+          }));
+
+          if (status.didJustFinish) {
+            setPlayingAudio(null);
+            sound.unloadAsync();
+            delete audioRefs.current[messageId];
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Error playing audio:', error);
+      Alert.alert('Error', 'Failed to play voice message');
+    }
+  };
+
+  const stopAudio = async (messageId) => {
+    try {
+      const sound = audioRefs.current[messageId];
+      if (sound) {
+        await sound.stopAsync();
+        await sound.unloadAsync();
+        delete audioRefs.current[messageId];
+      }
+      setPlayingAudio(null);
+    } catch (error) {
+      console.error('Error stopping audio:', error);
+    }
+  };
+
+  // Format audio duration
+  const formatAudioDuration = (milliseconds) => {
+    if (!milliseconds) return '0:00';
+    const seconds = Math.floor(milliseconds / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  };
+
+  const renderMessageWithSeparator = ({ item }) => {
+    if (!item) return null;
+    
+    // Render date separator
+    if (item.type === 'date-separator') {
+      return (
+        <View style={styles.dateSeparatorContainer}>
+          <View style={styles.dateSeparatorLine} />
+          <Text style={styles.dateSeparatorText}>{item.dateText}</Text>
+          <View style={styles.dateSeparatorLine} />
+        </View>
+      );
+    }
+
+    // Use the existing renderMessage function for regular messages
+    return renderMessage({ item });
   };
 
   const sendMessage = async () => {
@@ -636,6 +1052,13 @@ const MessageScreen = () => {
       
       // Update cache immediately
       await AsyncStorage.setItem(`conversation_${conversationId}`, JSON.stringify(updatedMessages));
+      
+      // Scroll to bottom after sending
+      setTimeout(() => {
+        if (flatListRef.current) {
+          flatListRef.current.scrollToEnd({ animated: false });
+        }
+      }, 100);
       
       const { data, error } = await supabase
         .from('messages')
@@ -1149,14 +1572,49 @@ const MessageScreen = () => {
                     style={styles.messageVideo}
                     resizeMode="cover"
                     shouldPlay={false}
-                    isMuted={true}
-                    isLooping={false}
-                    useNativeControls={false}
                     positionMillis={1000}
+                    useNativeControls={false}
+                    isLooping={false}
+                    onError={(error) => {
+                      console.error('Video error in message:', error);
+                    }}
+                    onLoadStart={() => {
+                      console.log('Video loading started for:', item.media_url);
+                    }}
+                    onLoad={(status) => {
+                      console.log('Video loaded successfully:', status);
+                    }}
                   />
-                  <View style={styles.videoPlayButton}>
-                    <Ionicons name="play-circle" size={50} color="rgba(255,255,255,0.9)" />
+                  <View style={styles.videoOverlay}>
+                    <Ionicons name="play-circle" size={50} color="rgba(255, 255, 255, 0.8)" />
                   </View>
+                </View>
+              ) : item.media_type === 'audio' ? (
+                <View style={styles.audioMessageContainer}>
+                  <TouchableOpacity
+                    style={styles.audioPlayButton}
+                    onPress={() => playAudio(item.id, item.media_url)}
+                  >
+                    <Ionicons 
+                      name={playingAudio === item.id ? "pause" : "play"} 
+                      size={20} 
+                      color="#fff" 
+                    />
+                  </TouchableOpacity>
+                  <View style={styles.audioWaveform}>
+                    <Text style={styles.audioWaveformText}>
+                      {playingAudio === item.id ? "Playing..." : "🎤 Voice message"}
+                    </Text>
+                  </View>
+                  <Text style={styles.audioDuration}>
+                    {audioPositions[item.id] 
+                      ? formatAudioDuration(audioPositions[item.id].position)
+                      : (item.audio_duration 
+                          ? `${Math.floor(item.audio_duration / 60)}:${(item.audio_duration % 60).toString().padStart(2, '0')}`
+                          : '0:00'
+                        )
+                    }
+                  </Text>
                 </View>
               ) : (
                 <Image 
@@ -1233,10 +1691,6 @@ const MessageScreen = () => {
     }
 
     const diffInSeconds = Math.floor((now - lastActiveDate) / 1000);
-
-    if (diffInSeconds < 300) {
-      return 'Active now';
-    }
 
     const diffInMinutes = Math.floor(diffInSeconds / 60);
     const diffInHours = Math.floor(diffInMinutes / 60);
@@ -1365,9 +1819,9 @@ const MessageScreen = () => {
 
             <FlatList
               ref={flatListRef}
-              data={messages}
+              data={addDateSeparators(messages)}
               keyExtractor={React.useCallback((item) => `message-${item.id.toString()}`, [])}
-              renderItem={renderMessage}
+              renderItem={renderMessageWithSeparator}
               style={styles.messageList}
               contentContainerStyle={styles.messageListContent}
               removeClippedSubviews={Platform.OS !== 'web'}
@@ -1375,19 +1829,42 @@ const MessageScreen = () => {
               initialNumToRender={15}
               windowSize={21}
               updateCellsBatchingPeriod={50}
-              getItemLayout={React.useCallback(
-                (data, index) => ({
-                  length: 100, // Approximate height of a message item
-                  offset: 100 * index,
-                  index,
-                }),
-                []
-              )}
-              onContentSizeChange={() => {
-                if (messages.length > 0) {
-                  flatListRef.current?.scrollToEnd({ animated: true });
+              inverted={false}
+              showsVerticalScrollIndicator={true}
+              maintainVisibleContentPosition={{
+                minIndexForVisible: 0,
+                autoscrollToTopThreshold: 10,
+              }}
+              onScroll={({ nativeEvent }) => {
+                const { contentOffset, contentSize, layoutMeasurement } = nativeEvent;
+                // Check if user scrolled to top (with some threshold)
+                if (contentOffset.y <= 50 && hasMoreMessages && !loadingOlder) {
+                  loadOlderMessages();
                 }
               }}
+              scrollEventThrottle={400}
+              onContentSizeChange={() => {
+                if (messages.length > 0 && currentPage === 0) {
+                  setTimeout(() => {
+                    flatListRef.current?.scrollToEnd({ animated: false });
+                  }, 100);
+                }
+              }}
+              onLayout={() => {
+                if (messages.length > 0 && currentPage === 0) {
+                  setTimeout(() => {
+                    flatListRef.current?.scrollToEnd({ animated: false });
+                  }, 100);
+                }
+              }}
+              ListHeaderComponent={
+                loadingOlder ? (
+                  <View style={styles.loadingOlderContainer}>
+                    <ActivityIndicator size="small" color="#3399ff" />
+                    <Text style={styles.loadingOlderText}>Loading older messages...</Text>
+                  </View>
+                ) : null
+              }
               ListEmptyComponent={
                 !loading ? (
                   <View style={styles.emptyContainer}>
@@ -1429,8 +1906,20 @@ const MessageScreen = () => {
                 />
                 
                 {!inputText.trim() ? (
-                  <TouchableOpacity style={styles.mediaButton}>
-                    <MaterialCommunityIcons name="microphone" size={24} color="#ff00ff" />
+                  <TouchableOpacity 
+                    style={[styles.mediaButton, isRecording && styles.recordingButton]}
+                    onPressIn={startRecording}
+                    onPressOut={stopRecordingAndSend}
+                    activeOpacity={0.8}
+                  >
+                    {isRecording ? (
+                      <View style={styles.recordingIndicator}>
+                        <MaterialCommunityIcons name="microphone" size={24} color="#fff" />
+                        <View style={styles.recordingPulse} />
+                      </View>
+                    ) : (
+                      <MaterialCommunityIcons name="microphone" size={24} color="#ff00ff" />
+                    )}
                   </TouchableOpacity>
                 ) : (
                   <TouchableOpacity onPress={sendMessage}>
@@ -1444,6 +1933,19 @@ const MessageScreen = () => {
                 )}
               </View>
             </LinearGradient>
+
+            {/* Recording Duration Display */}
+            {isRecording && (
+              <View style={styles.recordingDurationContainer}>
+                <View style={styles.recordingDurationBadge}>
+                  <MaterialCommunityIcons name="microphone" size={16} color="#ff00ff" />
+                  <Text style={styles.recordingDurationText}>
+                    {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60).toString().padStart(2, '0')}
+                  </Text>
+                  <Text style={styles.recordingHintText}>Release to send</Text>
+                </View>
+              </View>
+            )}
 
             <MediaPickerModal />
             
@@ -1922,19 +2424,6 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  loadingText: {
-    color: '#999',
-    fontSize: 14,
-    marginTop: 10,
-  },
-  sharedConfessionContainer: {
-    marginVertical: 4,
-  },
-  confessionCardPreview: {
     width: '100%',
     minHeight: 120,
     borderRadius: 12,
@@ -2257,6 +2746,86 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: 4,
     letterSpacing: 0.3,
+  },
+  // Voice recording styles
+  recordingButton: {
+    backgroundColor: '#ff00ff',
+    transform: [{ scale: 1.1 }],
+  },
+  recordingIndicator: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  recordingPulse: {
+    position: 'absolute',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 0, 255, 0.3)',
+    opacity: 0.7,
+  },
+  recordingDurationContainer: {
+    position: 'absolute',
+    top: -60,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  recordingDurationBadge: {
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 0, 255, 0.5)',
+  },
+  recordingDurationText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 8,
+    marginRight: 12,
+  },
+  recordingHintText: {
+    color: '#ccc',
+    fontSize: 12,
+  },
+  audioMessageContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  audioPlayButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  audioWaveform: {
+    flex: 1,
+    height: 30,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  audioWaveformText: {
+    color: '#fff',
+    fontSize: 12,
+    opacity: 0.9,
+  },
+  audioDuration: {
+    color: '#fff',
+    fontSize: 12,
+    opacity: 0.8,
+    marginLeft: 8,
   },
 });
 

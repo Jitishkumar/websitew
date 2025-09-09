@@ -143,6 +143,20 @@ const TabNavigator = () => {
         ),
       }}
     />
+    <Tab.Screen 
+      name="ConfessionScreen" 
+      component={ConfessionScreen}
+      options={{
+        tabBarButton: () => null, // Hide from tab bar
+      }}
+    />
+    <Tab.Screen 
+      name="ConfessionPersonScreen" 
+      component={ConfessionPersonScreen}
+      options={{
+        tabBarButton: () => null, // Hide from tab bar
+      }}
+    />
   </Tab.Navigator>
   );
 };

@@ -121,11 +121,11 @@ const ConfessionButtonScreen = () => {
   };
 
   const handlePersonConfession = () => {
-    navigation.navigate('ConfessionPerson');
+    navigation.navigate('ConfessionPersonScreen');
   };
 
   const handlePlaceConfession = () => {
-    navigation.navigate('Confession');
+    navigation.navigate('ConfessionScreen');
   };
 
   const handleLike = async (confessionId, confessionType) => {

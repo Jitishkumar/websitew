@@ -346,6 +346,17 @@ const ShortsScreen = ({ route }) => {
             onPlaybackStatusUpdate={onPlaybackStatusUpdate}
             useNativeControls={false}
             rate={1.0}
+            onError={(error) => {
+              console.error('Video error in ShortsScreen:', error);
+            }}
+            onLoadStart={() => {
+              console.log('Video loading started in ShortsScreen:', item.media_url);
+            }}
+            onLoad={(status) => {
+              console.log('Video loaded successfully in ShortsScreen:', status);
+            }}
+            progressUpdateIntervalMillis={100}
+            positionMillis={0}
           />
           
           {/* User info overlay */}
