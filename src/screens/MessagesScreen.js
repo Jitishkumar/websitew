@@ -17,6 +17,7 @@ const MessagesScreen = () => {
   const route = useRoute();
   const [conversations, setConversations] = useState([]);
   const [groups, setGroups] = useState([]);
+  const [publicGroups, setPublicGroups] = useState([]);
   const [loading, setLoading] = useState(false); // Changed to false since we'll load cache first
   const [currentUserId, setCurrentUserId] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -517,6 +518,82 @@ const MessagesScreen = () => {
     }, [])
   );
 
+  // Fetch public groups that user can discover
+  const fetchPublicGroups = async (userId, query) => {
+    try {
+      if (!userId || !query.trim()) {
+        setPublicGroups([]);
+        return;
+      }
+      
+      console.log('Searching public groups for:', query);
+      
+      // First get user's group IDs
+      const { data: userGroupIds, error: memberError } = await supabase
+        .from('group_members')
+        .select('group_id')
+        .eq('user_id', userId);
+
+      if (memberError) {
+        console.error('Error fetching user group IDs:', memberError);
+        return;
+      }
+
+      const excludeIds = userGroupIds?.map(g => g.group_id) || [];
+
+      // Get public groups that user is NOT a member of
+      let queryBuilder = supabase
+        .from('groups')
+        .select(`
+          id,
+          name,
+          description,
+          avatar_url,
+          is_private,
+          created_at,
+          created_by
+        `)
+        .eq('is_private', false)
+        .or(`name.ilike.%${query}%,description.ilike.%${query}%`)
+        .limit(10);
+
+      // Exclude user's groups if they have any
+      if (excludeIds.length > 0) {
+        queryBuilder = queryBuilder.not('id', 'in', `(${excludeIds.join(',')})`);
+      }
+
+      const { data: publicGroupsData, error } = await queryBuilder;
+      
+      if (error) {
+        console.error('Error fetching public groups:', error);
+        return;
+      }
+      
+      // Add member counts to public groups
+      const groupsWithDetails = await Promise.all(
+        (publicGroupsData || []).map(async (group) => {
+          const { count: memberCount } = await supabase
+            .from('group_members')
+            .select('*', { count: 'exact', head: true })
+            .eq('group_id', group.id);
+          
+          return {
+            ...group,
+            memberCount: memberCount || 0,
+            lastMessage: 'Tap to join this public group',
+            timestamp: group.created_at,
+            isPublicGroup: true // Flag to identify public groups
+          };
+        })
+      );
+      
+      console.log('Found public groups:', groupsWithDetails);
+      setPublicGroups(groupsWithDetails);
+    } catch (error) {
+      console.error('Error fetching public groups:', error);
+    }
+  };
+
   // Fetch groups function - using RPC to get user's groups with avatar_url
   const fetchGroups = async (userId) => {
     try {
@@ -613,6 +690,70 @@ const MessagesScreen = () => {
     }
   };
   
+  // Handle joining a public group
+  const handleJoinPublicGroup = async (group) => {
+    try {
+      Alert.alert(
+        'Join Group',
+        `Do you want to join "${group.name}"?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Join',
+            onPress: async () => {
+              try {
+                // Check if group has auto_join enabled
+                const { data: groupData, error: groupError } = await supabase
+                  .from('groups')
+                  .select('auto_join')
+                  .eq('id', group.id)
+                  .single();
+
+                if (groupError) throw groupError;
+
+                if (groupData.auto_join) {
+                  // Auto-join: directly add to group_members
+                  const { error: memberError } = await supabase
+                    .from('group_members')
+                    .insert({
+                      group_id: group.id,
+                      user_id: currentUserId
+                    });
+
+                  if (memberError) throw memberError;
+
+                  Alert.alert('Success', `You've joined "${group.name}"!`);
+                  
+                  // Refresh groups and remove from public groups
+                  await fetchGroups(currentUserId);
+                  setPublicGroups(prev => prev.filter(g => g.id !== group.id));
+                } else {
+                  // Request to join: add to group_join_requests
+                  const { error: requestError } = await supabase
+                    .from('group_join_requests')
+                    .insert({
+                      group_id: group.id,
+                      user_id: currentUserId,
+                      status: 'pending'
+                    });
+
+                  if (requestError) throw requestError;
+
+                  Alert.alert('Request Sent', `Your request to join "${group.name}" has been sent to the admin.`);
+                }
+              } catch (error) {
+                console.error('Error joining group:', error);
+                Alert.alert('Error', 'Failed to join group. Please try again.');
+              }
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('Error in handleJoinPublicGroup:', error);
+    }
+  };
+
   // Create group function
   const createGroup = async () => {
     console.log('Create group called');
@@ -700,12 +841,15 @@ const MessagesScreen = () => {
         (conv.lastMessage || '').toLowerCase().includes(searchQuery.toLowerCase()))
     : conversations;
   
+  // Combine user's groups with public groups for search
+  const allAvailableGroups = [...groups, ...publicGroups];
+  
   // Filter groups based on search query
   const filteredGroups = searchQuery
-    ? groups.filter(group => 
+    ? allAvailableGroups.filter(group => 
         (group.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (group.description || '').toLowerCase().includes(searchQuery.toLowerCase()))
-    : groups;
+    : groups; // Show only user's groups when not searching
 
   // Manual refresh function
   const handleRefresh = () => {
@@ -773,10 +917,15 @@ const MessagesScreen = () => {
             <Ionicons name="search" size={20} color="rgba(255,255,255,0.6)" style={styles.searchIcon} />
             <TextInput
               style={styles.searchInput}
-              placeholder="🔍 Search conversations..."
+              placeholder={activeTab === 'communities' ? "Search groups..." : "Search conversations..."}
               placeholderTextColor="rgba(255,255,255,0.4)"
               value={searchQuery}
-              onChangeText={setSearchQuery}
+              onChangeText={(text) => {
+                setSearchQuery(text);
+                if (activeTab === 'communities' && currentUserId) {
+                  fetchPublicGroups(currentUserId, text);
+                }
+              }}
             />
             {searchLoading && (
               <ActivityIndicator size="small" color="#667eea" style={styles.searchLoader} />
@@ -907,24 +1056,33 @@ const MessagesScreen = () => {
               filteredGroups.map((group) => (
                 <TouchableOpacity
                   key={group.id}
-                  onPress={() => navigation.navigate('GroupChatScreen', { 
-                    groupId: group.id, 
-                    groupName: group.name,
-                    groupAvatar: group.avatar_url
-                  })}
-                  onLongPress={() => {
-                    console.log('Group info pressed for group:', group.id);
-                    try {
-                      navigation.navigate('GroupInfoScreen', { 
-                        groupId: group.id,
+                  onPress={() => {
+                    if (group.isPublicGroup) {
+                      // Handle joining public group
+                      handleJoinPublicGroup(group);
+                    } else {
+                      navigation.navigate('GroupChatScreen', { 
+                        groupId: group.id, 
                         groupName: group.name,
                         groupAvatar: group.avatar_url
                       });
-                    } catch (error) {
-                      console.error('Navigation error:', error);
                     }
                   }}
-                  delayLongPress={500}
+                  onLongPress={() => {
+                    if (!group.isPublicGroup) {
+                      console.log('Long press on group:', group.name);
+                      try {
+                        navigation.navigate('GroupInfoScreen', { 
+                          groupId: group.id,
+                          groupName: group.name,
+                          groupAvatar: group.avatar_url
+                        });
+                      } catch (error) {
+                        console.error('Navigation error:', error);
+                      }
+                    }
+                  }}
+                  style={styles.messageItem}
                 >
                   <LinearGradient
                     colors={['rgba(255, 255, 255, 0.08)', 'rgba(255, 255, 255, 0.04)']}
@@ -976,11 +1134,19 @@ const MessagesScreen = () => {
                           {group.memberCount} members
                         </Text>
                         <Text 
-                          style={styles.messageText} 
+                          style={[
+                            styles.messageText,
+                            group.isPublicGroup && styles.publicGroupMessage
+                          ]} 
                           numberOfLines={1}
                         >
                           {group.lastMessage}
                         </Text>
+                        {group.isPublicGroup && (
+                          <View style={styles.publicBadge}>
+                            <Text style={styles.publicBadgeText}>PUBLIC</Text>
+                          </View>
+                        )}
                       </View>
                     </View>
                   </LinearGradient>
@@ -1380,6 +1546,25 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(156, 136, 255, 0.2)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 1,
+  },
+  publicGroupMessage: {
+    color: 'rgba(102, 255, 178, 0.9)',
+    fontStyle: 'italic',
+  },
+  publicBadge: {
+    backgroundColor: 'rgba(102, 255, 178, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginLeft: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(102, 255, 178, 0.3)',
+  },
+  publicBadgeText: {
+    color: 'rgba(102, 255, 178, 1)',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   unreadMessageText: {
     color: '#fff',
