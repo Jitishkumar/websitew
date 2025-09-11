@@ -26,11 +26,19 @@ const GroupInfoScreen = () => {
   const [showAddMembers, setShowAddMembers] = useState(false);
   const [showMemberOptions, setShowMemberOptions] = useState(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [joinRequests, setJoinRequests] = useState([]);
+  const [loadingJoinRequests, setLoadingJoinRequests] = useState(false);
 
   useEffect(() => {
     getCurrentUser();
     fetchGroupInfo();
   }, []);
+
+  useEffect(() => {
+    if (isAdmin && group) {
+      fetchJoinRequests();
+    }
+  }, [isAdmin, group]);
 
   const getCurrentUser = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -83,6 +91,32 @@ const GroupInfoScreen = () => {
       Alert.alert('Error', 'Failed to load group information');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchJoinRequests = async () => {
+    try {
+      setLoadingJoinRequests(true);
+      // Use the RPC function with proper error handling
+      const { data, error } = await supabase
+        .rpc('get_group_join_requests', { group_id_param: groupId });
+
+      if (error) {
+        console.error('RPC Error:', error);
+        throw error;
+      }
+
+      // Filter for pending requests and sort by creation date
+      const pendingRequests = (data || [])
+        .filter(req => req.status === 'pending')
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+      setJoinRequests(pendingRequests);
+    } catch (error) {
+      console.error('Error in fetchJoinRequests:', error);
+      Alert.alert('Error', 'Failed to load join requests. Please try again.');
+    } finally {
+      setLoadingJoinRequests(false);
     }
   };
 
@@ -340,6 +374,78 @@ const GroupInfoScreen = () => {
     );
   };
 
+  const togglePrivacy = async () => {
+    try {
+      const newPrivacyStatus = !group.is_private;
+      const { error } = await supabase
+        .from('groups')
+        .update({ is_private: newPrivacyStatus })
+        .eq('id', groupId);
+
+      if (error) throw error;
+
+      setGroup({ ...group, is_private: newPrivacyStatus });
+      Alert.alert('Success', `Group is now ${newPrivacyStatus ? 'private' : 'public'}`);
+    } catch (error) {
+      console.error('Error updating privacy:', error);
+      Alert.alert('Error', 'Failed to update group privacy');
+    }
+  };
+
+  const toggleAutoJoin = async () => {
+    try {
+      const newAutoJoinStatus = !group.auto_join;
+      const { error } = await supabase
+        .from('groups')
+        .update({ auto_join: newAutoJoinStatus })
+        .eq('id', groupId);
+
+      if (error) throw error;
+
+      setGroup({ ...group, auto_join: newAutoJoinStatus });
+      Alert.alert('Success', `Auto-join is now ${newAutoJoinStatus ? 'enabled' : 'disabled'}`);
+    } catch (error) {
+      console.error('Error updating auto-join:', error);
+      Alert.alert('Error', 'Failed to update auto-join setting');
+    }
+  };
+
+  const handleJoinRequest = async (requestId, action, username) => {
+    try {
+      const { error } = await supabase
+        .from('group_join_requests')
+        .update({ status: action })
+        .eq('id', requestId);
+
+      if (error) throw error;
+
+      if (action === 'approved') {
+        // Add user to group_members
+        const request = joinRequests.find(r => r.id === requestId);
+        if (request) {
+          const { error: memberError } = await supabase
+            .from('group_members')
+            .insert({
+              group_id: groupId,
+              user_id: request.user_id,
+              role: 'member'
+            });
+
+          if (memberError) throw memberError;
+        }
+      }
+
+      // Refresh join requests and group info
+      await fetchJoinRequests();
+      await fetchGroupInfo();
+      
+      Alert.alert('Success', `Join request ${action} for ${username}`);
+    } catch (error) {
+      console.error('Error handling join request:', error);
+      Alert.alert('Error', `Failed to ${action} join request`);
+    }
+  };
+
   const removeAdmin = async (memberId, memberName) => {
     Alert.alert(
       'Remove Admin',
@@ -387,32 +493,30 @@ const GroupInfoScreen = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              // Delete group members first
-              await supabase
-                .from('group_members')
-                .delete()
-                .eq('group_id', groupId);
+              console.log('Deleting group:', groupId);
+              
+              // Use the database function for complete deletion
+              const { data, error } = await supabase.rpc('delete_group_completely', {
+                group_id_param: groupId
+              });
 
-              // Delete group messages
-              await supabase
-                .from('group_messages')
-                .delete()
-                .eq('group_id', groupId);
+              console.log('Delete group result:', { data, error });
 
-              // Delete group
-              const { error } = await supabase
-                .from('groups')
-                .delete()
-                .eq('id', groupId);
+              if (error) {
+                console.error('Database error deleting group:', error);
+                throw error;
+              }
 
-              if (error) throw error;
+              if (!data) {
+                throw new Error('You are not authorized to delete this group');
+              }
 
               Alert.alert('Success', 'Group deleted successfully', [
                 { text: 'OK', onPress: () => navigation.goBack() }
               ]);
             } catch (error) {
               console.error('Error deleting group:', error);
-              Alert.alert('Error', 'Failed to delete group');
+              Alert.alert('Error', `Failed to delete group: ${error.message}`);
             }
           }
         }
@@ -643,6 +747,93 @@ const GroupInfoScreen = () => {
             scrollEnabled={false}
           />
         </View>
+
+        {/* Privacy Settings */}
+        {isAdmin && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Privacy Settings</Text>
+            
+            <View style={styles.settingItem}>
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingTitle}>Private Group</Text>
+                <Text style={styles.settingDescription}>
+                  Only members can see this group in search
+                </Text>
+              </View>
+              <TouchableOpacity 
+                onPress={togglePrivacy}
+                style={[styles.toggle, group?.is_private && styles.toggleActive]}
+              >
+                <View style={[styles.toggleCircle, group?.is_private && styles.toggleCircleActive]} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.settingItem}>
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingTitle}>Auto Join</Text>
+                <Text style={styles.settingDescription}>
+                  Users can join automatically without approval
+                </Text>
+              </View>
+              <TouchableOpacity 
+                onPress={toggleAutoJoin}
+                style={[styles.toggle, group?.auto_join && styles.toggleActive]}
+              >
+                <View style={[styles.toggleCircle, group?.auto_join && styles.toggleCircleActive]} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* Join Requests */}
+        {isAdmin && !group?.auto_join && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Join Requests ({joinRequests.length})</Text>
+            
+            {loadingJoinRequests ? (
+              <ActivityIndicator size="small" color="#ff6b6b" style={styles.loader} />
+            ) : joinRequests.length > 0 ? (
+              <FlatList
+                data={joinRequests}
+                keyExtractor={(item) => item.id}
+                scrollEnabled={false}
+                renderItem={({ item }) => (
+                  <View style={styles.joinRequestItem}>
+                    <Image 
+                      source={{ uri: item.profiles?.avatar_url || 'https://via.placeholder.com/150' }}
+                      style={styles.requestAvatar}
+                    />
+                    <View style={styles.requestInfo}>
+                      <Text style={styles.requestUsername}>{item.profiles?.username}</Text>
+                      <Text style={styles.requestTime}>
+                        {new Date(item.created_at).toLocaleDateString()}
+                      </Text>
+                      {item.message && (
+                        <Text style={styles.requestMessage}>{item.message}</Text>
+                      )}
+                    </View>
+                    <View style={styles.requestActions}>
+                      <TouchableOpacity
+                        onPress={() => handleJoinRequest(item.id, 'approved', item.profiles?.username)}
+                        style={styles.approveButton}
+                      >
+                        <Ionicons name="checkmark" size={20} color="#fff" />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => handleJoinRequest(item.id, 'rejected', item.profiles?.username)}
+                        style={styles.rejectButton}
+                      >
+                        <Ionicons name="close" size={20} color="#fff" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+              />
+            ) : (
+              <Text style={styles.emptyText}>No pending join requests</Text>
+            )}
+          </View>
+        )}
 
         {/* Admin Actions */}
         {isAdmin && (
@@ -1014,6 +1205,101 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: 'rgba(255,255,255,0.6)',
     fontWeight: '500',
+  },
+  settingItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+  },
+  settingInfo: {
+    flex: 1,
+  },
+  settingTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+    marginBottom: 4,
+  },
+  settingDescription: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.6)',
+  },
+  toggle: {
+    width: 50,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    paddingHorizontal: 2,
+  },
+  toggleActive: {
+    backgroundColor: '#00ff88',
+  },
+  toggleCircle: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#fff',
+    alignSelf: 'flex-start',
+  },
+  toggleCircleActive: {
+    alignSelf: 'flex-end',
+  },
+  joinRequestItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+  },
+  requestAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+  },
+  requestInfo: {
+    flex: 1,
+  },
+  requestUsername: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  requestTime: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.6)',
+    marginTop: 2,
+  },
+  requestMessage: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 4,
+  },
+  requestActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  approveButton: {
+    backgroundColor: '#00ff88',
+    borderRadius: 20,
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  rejectButton: {
+    backgroundColor: '#ff6b6b',
+    borderRadius: 20,
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   emptyText: {
     color: 'rgba(255,255,255,0.6)',

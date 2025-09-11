@@ -480,28 +480,28 @@ const MessagesScreen = () => {
     }
   };
   
-  // Fetch groups function
+  // Fetch groups function - using RPC to completely bypass RLS
   const fetchGroups = async (userId) => {
     try {
-      const { data: groupsData, error } = await supabase
-        .from('groups')
-        .select(`
-          *,
-          group_members!inner(
-            user_id,
-            role
-          )
-        `)
-        .eq('group_members.user_id', userId);
+      if (!userId) {
+        console.log('No user ID provided to fetchGroups');
+        setGroups([]);
+        return;
+      }
+      
+      // Use RPC function to get all user groups (bypasses RLS completely)
+      const { data: allGroups, error } = await supabase
+        .rpc('get_all_user_groups', { user_id_param: userId });
       
       if (error) {
         console.error('Error fetching groups:', error);
+        setGroups([]);
         return;
       }
       
       // Get member counts and latest messages for each group
       const groupsWithDetails = await Promise.all(
-        groupsData.map(async (group) => {
+        (allGroups || []).map(async (group) => {
           // Get member count
           const { count: memberCount } = await supabase
             .from('group_members')
@@ -872,12 +872,21 @@ const MessagesScreen = () => {
                     style={styles.messageItemGradient}
                   >
                     <View style={styles.avatarContainer}>
-                      <LinearGradient
-                        colors={['rgba(255, 107, 107, 0.8)', 'rgba(255, 82, 82, 0.6)']}  
-                        style={styles.groupAvatar}
-                      >
-                        <Ionicons name="people" size={24} color="#fff" />
-                      </LinearGradient>
+                      {group.avatar_url ? (
+                        <Image 
+                          source={{ uri: group.avatar_url }} 
+                          style={styles.groupAvatarImage}
+                        />
+                      ) : (
+                        <LinearGradient
+                          colors={['rgba(102, 126, 234, 0.8)', 'rgba(156, 136, 255, 0.8)']}
+                          style={styles.groupAvatar}
+                        >
+                          <Text style={styles.groupAvatarText}>
+                            {group.name ? group.name.charAt(0).toUpperCase() : 'G'}
+                          </Text>
+                        </LinearGradient>
+                      )}
                     </View>
                     <View style={styles.messageContent}>
                       <View style={styles.messageHeader}>
@@ -1383,19 +1392,25 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.1)',
+    overflow: 'hidden',
+    backgroundColor: 'rgba(102, 126, 234, 0.8)'
   },
-  groupName: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#ff6b6b',
-    letterSpacing: 0.5,
-    flex: 1,
+  groupAvatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 24,
+    backgroundColor: 'rgba(0,0,0,0.1)'
   },
-  memberCount: {
-    fontSize: 12,
-    color: 'rgba(255,107,107,0.8)',
-    marginBottom: 2,
-    fontWeight: '500',
+  groupAvatarText: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2
   },
   // Modal styles
   modalContainer: {
