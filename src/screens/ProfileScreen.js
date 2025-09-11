@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, Alert, Modal, ActivityIndicator, FlatList, Dimensions } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text, StyleSheet, Image, TouchableOpacity, Alert, Modal, ActivityIndicator, FlatList, Dimensions, Animated, ScrollView } from 'react-native';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Video } from 'expo-av';
 import Sidebar from '../components/Sidebar';
@@ -201,10 +201,57 @@ const ProfileScreen = () => {
   const [following, setFollowing] = useState([]);
   const [loadingConnections, setLoadingConnections] = useState(false);
   const navigation = useNavigation();
+  
+  // Animation values
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+  const scaleAnim = useRef(new Animated.Value(0.8)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
 
   const memoizedPosts = useMemo(() => posts, [posts]);
   const memoizedShorts = useMemo(() => shorts, [shorts]);
   const videoRefs = useRef({});
+  
+  // Initialize animations
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 100,
+        friction: 8,
+        useNativeDriver: true,
+      })
+    ]).start();
+    
+    // Pulse animation for verified badge
+    const pulseAnimation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.2,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        })
+      ])
+    );
+    pulseAnimation.start();
+    
+    return () => pulseAnimation.stop();
+  }, []);
   
   // Effect to ensure videos are properly unloaded when component unmounts
   // Cleanup videos when screen loses focus or unmounts
@@ -346,7 +393,11 @@ const ProfileScreen = () => {
         colors={['#0f0f23', '#1a1a2e', '#16213e']}
         style={styles.header}
       >
-        <TouchableOpacity onPress={() => setSidebarVisible(true)}>
+        <TouchableOpacity 
+          onPress={() => setSidebarVisible(true)}
+          style={styles.headerButton}
+          activeOpacity={0.8}
+        >
           <LinearGradient
             colors={['#ffd700', '#ffed4e']}
             style={styles.headerIconContainer}
@@ -354,7 +405,20 @@ const ProfileScreen = () => {
             <Ionicons name="menu" size={20} color="#000" />
           </LinearGradient>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => setAccountSwitcherVisible(true)}>
+        
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>Profile</Text>
+          <View style={styles.headerSubtitle}>
+            <MaterialIcons name="verified" size={16} color="#ffd700" />
+            <Text style={styles.headerSubtitleText}>Premium Account</Text>
+          </View>
+        </View>
+        
+        <TouchableOpacity 
+          onPress={() => setAccountSwitcherVisible(true)}
+          style={styles.headerButton}
+          activeOpacity={0.8}
+        >
           <LinearGradient
             colors={['#ffd700', '#ffed4e']}
             style={styles.headerIconContainer}
@@ -364,8 +428,20 @@ const ProfileScreen = () => {
         </TouchableOpacity>
       </LinearGradient>
 
-      <View style={styles.profileSection}>
+      <Animated.View 
+        style={[
+          styles.profileSection,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }]
+          }
+        ]}
+      >
         <View style={styles.coverPhotoContainer}>
+          <LinearGradient
+            colors={['rgba(255,215,0,0.3)', 'rgba(255,0,255,0.2)', 'rgba(0,0,0,0.8)']}
+            style={styles.coverGradientOverlay}
+          />
           {userProfile?.cover_is_video ? (
             <View style={styles.videoCoverContainer}>
               <Video
@@ -393,40 +469,111 @@ const ProfileScreen = () => {
               onError={(e) => console.log('Cover photo error:', e.nativeEvent.error)}
             />
           )}
+          <View style={styles.coverStats}>
+            <View style={styles.coverStatItem}>
+              <MaterialIcons name="visibility" size={16} color="#ffd700" />
+              <Text style={styles.coverStatText}>2.1K</Text>
+            </View>
+            <View style={styles.coverStatItem}>
+              <MaterialIcons name="favorite" size={16} color="#ff69b4" />
+              <Text style={styles.coverStatText}>856</Text>
+            </View>
+          </View>
         </View>
         
-        <Image
-          style={styles.profileImage}
-          source={
-            userProfile?.avatar_url
-              ? { uri: userProfile.avatar_url, cache: 'reload' }
-              : require('../../assets/defaultavatar.png')
-          }
-          onLoadStart={() => console.log('Avatar loading started')}
-          onLoadEnd={() => console.log('Avatar loading ended')}
-          onError={(e) => console.log('Avatar error:', e.nativeEvent.error)}
-        />
-        
-        <Text style={styles.name}>{userProfile?.full_name || 'No name set'}</Text>
-        <View style={styles.usernameContainer}>
-          <Text style={styles.username}>@{userProfile?.username || 'username'}</Text>
-          {userProfile?.isVerified && (
-            <Ionicons name="checkmark-circle" size={20} color="#ff0000" style={styles.verifiedBadge} />
-          )}
-        </View>
-        <LinearGradient
-          colors={['#ffd700', '#ffed4e']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.rankBadge}
+        <Animated.View 
+          style={[
+            styles.profileImageContainer,
+            {
+              transform: [{ scale: scaleAnim }]
+            }
+          ]}
         >
-          <Ionicons name="trophy-outline" size={16} color="#000" />
-          <Text style={styles.rankNumber}>
-            {userProfile?.rank 
-              ? `Rank #${userProfile.rank} ${userProfile.rank === 1 ? '(First Member!)' : ''}`
-              : 'Rank not assigned'}
-          </Text>
-        </LinearGradient>
+          <LinearGradient
+            colors={['#ffd700', '#ff69b4', '#8a2be2']}
+            style={styles.profileImageGradient}
+          >
+            <Image
+              style={styles.profileImage}
+              source={
+                userProfile?.avatar_url
+                  ? { uri: userProfile.avatar_url, cache: 'reload' }
+                  : require('../../assets/defaultavatar.png')
+              }
+              onLoadStart={() => console.log('Avatar loading started')}
+              onLoadEnd={() => console.log('Avatar loading ended')}
+              onError={(e) => console.log('Avatar error:', e.nativeEvent.error)}
+            />
+          </LinearGradient>
+          <TouchableOpacity style={styles.profileImageBadge}>
+            <LinearGradient
+              colors={['#00ff88', '#00cc6a']}
+              style={styles.onlineBadge}
+            >
+              <View style={styles.onlineDot} />
+            </LinearGradient>
+          </TouchableOpacity>
+        </Animated.View>
+        
+        <View style={styles.nameSection}>
+          <Text style={styles.name}>{userProfile?.full_name || 'No name set'}</Text>
+          <View style={styles.usernameContainer}>
+            <Text style={styles.username}>@{userProfile?.username || 'username'}</Text>
+            {userProfile?.isVerified && (
+              <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+                <LinearGradient
+                  colors={['#ffd700', '#ff69b4']}
+                  style={styles.verifiedBadgeGradient}
+                >
+                  <MaterialIcons name="verified" size={18} color="#fff" />
+                </LinearGradient>
+              </Animated.View>
+            )}
+          </View>
+          <View style={styles.userTags}>
+            <View style={styles.tag}>
+              <MaterialIcons name="star" size={12} color="#ffd700" />
+              <Text style={styles.tagText}>Creator</Text>
+            </View>
+            <View style={styles.tag}>
+              <MaterialIcons name="trending-up" size={12} color="#00ff88" />
+              <Text style={styles.tagText}>Rising</Text>
+            </View>
+          </View>
+        </View>
+        <View style={styles.achievementsSection}>
+          <LinearGradient
+            colors={['#ffd700', '#ffed4e']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.rankBadge}
+          >
+            <MaterialIcons name="emoji-events" size={18} color="#000" />
+            <Text style={styles.rankNumber}>
+              {userProfile?.rank 
+                ? `Rank #${userProfile.rank} ${userProfile.rank === 1 ? '(First Member!)' : ''}`
+                : 'Rank not assigned'}
+            </Text>
+          </LinearGradient>
+          
+          <View style={styles.achievementBadges}>
+            <TouchableOpacity style={styles.achievementBadge}>
+              <LinearGradient colors={['#ff6b6b', '#ee5a52']} style={styles.badgeGradient}>
+                <MaterialIcons name="favorite" size={16} color="#fff" />
+              </LinearGradient>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.achievementBadge}>
+              <LinearGradient colors={['#4ecdc4', '#44a08d']} style={styles.badgeGradient}>
+                <MaterialIcons name="flash-on" size={16} color="#fff" />
+              </LinearGradient>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.achievementBadge}>
+              <LinearGradient colors={['#a8e6cf', '#7fcdcd']} style={styles.badgeGradient}>
+                <MaterialIcons name="trending-up" size={16} color="#fff" />
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
         {userProfile?.bio && (
           <View style={styles.bioContainer}>
             <Text style={styles.bioText}>
@@ -443,45 +590,87 @@ const ProfileScreen = () => {
           </View>
         )}
         
-        <TouchableOpacity
-          style={styles.editButton}
-          onPress={() => navigation.navigate('EditProfile')}
-        >
-          <LinearGradient
-            colors={['#ffd700', '#ffed4e']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.editButtonGradient}
+        <View style={styles.actionButtonsContainer}>
+          <TouchableOpacity
+            style={styles.editButton}
+            onPress={() => navigation.navigate('EditProfile')}
+            activeOpacity={0.8}
           >
-            <Text style={[styles.editButtonText, { color: '#000' }]}>EDIT PROFILE</Text>
-          </LinearGradient>
-        </TouchableOpacity>
+            <LinearGradient
+              colors={['#ffd700', '#ffed4e']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.editButtonGradient}
+            >
+              <MaterialIcons name="edit" size={18} color="#000" style={{ marginRight: 8 }} />
+              <Text style={[styles.editButtonText, { color: '#000' }]}>EDIT PROFILE</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.shareButton} activeOpacity={0.8}>
+            <LinearGradient
+              colors={['#667eea', '#764ba2']}
+              style={styles.shareButtonGradient}
+            >
+              <MaterialIcons name="share" size={18} color="#fff" />
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
 
         <View style={styles.statsContainer}>
-          <TouchableOpacity style={styles.stat}>
-            <Text style={styles.statNumber}>{postsCount}</Text>
-            <Text style={styles.statLabel}>Posts</Text>
+          <TouchableOpacity style={styles.stat} activeOpacity={0.7}>
+            <LinearGradient
+              colors={['rgba(255,215,0,0.1)', 'rgba(255,215,0,0.05)']}
+              style={styles.statBackground}
+            >
+              <MaterialIcons name="article" size={20} color="#ffd700" />
+              <Text style={styles.statNumber}>{postsCount}</Text>
+              <Text style={styles.statLabel}>Posts</Text>
+            </LinearGradient>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.stat}>
-            <Text style={styles.statNumber}>{shortsCount}</Text>
-            <Text style={styles.statLabel}>Shorts</Text>
+          
+          <TouchableOpacity style={styles.stat} activeOpacity={0.7}>
+            <LinearGradient
+              colors={['rgba(255,105,180,0.1)', 'rgba(255,105,180,0.05)']}
+              style={styles.statBackground}
+            >
+              <MaterialIcons name="videocam" size={20} color="#ff69b4" />
+              <Text style={styles.statNumber}>{shortsCount}</Text>
+              <Text style={styles.statLabel}>Shorts</Text>
+            </LinearGradient>
           </TouchableOpacity>
+          
           <TouchableOpacity 
             style={styles.stat}
             onPress={fetchFollowers}
+            activeOpacity={0.7}
           >
-            <Text style={styles.statNumber}>{followersCount}</Text>
-            <Text style={styles.statLabel}>Followers</Text>
+            <LinearGradient
+              colors={['rgba(0,255,136,0.1)', 'rgba(0,255,136,0.05)']}
+              style={styles.statBackground}
+            >
+              <MaterialIcons name="people" size={20} color="#00ff88" />
+              <Text style={styles.statNumber}>{followersCount}</Text>
+              <Text style={styles.statLabel}>Followers</Text>
+            </LinearGradient>
           </TouchableOpacity>
+          
           <TouchableOpacity 
             style={styles.stat}
             onPress={fetchFollowing}
+            activeOpacity={0.7}
           >
-            <Text style={styles.statNumber}>{followingCount}</Text>
-            <Text style={styles.statLabel}>Following</Text>
+            <LinearGradient
+              colors={['rgba(138,43,226,0.1)', 'rgba(138,43,226,0.05)']}
+              style={styles.statBackground}
+            >
+              <MaterialIcons name="person-add" size={20} color="#8a2be2" />
+              <Text style={styles.statNumber}>{followingCount}</Text>
+              <Text style={styles.statLabel}>Following</Text>
+            </LinearGradient>
           </TouchableOpacity>
         </View>
-      </View>
+      </Animated.View>
 
       <View style={styles.tabsContainer}>
         <TouchableOpacity 
@@ -1088,6 +1277,190 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  headerButton: {
+    padding: 4,
+  },
+  headerCenter: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  headerTitle: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: 'bold',
+    textShadowColor: 'rgba(255, 215, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  headerSubtitle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  headerSubtitleText: {
+    color: '#ffd700',
+    fontSize: 12,
+    marginLeft: 4,
+    fontWeight: '500',
+  },
+  coverGradientOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1,
+  },
+  coverStats: {
+    position: 'absolute',
+    top: 15,
+    right: 15,
+    flexDirection: 'row',
+    zIndex: 2,
+  },
+  coverStatItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginLeft: 8,
+  },
+  coverStatText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  profileImageContainer: {
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  profileImageGradient: {
+    padding: 4,
+    borderRadius: 54,
+    shadowColor: '#ffd700',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  profileImageBadge: {
+    position: 'absolute',
+    bottom: 5,
+    right: 5,
+  },
+  onlineBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  onlineDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#fff',
+  },
+  nameSection: {
+    alignItems: 'center',
+    marginTop: 15,
+  },
+  verifiedBadgeGradient: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 6,
+    shadowColor: '#ffd700',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  userTags: {
+    flexDirection: 'row',
+    marginTop: 8,
+  },
+  tag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginHorizontal: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 215, 0, 0.3)',
+  },
+  tagText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  achievementsSection: {
+    alignItems: 'center',
+    marginTop: 15,
+  },
+  achievementBadges: {
+    flexDirection: 'row',
+    marginTop: 10,
+  },
+  achievementBadge: {
+    marginHorizontal: 6,
+  },
+  badgeGradient: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  actionButtonsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+  },
+  shareButton: {
+    marginLeft: 12,
+  },
+  shareButtonGradient: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#667eea',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  statBackground: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
   usernameContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1111,9 +1484,22 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0f0f23',
   },
+  headerIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#ffd700',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     padding: 18,
     paddingTop: 50,
   },
@@ -1140,16 +1526,15 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    borderWidth: 3,
-    borderColor: '#e3a6be',
     backgroundColor: '#1a1a1a',
-    marginTop: 10,
   },
   name: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: 'bold',
     color: 'white',
-    marginTop: 10,
+    textShadowColor: 'rgba(255, 215, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   username: {
     fontSize: 16,
@@ -1194,9 +1579,8 @@ const styles = StyleSheet.create({
     textShadowRadius: 2,
   },
   editButton: {
-    marginTop: 15,
-    width: '60%',
-    alignSelf: 'center',
+    flex: 1,
+    maxWidth: 200,
     elevation: 3,
     shadowColor: '#ffd700',
     shadowOffset: { width: 0, height: 2 },
@@ -1204,6 +1588,9 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
   },
   editButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: 25,
     shadowColor: '#ffd700',
     shadowOffset: { width: 0, height: 2 },
@@ -1225,23 +1612,30 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     width: '100%',
-    marginTop: 20,
+    marginTop: 25,
     paddingVertical: 15,
+    paddingHorizontal: 10,
     borderBottomWidth: 1,
     borderColor: 'rgba(255, 215, 0, 0.2)',
   },
   stat: {
-    alignItems: 'center',
+    flex: 1,
+    marginHorizontal: 4,
   },
   statNumber: {
     fontSize: 18,
     fontWeight: 'bold',
     color: 'white',
+    marginTop: 4,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   statLabel: {
     fontSize: 12,
-    color: '#666',
-    marginTop: 5,
+    color: '#999',
+    marginTop: 4,
+    fontWeight: '500',
   },
   tabsContainer: {
     flexDirection: 'row',
