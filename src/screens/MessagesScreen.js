@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, ScrollView, Image, TouchableOpacity, ActivityIndicator, Animated, Modal } from 'react-native';
+import { View, Text, StyleSheet, TextInput, ScrollView, Image, TouchableOpacity, ActivityIndicator, Animated, Modal, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
@@ -855,7 +855,7 @@ const MessagesScreen = () => {
   const handleRefresh = () => {
     console.log('Manual refresh triggered');
     if (currentUserId) {
-      fetchConversations();
+      fetchConversations(currentUserId);
       fetchGroups(currentUserId);
     }
   };

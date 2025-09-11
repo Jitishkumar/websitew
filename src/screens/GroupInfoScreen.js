@@ -935,11 +935,11 @@ const GroupInfoScreen = () => {
                 renderItem={({ item }) => (
                   <View style={styles.joinRequestItem}>
                     <Image 
-                      source={{ uri: item.profiles?.avatar_url || 'https://via.placeholder.com/150' }}
+                      source={{ uri: item.avatar_url || 'https://via.placeholder.com/150' }}
                       style={styles.requestAvatar}
                     />
                     <View style={styles.requestInfo}>
-                      <Text style={styles.requestUsername}>{item.profiles?.username}</Text>
+                      <Text style={styles.requestUsername}>{item.username || 'Unknown User'}</Text>
                       <Text style={styles.requestTime}>
                         {new Date(item.created_at).toLocaleDateString()}
                       </Text>
@@ -949,13 +949,13 @@ const GroupInfoScreen = () => {
                     </View>
                     <View style={styles.requestActions}>
                       <TouchableOpacity
-                        onPress={() => handleJoinRequest(item.id, 'approved', item.profiles?.username)}
+                        onPress={() => handleJoinRequest(item.id, 'approved', item.username)}
                         style={styles.approveButton}
                       >
                         <Ionicons name="checkmark" size={20} color="#fff" />
                       </TouchableOpacity>
                       <TouchableOpacity
-                        onPress={() => handleJoinRequest(item.id, 'rejected', item.profiles?.username)}
+                        onPress={() => handleJoinRequest(item.id, 'rejected', item.username)}
                         style={styles.rejectButton}
                       >
                         <Ionicons name="close" size={20} color="#fff" />
@@ -972,7 +972,7 @@ const GroupInfoScreen = () => {
 
         {/* Admin Actions */}
         {isAdmin && (
-          <View style={styles.section}>
+          <View style={[styles.section, styles.lastSection]}>
             <Text style={styles.sectionTitle}>Admin Actions</Text>
             <TouchableOpacity onPress={deleteGroup} style={styles.deleteButton}>
               <Ionicons name="trash" size={20} color="#fff" />
@@ -2235,6 +2235,9 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  lastSection: {
+    marginBottom: 100, // Add extra bottom padding to prevent collision with bottom navigation
   },
 });
 
