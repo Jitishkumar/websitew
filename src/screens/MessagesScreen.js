@@ -728,6 +728,28 @@ const MessagesScreen = () => {
                   await fetchGroups(currentUserId);
                   setPublicGroups(prev => prev.filter(g => g.id !== group.id));
                 } else {
+                  // Check if user already has a pending request
+                  const { data: existingRequest, error: checkError } = await supabase
+                    .from('group_join_requests')
+                    .select('id, status')
+                    .eq('group_id', group.id)
+                    .eq('user_id', currentUserId)
+                    .single();
+
+                  if (checkError && checkError.code !== 'PGRST116') {
+                    throw checkError;
+                  }
+
+                  if (existingRequest) {
+                    if (existingRequest.status === 'pending') {
+                      Alert.alert('Already Requested', `You already have a pending request to join "${group.name}".`);
+                      return;
+                    } else if (existingRequest.status === 'rejected') {
+                      Alert.alert('Request Rejected', `Your previous request to join "${group.name}" was rejected.`);
+                      return;
+                    }
+                  }
+
                   // Request to join: add to group_join_requests
                   const { error: requestError } = await supabase
                     .from('group_join_requests')
