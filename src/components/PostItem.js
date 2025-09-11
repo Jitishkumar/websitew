@@ -94,6 +94,7 @@ const PostItem = ({ post, onOptionsPress }) => {
   const pauseIconTimeout = useRef(null);
   const likeTimeout = useRef(null);
   const [isLiking, setIsLiking] = useState(false);
+  const [viewedVideos, setViewedVideos] = useState(new Set());
   
   // Get video context
   const { activeVideoId, setActiveVideo, clearActiveVideo, isFullscreenMode, setFullscreen: setContextFullscreen } = useVideo();
@@ -412,11 +413,13 @@ const PostItem = ({ post, onOptionsPress }) => {
   }, [fullscreen]);
 
   const [showLikesModal, setShowLikesModal] = useState(false);
-  const [showCommentModal, setShowCommentModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editCaption, setEditCaption] = useState(post.caption || '');
-  const [likesList, setLikesList] = useState([]);
+  const [editedCaption, setEditedCaption] = useState(post.caption || '');
+  const [isEditing, setIsEditing] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [loadingLikes, setLoadingLikes] = useState(false);
+  const [likesList, setLikesList] = useState([]);
+  const [editCaption, setEditCaption] = useState(post.caption || '');
   const [currentUser, setCurrentUser] = useState(null);
 
   useEffect(() => {
@@ -426,6 +429,21 @@ const PostItem = ({ post, onOptionsPress }) => {
     };
     getCurrentUser();
   }, []);
+
+  // Increment views count
+  const incrementViews = async (postId) => {
+    try {
+      const { error } = await supabase.rpc('increment_post_views', {
+        post_id: postId
+      });
+
+      if (error) {
+        console.error('Error incrementing views:', error);
+      }
+    } catch (error) {
+      console.error('Error incrementing views:', error);
+    }
+  };
 
   // Realtime like updates for this post
   useEffect(() => {
@@ -689,17 +707,18 @@ const PostItem = ({ post, onOptionsPress }) => {
                     onLoadStart={() => setLoading(true)}
                     onLoad={async () => {
                       setLoading(false);
+                      // Track view when video loads and starts playing
+                      if (activeVideoId === post.id && !viewedVideos.has(post.id)) {
+                        incrementViews(post.id);
+                        setViewedVideos(prev => new Set([...prev, post.id]));
+                      }
                       // Only auto-play if this is the active video and not being held
                       if (activeVideoId === post.id && !isTouchHolding.current) {
-                        // First ensure any previous video is fully stopped
-                        if (videoRef.current) {
-                          // Pause first to ensure clean state
-                          await videoRef.current.pauseAsync();
-                          // Small delay to ensure audio channels are cleared
-                          setTimeout(async () => {
-                            setPlaying(true);
-                            await videoRef.current.playAsync();
-                          }, 50);
+                        try {
+                          await videoRef.current?.playAsync();
+                          setPlaying(true);
+                        } catch (error) {
+                          console.warn('Error auto-playing video:', error);
                         }
                       }
                     }}
@@ -807,6 +826,7 @@ const PostItem = ({ post, onOptionsPress }) => {
                 color={isLiked ? "#fff" : "#ff6b6b"} 
               />
             </LinearGradient>
+            <Text style={styles.actionText}>{likesCount}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.actionButton} onPress={handleComment}>
@@ -816,6 +836,7 @@ const PostItem = ({ post, onOptionsPress }) => {
             >
               <Ionicons name="chatbubble-outline" size={20} color="#667eea" />
             </LinearGradient>
+            <Text style={styles.actionText}>{commentsCount}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.actionButton} onPress={handleShare}>
@@ -826,6 +847,18 @@ const PostItem = ({ post, onOptionsPress }) => {
               <Ionicons name="share-outline" size={20} color="#9c88ff" />
             </LinearGradient>
           </TouchableOpacity>
+
+          {post.type === 'video' && (
+            <View style={styles.actionButton}>
+              <LinearGradient
+                colors={['rgba(102, 126, 234, 0.2)', 'rgba(102, 126, 234, 0.1)']}
+                style={styles.actionButtonGradient}
+              >
+                <Ionicons name="eye-outline" size={20} color="#667eea" />
+              </LinearGradient>
+              <Text style={styles.actionText}>{post.views || 0}</Text>
+            </View>
+          )}
         </LinearGradient>
 
 
@@ -1399,6 +1432,7 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     marginRight: 15,
+    alignItems: 'center',
   },
   actionButtonGradient: {
     width: 36,
@@ -1411,6 +1445,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 3,
+  },
+  actionText: {
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 4,
   },
   closeButton: { 
     position: 'absolute', 

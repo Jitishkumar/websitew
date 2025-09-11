@@ -8,6 +8,7 @@ create table public.posts (
   type text null default 'text'::text,
   media_url text null,
   cloudinary_public_id text null,
+  views integer null default 0,
   constraint posts_pkey primary key (id),
   constraint posts_user_id_fkey foreign KEY (user_id) references profiles (id) on delete CASCADE,
   constraint posts_type_check check (
@@ -26,6 +27,8 @@ create index IF not exists posts_created_at_idx on public.posts using btree (cre
 create index IF not exists posts_user_id_idx on public.posts using btree (user_id) TABLESPACE pg_default;
 
 create index IF not exists idx_posts_created_at_type on public.posts using btree (created_at desc, type) TABLESPACE pg_default;
+
+create index IF not exists idx_posts_views on public.posts using btree (views desc) TABLESPACE pg_default;
 
 
 
@@ -233,3 +236,22 @@ using (
   (user_id = auth.uid())
 
 );
+
+-- Drop the overly permissive policy if it exists
+DROP POLICY IF EXISTS "Anyone can increment views" ON "public"."posts";
+
+-- Create a function to handle view increments securely
+CREATE OR REPLACE FUNCTION increment_post_views(post_id UUID)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  UPDATE posts 
+  SET views = COALESCE(views, 0) + 1 
+  WHERE id = post_id;
+END;
+$$;
+
+-- Grant execute permission to authenticated users
+GRANT EXECUTE ON FUNCTION increment_post_views(UUID) TO authenticated;

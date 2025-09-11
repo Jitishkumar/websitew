@@ -1555,7 +1555,7 @@ const ConfessionPersonScreen = () => {
             loading={loading}
           />
         }
-        contentContainerStyle={styles.confessionsList}
+        contentContainerStyle={[styles.confessionsList, { paddingBottom: 100 }]}
         refreshing={loading}
         onRefresh={refreshConfessions}
         showsVerticalScrollIndicator={false}
@@ -2341,7 +2341,7 @@ const styles = StyleSheet.create({
   },
   addButton: {
     position: 'absolute',
-    bottom: 20,
+    bottom: 80, // Increased from 20 to 80 to be above bottom tab navigation
     right: 20,
     backgroundColor: '#ff00ff',
     width: 60,

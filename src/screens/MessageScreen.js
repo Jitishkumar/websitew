@@ -607,6 +607,13 @@ const MessageScreen = () => {
             setMessages(updatedMessages);
             setLoading(false);
             console.log('Loaded messages from cache:', updatedMessages.length);
+            
+            // Scroll to bottom when loading from cache
+            setTimeout(() => {
+              if (flatListRef.current && updatedMessages.length > 0) {
+                flatListRef.current.scrollToEnd({ animated: false });
+              }
+            }, 100);
         }
       } catch (cacheError) {
         console.error('Error loading from cache:', cacheError);
@@ -686,16 +693,18 @@ const MessageScreen = () => {
           setMessages(prevMessages => [...formattedMessages, ...prevMessages]);
           setCurrentPage(page);
         } else {
-          // Set new messages for initial load
-          setMessages(formattedMessages);
-          setCurrentPage(0);
-          
-          // Scroll to bottom after initial load
-          setTimeout(() => {
-            if (flatListRef.current && formattedMessages.length > 0) {
-              flatListRef.current.scrollToEnd({ animated: false });
-            }
-          }, 200);
+          // Set new messages
+          if (page === 0) {
+            setMessages(formattedMessages);
+            setCurrentPage(0);
+            
+            // Always scroll to bottom for initial load (latest messages)
+            setTimeout(() => {
+              if (flatListRef.current && formattedMessages.length > 0) {
+                flatListRef.current.scrollToEnd({ animated: false });
+              }
+            }, 100);
+          }
         }
         
         // Update cache only for initial load
@@ -1844,17 +1853,19 @@ const MessageScreen = () => {
               }}
               scrollEventThrottle={400}
               onContentSizeChange={() => {
-                if (messages.length > 0 && currentPage === 0) {
+                // Always scroll to bottom when content changes (new messages or initial load)
+                if (messages.length > 0) {
                   setTimeout(() => {
                     flatListRef.current?.scrollToEnd({ animated: false });
-                  }, 100);
+                  }, 50);
                 }
               }}
               onLayout={() => {
-                if (messages.length > 0 && currentPage === 0) {
+                // Always scroll to bottom on layout (when navigating to chat)
+                if (messages.length > 0) {
                   setTimeout(() => {
                     flatListRef.current?.scrollToEnd({ animated: false });
-                  }, 100);
+                  }, 50);
                 }
               }}
               ListHeaderComponent={

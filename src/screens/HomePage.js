@@ -3,6 +3,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { TextInput } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Camera } from 'expo-camera';
+import { Audio } from 'expo-av';
 import { supabase } from '../lib/supabase';
 
 function HomePage({navigation}) {
@@ -12,6 +14,7 @@ function HomePage({navigation}) {
   const [isMatching, setIsMatching] = useState(false);
   const [matchingStatus, setMatchingStatus] = useState('');
   const [waitingUsers, setWaitingUsers] = useState(0);
+  const [permissionsGranted, setPermissionsGranted] = useState(false);
   const insets = useSafeAreaInsets();
   const pollIntervalRef = useRef(null);
   const timeoutRef = useRef(null);
@@ -19,6 +22,7 @@ function HomePage({navigation}) {
   useEffect(() => {
     getCurrentUser();
     getWaitingUsersCount();
+    requestPermissions();
     
     // Clean up any existing waiting entries for this user on mount
     return () => {
@@ -31,6 +35,34 @@ function HomePage({navigation}) {
       }
     };
   }, []);
+
+  const requestPermissions = async () => {
+    try {
+      // Request camera permissions
+      const cameraStatus = await Camera.requestCameraPermissionsAsync();
+      
+      // Request microphone permissions
+      const audioStatus = await Audio.requestPermissionsAsync();
+      
+      if (cameraStatus.status === 'granted' && audioStatus.status === 'granted') {
+        setPermissionsGranted(true);
+        console.log('Camera and microphone permissions granted');
+      } else {
+        setPermissionsGranted(false);
+        Alert.alert(
+          'Permissions Required',
+          'Camera and microphone permissions are required for video calls. Please enable them in your device settings.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Try Again', onPress: requestPermissions }
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('Error requesting permissions:', error);
+      setPermissionsGranted(false);
+    }
+  };
 
   const getCurrentUser = async () => {
     try {
@@ -111,6 +143,19 @@ function HomePage({navigation}) {
 
     if (!currentUser.gender) {
       Alert.alert('Profile Incomplete', 'Please complete your profile with gender information to enable matching.');
+      return;
+    }
+
+    // Check permissions before starting match
+    if (!permissionsGranted) {
+      Alert.alert(
+        'Permissions Required',
+        'Camera and microphone permissions are required for video calls. Please grant permissions first.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Grant Permissions', onPress: requestPermissions }
+        ]
+      );
       return;
     }
 
@@ -492,10 +537,10 @@ function HomePage({navigation}) {
           style={[
             styles.joinButton, 
             (isMatching && !isWaiting) && styles.joinButtonDisabled,
-            !currentUser?.gender && styles.joinButtonDisabled
+            (!currentUser?.gender || !permissionsGranted) && styles.joinButtonDisabled
           ]}
           onPress={isWaiting ? cancelWaiting : findRandomMatch}
-          disabled={(isMatching && !isWaiting) || !name || !currentUser?.gender}
+          disabled={(isMatching && !isWaiting) || !name || !currentUser?.gender || !permissionsGranted}
         >
           {isMatching && !isWaiting ? (
             <View style={styles.loadingContainer}>
@@ -514,9 +559,27 @@ function HomePage({navigation}) {
             Priority matching: {getPriorityGender()}
           </Text>
           {!currentUser?.gender && (
-            <Text style={styles.warningText}>
-              ⚠️ Please complete your profile with gender information
-            </Text>
+            <View style={styles.genderWarning}>
+              <Ionicons name="warning-outline" size={20} color="#ff9800" />
+              <Text style={styles.genderWarningText}>
+                Please complete your profile with gender information to enable matching.
+              </Text>
+            </View>
+          )}
+
+          {!permissionsGranted && (
+            <View style={styles.permissionWarning}>
+              <Ionicons name="camera-outline" size={20} color="#ff4444" />
+              <Text style={styles.permissionWarningText}>
+                Camera and microphone permissions required for video calls.
+              </Text>
+              <TouchableOpacity 
+                style={styles.permissionButton}
+                onPress={requestPermissions}
+              >
+                <Text style={styles.permissionButtonText}>Grant Permissions</Text>
+              </TouchableOpacity>
+            </View>
           )}
         </View>
 
@@ -682,9 +745,38 @@ const styles = StyleSheet.create({
   },
   helpItem: {
     color: 'rgba(255, 255, 255, 0.7)',
-    fontSize: 14,
+    fontSize: 12,
     marginVertical: 2,
-    lineHeight: 18,
+    paddingLeft: 8,
+  },
+  permissionWarning: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 68, 68, 0.1)',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 68, 68, 0.3)',
+  },
+  permissionWarningText: {
+    color: '#ff4444',
+    fontSize: 12,
+    marginLeft: 8,
+    flex: 1,
+    lineHeight: 16,
+  },
+  permissionButton: {
+    backgroundColor: '#ff4444',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    marginLeft: 8,
+  },
+  permissionButtonText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: 'bold',
   },
 });
 

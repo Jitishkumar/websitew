@@ -52,6 +52,7 @@ const ReelsScreen = () => {
   const isTouchHolding = useRef(false);
   const pauseIconTimeout = useRef(null);
   const { setFullscreen } = useVideo();
+  const [viewedVideos, setViewedVideos] = useState(new Set());
   
   const REELS_PER_PAGE = 10;
   
@@ -325,6 +326,7 @@ const loadReels = async (isInitialLoad = false) => {
   const onViewableItemsChanged = useRef(({ viewableItems }) => {
     if (viewableItems.length > 0) {
       const newIndex = viewableItems[0].index;
+      const currentReel = reels[newIndex];
       
       // Pause previous video
       if (videoRefs.current[currentIndex] && currentIndex !== newIndex) {
@@ -335,6 +337,13 @@ const loadReels = async (isInitialLoad = false) => {
       if (videoRefs.current[newIndex]) {
         videoRefs.current[newIndex].playAsync();
         setIsPlaying(true);
+      }
+      
+      // Track view when scrolling to a new video
+      if (currentReel && !viewedVideos.has(currentReel.id)) {
+        console.log('Incrementing views for scrolled reel:', currentReel.id);
+        incrementViews(currentReel.id);
+        setViewedVideos(prev => new Set([...prev, currentReel.id]));
       }
       
       setCurrentIndex(newIndex);
@@ -518,6 +527,30 @@ const loadReels = async (isInitialLoad = false) => {
     navigation.navigate('ShortsComment', { postId });
   };
 
+  // Increment views count
+  const incrementViews = async (postId) => {
+    try {
+      const { error } = await supabase.rpc('increment_post_views', {
+        post_id: postId
+      });
+
+      if (error) {
+        console.error('Error incrementing views:', error);
+      } else {
+        // Update local state optimistically
+        setReels(prevReels => 
+          prevReels.map(reel => 
+            reel.id === postId 
+              ? { ...reel, views: (reel.views || 0) + 1 }
+              : reel
+          )
+        );
+      }
+    } catch (error) {
+      console.error('Error incrementing views:', error);
+    }
+  };
+
   // Handle share functionality
   const handleShare = async (reel) => {
     try {
@@ -527,7 +560,7 @@ const loadReels = async (isInitialLoad = false) => {
         postId: reel.id,
         media_url: reel.media_url,
         caption: reel.caption || '',
-        from: 'Reels',
+        from: 'ReelsScreen',
       };
       const parentNav = navigation.getParent?.();
       if (parentNav) {
@@ -536,8 +569,8 @@ const loadReels = async (isInitialLoad = false) => {
         navigation.navigate('ShareUserSelection', { sharePayload });
       }
     } catch (error) {
-      Alert.alert('Error', 'Could not open share sheet');
-      console.error('Error sharing:', error);
+      console.error('Error sharing reel:', error);
+      Alert.alert('Error', 'Failed to share reel');
     }
   };
 
@@ -607,6 +640,14 @@ const loadReels = async (isInitialLoad = false) => {
             shouldPlay={isPlaying && index === currentIndex && !isTouchHolding.current}
             isLooping={true}
             onPlaybackStatusUpdate={index === currentIndex ? onPlaybackStatusUpdate : undefined}
+            onLoad={(status) => {
+              // Track view when video starts playing
+              if (index === currentIndex && !viewedVideos.has(item.id)) {
+                console.log('Incrementing views for loaded reel:', item.id);
+                incrementViews(item.id);
+                setViewedVideos(prev => new Set([...prev, item.id]));
+              }
+            }}
             useNativeControls={false}
             rate={1.0}
           />
@@ -694,6 +735,16 @@ const loadReels = async (isInitialLoad = false) => {
                 <Ionicons name="share-social-outline" size={24} color="#fff" />
               </LinearGradient>
             </TouchableOpacity>
+
+            <View style={styles.socialButton}>
+              <LinearGradient 
+                colors={['rgba(0,0,0,0.5)', 'rgba(0,0,0,0.5)']}
+                style={styles.socialButtonGradient}
+              >
+                <Ionicons name="eye-outline" size={24} color="#fff" />
+              </LinearGradient>
+              <Text style={styles.socialButtonText}>{item.views > 0 ? item.views : ''}</Text>
+            </View>
           </View>
 
           {/* Video controls */}

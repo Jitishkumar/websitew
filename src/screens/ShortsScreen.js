@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useVideo } from '../context/VideoContext';
 import { supabase } from '../lib/supabase';
 import { PostsService } from '../services/PostsService';
+import { videoCache } from '../utils/VideoCache';
 
 const { width, height } = Dimensions.get('window');
 
@@ -35,6 +36,13 @@ const ShortsScreen = ({ route }) => {
   const { setFullscreen } = useVideo();
   const isUserSpecificView = !!userId;
   
+  // Video preloading and caching states
+  const [videoLoadStates, setVideoLoadStates] = useState({});
+  const [preloadedVideos, setPreloadedVideos] = useState(new Set());
+  const [viewedVideos, setViewedVideos] = useState(new Set());
+  const videoCache = useRef(new Map());
+  const [thumbnailStates, setThumbnailStates] = useState({});
+  
   // Set fullscreen mode when component mounts
   useEffect(() => {
     setFullscreen(true);
@@ -48,6 +56,93 @@ const ShortsScreen = ({ route }) => {
       loadUserShorts();
     }
   }, [userId]);
+
+  // Preload videos when posts change or current index changes
+  useEffect(() => {
+    if (posts.length > 0) {
+      preloadAdjacentVideos();
+    }
+  }, [posts, currentIndex]);
+
+  // Preload adjacent videos (Instagram/YouTube strategy)
+  const preloadAdjacentVideos = () => {
+    if (!videoCache || typeof videoCache.preloadAdjacentVideos !== 'function') {
+      console.warn('VideoCache not available, using fallback preloading');
+      // Fallback preloading logic
+      const preloadIndices = [];
+      for (let i = Math.max(0, currentIndex - 1); i <= Math.min(posts.length - 1, currentIndex + 2); i++) {
+        preloadIndices.push(i);
+      }
+      
+      preloadIndices.forEach(index => {
+        const post = posts[index];
+        if (post && !preloadedVideos.has(post.id)) {
+          preloadVideo(post, index);
+        }
+      });
+      return;
+    }
+
+    // Use the video cache utility for smart preloading
+    videoCache.preloadAdjacentVideos(posts, currentIndex, 2)
+      .then(results => {
+        console.log('Preload results:', results);
+        // Update preloaded videos state
+        const newPreloaded = new Set(preloadedVideos);
+        results.forEach((result, index) => {
+          if (result.status === 'fulfilled') {
+            const videoIndex = currentIndex + index - 1; // Adjust for range
+            if (posts[videoIndex]) {
+              newPreloaded.add(posts[videoIndex].id);
+            }
+          }
+        });
+        setPreloadedVideos(newPreloaded);
+      })
+      .catch(error => {
+        console.error('Preload error:', error);
+      });
+  };
+
+  // Preload video function
+  const preloadVideo = async (post, index) => {
+    try {
+      setVideoLoadStates(prev => ({
+        ...prev,
+        [post.id]: 'loading'
+      }));
+
+      // Create a hidden video element to preload
+      const videoRef = videoRefs.current[index];
+      if (videoRef) {
+        // Set up the video source
+        await videoRef.loadAsync({ uri: post.media_url }, {}, false);
+        
+        setPreloadedVideos(prev => new Set([...prev, post.id]));
+        setVideoLoadStates(prev => ({
+          ...prev,
+          [post.id]: 'loaded'
+        }));
+        
+        console.log(`Preloaded video ${index}:`, post.media_url);
+      }
+    } catch (error) {
+      console.error(`Failed to preload video ${index}:`, error);
+      setVideoLoadStates(prev => ({
+        ...prev,
+        [post.id]: 'error'
+      }));
+    }
+  };
+
+  // Generate thumbnail URL from video URL (Cloudinary)
+  const getThumbnailUrl = (videoUrl) => {
+    if (videoUrl.includes('cloudinary.com')) {
+      // Convert video URL to thumbnail URL
+      return videoUrl.replace('/video/upload/', '/image/upload/c_fill,w_400,h_600,q_auto:low/').replace(/\.(mp4|mov|avi)$/, '.jpg');
+    }
+    return null;
+  };
 
   // Load user profile
   const loadUserProfile = async () => {
@@ -213,6 +308,7 @@ const ShortsScreen = ({ route }) => {
   const onViewableItemsChanged = useRef(({ viewableItems }) => {
     if (viewableItems.length > 0) {
       const newIndex = viewableItems[0].index;
+      const currentPost = posts.filter(post => post.type === 'video')[newIndex];
       
       // Pause previous video
       if (videoRefs.current[currentIndex] && currentIndex !== newIndex) {
@@ -223,6 +319,13 @@ const ShortsScreen = ({ route }) => {
       if (videoRefs.current[newIndex]) {
         videoRefs.current[newIndex].playAsync();
         setIsPlaying(true);
+      }
+      
+      // Track view when scrolling to a new video
+      if (currentPost && !viewedVideos.has(currentPost.id)) {
+        console.log('Incrementing views for scrolled video:', currentPost.id);
+        incrementViews(currentPost.id);
+        setViewedVideos(prev => new Set([...prev, currentPost.id]));
       }
       
       setCurrentIndex(newIndex);
@@ -288,6 +391,30 @@ const ShortsScreen = ({ route }) => {
     navigation.navigate('ShortsComment', { postId });
   };
 
+  // Increment views count
+  const incrementViews = async (postId) => {
+    try {
+      const { error } = await supabase.rpc('increment_post_views', {
+        post_id: postId
+      });
+
+      if (error) {
+        console.error('Error incrementing views:', error);
+      } else {
+        // Update local state optimistically
+        setPosts(prevPosts => 
+          prevPosts.map(post => 
+            post.id === postId 
+              ? { ...post, views: (post.views || 0) + 1 }
+              : post
+          )
+        );
+      }
+    } catch (error) {
+      console.error('Error incrementing views:', error);
+    }
+  };
+
   // Handle share functionality
   const handleShare = async (post) => {
     try {
@@ -334,10 +461,27 @@ const ShortsScreen = ({ route }) => {
           onPressIn={handleTouchStart}
           onPressOut={handleTouchEnd}
         >
+          {/* Thumbnail Layer - Shows immediately */}
+          {getThumbnailUrl(item.media_url) && videoLoadStates[item.id] !== 'loaded' && (
+            <Image
+              source={{ uri: getThumbnailUrl(item.media_url) }}
+              style={[styles.video, styles.thumbnail]}
+              resizeMode="cover"
+            />
+          )}
+          
+          {/* Loading indicator */}
+          {videoLoadStates[item.id] === 'loading' && (
+            <View style={styles.loadingOverlay}>
+              <ActivityIndicator size="large" color="#fff" />
+            </View>
+          )}
+          
+          {/* Video Layer */}
           <Video
             ref={ref => { videoRefs.current[index] = ref }}
             source={{ uri: item.media_url }}
-            style={styles.video}
+            style={[styles.video, { opacity: videoLoadStates[item.id] === 'loaded' ? 1 : 0 }]}
             resizeMode="contain"
             play={isPlaying && index === currentIndex && !isTouchHolding.current}
             shouldPlay={isPlaying && index === currentIndex && !isTouchHolding.current}
@@ -348,12 +492,32 @@ const ShortsScreen = ({ route }) => {
             rate={1.0}
             onError={(error) => {
               console.error('Video error in ShortsScreen:', error);
+              setVideoLoadStates(prev => ({
+                ...prev,
+                [item.id]: 'error'
+              }));
             }}
             onLoadStart={() => {
               console.log('Video loading started in ShortsScreen:', item.media_url);
+              setVideoLoadStates(prev => ({
+                ...prev,
+                [item.id]: 'loading'
+              }));
             }}
             onLoad={(status) => {
               console.log('Video loaded successfully in ShortsScreen:', status);
+              setVideoLoadStates(prev => ({
+                ...prev,
+                [item.id]: 'loaded'
+              }));
+              setPreloadedVideos(prev => new Set([...prev, item.id]));
+              
+              // Track view when video starts playing
+              if (index === currentIndex && !viewedVideos.has(item.id)) {
+                console.log('Incrementing views for video:', item.id);
+                incrementViews(item.id);
+                setViewedVideos(prev => new Set([...prev, item.id]));
+              }
             }}
             progressUpdateIntervalMillis={100}
             positionMillis={0}
@@ -418,6 +582,16 @@ const ShortsScreen = ({ route }) => {
                   <Ionicons name="share-social-outline" size={24} color="#fff" />
                 </LinearGradient>
               </TouchableOpacity>
+
+              <View style={styles.socialButton}>
+                <LinearGradient 
+                  colors={['rgba(0,0,0,0.5)', 'rgba(0,0,0,0.5)']}
+                  style={styles.socialButtonGradient}
+                >
+                  <Ionicons name="eye-outline" size={24} color="#fff" />
+                </LinearGradient>
+                <Text style={styles.socialButtonText}>{item.views || 0}</Text>
+              </View>
             </View>
           </LinearGradient>
 
@@ -559,6 +733,23 @@ const styles = StyleSheet.create({
   video: {
     width,
     height,
+  },
+  thumbnail: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    zIndex: 1,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2,
   },
   userInfoOverlay: {
     position: 'absolute',
