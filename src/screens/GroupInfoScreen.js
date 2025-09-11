@@ -616,6 +616,76 @@ const GroupInfoScreen = () => {
     );
   };
 
+  const leaveGroup = async () => {
+    Alert.alert(
+      'Leave Group',
+      'Are you sure you want to leave this group?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Leave',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Check if user is an admin
+              const currentMember = members.find(m => m.user_id === currentUserId);
+              const isCurrentUserAdmin = currentMember?.role === 'admin';
+              
+              // Remove user from group
+              const { error: leaveError } = await supabase
+                .from('group_members')
+                .delete()
+                .eq('group_id', groupId)
+                .eq('user_id', currentUserId);
+
+              if (leaveError) throw leaveError;
+
+              // If leaving user was admin, check if any admins remain
+              if (isCurrentUserAdmin) {
+                const { data: remainingAdmins, error: adminError } = await supabase
+                  .from('group_members')
+                  .select('user_id')
+                  .eq('group_id', groupId)
+                  .eq('role', 'admin');
+
+                if (adminError) throw adminError;
+
+                // If no admins left, promote a random member to admin
+                if (!remainingAdmins || remainingAdmins.length === 0) {
+                  const { data: remainingMembers, error: membersError } = await supabase
+                    .from('group_members')
+                    .select('user_id')
+                    .eq('group_id', groupId)
+                    .limit(1);
+
+                  if (membersError) throw membersError;
+
+                  if (remainingMembers && remainingMembers.length > 0) {
+                    const newAdminId = remainingMembers[0].user_id;
+                    
+                    const { error: promoteError } = await supabase
+                      .from('group_members')
+                      .update({ role: 'admin' })
+                      .eq('group_id', groupId)
+                      .eq('user_id', newAdminId);
+
+                    if (promoteError) throw promoteError;
+                  }
+                }
+              }
+
+              Alert.alert('Success', 'You have left the group');
+              navigation.goBack();
+            } catch (error) {
+              console.error('Error leaving group:', error);
+              Alert.alert('Error', 'Failed to leave group. Please try again.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const deleteGroup = async () => {
     Alert.alert(
       'Delete Group',
@@ -627,30 +697,18 @@ const GroupInfoScreen = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              console.log('Deleting group:', groupId);
-              
-              // Use the database function for complete deletion
-              const { data, error } = await supabase.rpc('delete_group_completely', {
-                group_id_param: groupId
-              });
+              const { error } = await supabase
+                .from('groups')
+                .delete()
+                .eq('id', groupId);
 
-              console.log('Delete group result:', { data, error });
+              if (error) throw error;
 
-              if (error) {
-                console.error('Database error deleting group:', error);
-                throw error;
-              }
-
-              if (!data) {
-                throw new Error('You are not authorized to delete this group');
-              }
-
-              Alert.alert('Success', 'Group deleted successfully', [
-                { text: 'OK', onPress: () => navigation.goBack() }
-              ]);
+              Alert.alert('Success', 'Group deleted successfully');
+              navigation.goBack();
             } catch (error) {
               console.error('Error deleting group:', error);
-              Alert.alert('Error', `Failed to delete group: ${error.message}`);
+              Alert.alert('Error', 'Failed to delete group. Please try again.');
             }
           }
         }
@@ -970,16 +1028,24 @@ const GroupInfoScreen = () => {
           </View>
         )}
 
-        {/* Admin Actions */}
-        {isAdmin && (
-          <View style={[styles.section, styles.lastSection]}>
-            <Text style={styles.sectionTitle}>Admin Actions</Text>
+        {/* Group Actions */}
+        <View style={[styles.section, styles.lastSection]}>
+          <Text style={styles.sectionTitle}>Group Actions</Text>
+          
+          {/* Leave Group - Available to all members */}
+          <TouchableOpacity onPress={leaveGroup} style={styles.leaveButton}>
+            <Ionicons name="exit-outline" size={20} color="#fff" />
+            <Text style={styles.leaveButtonText}>Leave Group</Text>
+          </TouchableOpacity>
+          
+          {/* Delete Group - Admin only */}
+          {isAdmin && (
             <TouchableOpacity onPress={deleteGroup} style={styles.deleteButton}>
               <Ionicons name="trash" size={20} color="#fff" />
               <Text style={styles.deleteButtonText}>Delete Group</Text>
             </TouchableOpacity>
-          </View>
-        )}
+          )}
+        </View>
       </ScrollView>
 
       {/* Member Options Modal */}
@@ -2238,6 +2304,22 @@ const styles = StyleSheet.create({
   },
   lastSection: {
     marginBottom: 100, // Add extra bottom padding to prevent collision with bottom navigation
+  },
+  leaveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ff9500',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  leaveButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
   },
 });
 
