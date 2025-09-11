@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, Image, ActivityIndicator, Alert, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, Image, ActivityIndicator, Alert, ScrollView, Modal } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -23,6 +24,8 @@ const GroupInfoScreen = () => {
   const [loading, setLoading] = useState(true);
   const [searchLoading, setSearchLoading] = useState(false);
   const [showAddMembers, setShowAddMembers] = useState(false);
+  const [showMemberOptions, setShowMemberOptions] = useState(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   useEffect(() => {
     getCurrentUser();
@@ -211,19 +214,161 @@ const GroupInfoScreen = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              const { error } = await supabase
+              console.log('Removing member:', { groupId, memberId, memberName });
+              
+              const { data, error } = await supabase
                 .from('group_members')
                 .delete()
                 .eq('group_id', groupId)
                 .eq('user_id', memberId);
 
-              if (error) throw error;
+              console.log('Delete result:', { data, error });
 
-              setMembers(members.filter(member => member.user_id !== memberId));
+              if (error) {
+                console.error('Database error removing member:', error);
+                throw error;
+              }
+
+              // Refresh the group info to get updated member list
+              await fetchGroupInfo();
               Alert.alert('Success', 'Member removed from group');
             } catch (error) {
               console.error('Error removing member:', error);
-              Alert.alert('Error', 'Failed to remove member');
+              Alert.alert('Error', `Failed to remove member: ${error.message}`);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const uploadGroupAvatar = async () => {
+    try {
+      // Request permission
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Please grant camera roll permissions to upload group avatar');
+        return;
+      }
+
+      // Launch image picker
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        setUploadingAvatar(true);
+        const image = result.assets[0];
+        
+        // Create form data
+        const formData = new FormData();
+        formData.append('file', {
+          uri: image.uri,
+          type: 'image/jpeg',
+          name: `group_avatar_${Date.now()}.jpg`,
+        });
+
+        // Upload to Supabase storage
+        const fileName = `${groupId}/avatar_${Date.now()}.jpg`;
+        const { data, error } = await supabase.storage
+          .from('media')
+          .upload(fileName, formData);
+
+        if (error) throw error;
+
+        // Get public URL
+        const { data: { publicUrl } } = supabase.storage
+          .from('media')
+          .getPublicUrl(fileName);
+
+        // Update group avatar in database
+        const { error: updateError } = await supabase
+          .from('groups')
+          .update({ avatar_url: publicUrl })
+          .eq('id', groupId);
+
+        if (updateError) throw updateError;
+
+        // Update local state
+        setGroup({ ...group, avatar_url: publicUrl });
+        Alert.alert('Success', 'Group avatar updated successfully!');
+      }
+    } catch (error) {
+      console.error('Error uploading avatar:', error);
+      Alert.alert('Error', 'Failed to upload group avatar');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  const makeAdmin = async (memberId, memberName) => {
+    Alert.alert(
+      'Make Admin',
+      `Are you sure you want to make ${memberName} an admin?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Make Admin',
+          onPress: async () => {
+            try {
+              console.log('Making admin:', { groupId, memberId, memberName });
+              
+              const { error } = await supabase
+                .from('group_members')
+                .update({ role: 'admin' })
+                .eq('group_id', groupId)
+                .eq('user_id', memberId);
+
+              if (error) {
+                console.error('Database error making admin:', error);
+                throw error;
+              }
+
+              // Refresh the group info to get updated member list
+              await fetchGroupInfo();
+              Alert.alert('Success', `${memberName} is now an admin`);
+            } catch (error) {
+              console.error('Error making admin:', error);
+              Alert.alert('Error', `Failed to make user admin: ${error.message}`);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const removeAdmin = async (memberId, memberName) => {
+    Alert.alert(
+      'Remove Admin',
+      `Are you sure you want to remove admin privileges from ${memberName}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove Admin',
+          onPress: async () => {
+            try {
+              console.log('Removing admin:', { groupId, memberId, memberName });
+              
+              const { error } = await supabase
+                .from('group_members')
+                .update({ role: 'member' })
+                .eq('group_id', groupId)
+                .eq('user_id', memberId);
+
+              if (error) {
+                console.error('Database error removing admin:', error);
+                throw error;
+              }
+
+              // Refresh the group info to get updated member list
+              await fetchGroupInfo();
+              Alert.alert('Success', `${memberName} is no longer an admin`);
+            } catch (error) {
+              console.error('Error removing admin:', error);
+              Alert.alert('Error', `Failed to remove admin privileges: ${error.message}`);
             }
           }
         }
@@ -278,9 +423,22 @@ const GroupInfoScreen = () => {
   const renderMember = ({ item }) => {
     const user = item.profiles;
     const canRemove = isAdmin && item.user_id !== currentUserId;
+    const canChangeRole = isAdmin && item.user_id !== currentUserId;
 
     return (
-      <View style={styles.memberItem}>
+      <TouchableOpacity 
+        style={styles.memberItem}
+        onLongPress={() => {
+          if (canChangeRole) {
+            setShowMemberOptions({
+              userId: item.user_id,
+              username: user.username,
+              role: item.role
+            });
+          }
+        }}
+        delayLongPress={500}
+      >
         <Image 
           source={{ uri: user.avatar_url || 'https://via.placeholder.com/150' }}
           style={styles.memberAvatar}
@@ -302,7 +460,7 @@ const GroupInfoScreen = () => {
             <Ionicons name="remove-circle" size={24} color="#ff6b6b" />
           </TouchableOpacity>
         )}
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -347,6 +505,44 @@ const GroupInfoScreen = () => {
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Group Avatar Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Group Avatar</Text>
+          <View style={styles.avatarSection}>
+            <TouchableOpacity 
+              onPress={isAdmin ? uploadGroupAvatar : null}
+              style={[styles.groupAvatarContainer, !isAdmin && styles.disabledAvatar]}
+              disabled={uploadingAvatar}
+            >
+              {group?.avatar_url ? (
+                <Image 
+                  source={{ uri: group.avatar_url }}
+                  style={styles.groupAvatarImage}
+                />
+              ) : (
+                <LinearGradient
+                  colors={['rgba(255, 107, 107, 0.8)', 'rgba(255, 82, 82, 0.6)']}
+                  style={styles.groupAvatarPlaceholder}
+                >
+                  <Ionicons name="people" size={40} color="#fff" />
+                </LinearGradient>
+              )}
+              {isAdmin && (
+                <View style={styles.avatarEditOverlay}>
+                  {uploadingAvatar ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Ionicons name="camera" size={20} color="#fff" />
+                  )}
+                </View>
+              )}
+            </TouchableOpacity>
+            {isAdmin && (
+              <Text style={styles.avatarHint}>Tap to change group avatar</Text>
+            )}
+          </View>
+        </View>
+
         {/* Group Name Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Group Name</Text>
@@ -459,6 +655,64 @@ const GroupInfoScreen = () => {
           </View>
         )}
       </ScrollView>
+
+      {/* Member Options Modal */}
+      <Modal
+        visible={showMemberOptions !== null}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowMemberOptions(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>
+              Manage {showMemberOptions?.username}
+            </Text>
+            
+            {showMemberOptions?.role === 'member' ? (
+              <TouchableOpacity
+                style={styles.modalOption}
+                onPress={() => {
+                  makeAdmin(showMemberOptions.userId, showMemberOptions.username);
+                  setShowMemberOptions(null);
+                }}
+              >
+                <Ionicons name="shield-checkmark" size={20} color="#00ff88" />
+                <Text style={styles.modalOptionText}>Make Admin</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={styles.modalOption}
+                onPress={() => {
+                  removeAdmin(showMemberOptions.userId, showMemberOptions.username);
+                  setShowMemberOptions(null);
+                }}
+              >
+                <Ionicons name="shield" size={20} color="#ff6b6b" />
+                <Text style={styles.modalOptionText}>Remove Admin</Text>
+              </TouchableOpacity>
+            )}
+            
+            <TouchableOpacity
+              style={styles.modalOption}
+              onPress={() => {
+                removeMember(showMemberOptions.userId, showMemberOptions.username);
+                setShowMemberOptions(null);
+              }}
+            >
+              <Ionicons name="person-remove" size={20} color="#ff6b6b" />
+              <Text style={styles.modalOptionText}>Remove from Group</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.modalCancelOption}
+              onPress={() => setShowMemberOptions(null)}
+            >
+              <Text style={styles.modalCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </LinearGradient>
   );
 };
@@ -674,8 +928,92 @@ const styles = StyleSheet.create({
   deleteButtonText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '500',
     marginLeft: 8,
+  },
+  avatarSection: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  groupAvatarContainer: {
+    position: 'relative',
+    marginBottom: 12,
+  },
+  groupAvatarImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+  },
+  groupAvatarPlaceholder: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  disabledAvatar: {
+    opacity: 0.7,
+  },
+  avatarEditOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderRadius: 15,
+    width: 30,
+    height: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarHint: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.6)',
+    textAlign: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#1a1a2e',
+    borderRadius: 16,
+    padding: 20,
+    width: '80%',
+    maxWidth: 300,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  modalOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 15,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    marginBottom: 8,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  modalOptionText: {
+    fontSize: 16,
+    color: '#fff',
+    marginLeft: 12,
+    fontWeight: '500',
+  },
+  modalCancelOption: {
+    paddingVertical: 15,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  modalCancelText: {
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.6)',
+    fontWeight: '500',
   },
   emptyText: {
     color: 'rgba(255,255,255,0.6)',
