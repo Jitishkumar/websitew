@@ -5,6 +5,8 @@ import { supabase } from '../lib/supabase';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as ImagePicker from 'expo-image-picker';
+import { GroupsService } from '../services/GroupsService';
 
 const CreateGroupScreen = () => {
   const [groupName, setGroupName] = useState('');
@@ -14,6 +16,7 @@ const CreateGroupScreen = () => {
   const [selectedMembers, setSelectedMembers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [avatar, setAvatar] = useState(null);
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
 
@@ -122,6 +125,28 @@ const CreateGroupScreen = () => {
     }
   };
 
+  const pickImage = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets[0]) {
+        setAvatar(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to pick image. Please try again.');
+    }
+  };
+
+  const removeAvatar = () => {
+    setAvatar(null);
+  };
+
   const createGroup = async () => {
     console.log('Create group called');
     console.log('Group name:', groupName);
@@ -146,58 +171,24 @@ const CreateGroupScreen = () => {
     setCreating(true);
     
     try {
-      console.log('Creating group with data:', {
-        name: groupName.trim(),
-        description: groupDescription.trim(),
-        created_by: currentUserId
-      });
+      // Create the group with avatar if available
+      const newGroup = await GroupsService.createGroup(
+        groupName.trim(),
+        groupDescription.trim(),
+        currentUserId,
+        avatar
+      );
       
-      // Create the group
-      const { data: newGroup, error: groupError } = await supabase
-        .from('groups')
-        .insert({
-          name: groupName.trim(),
-          description: groupDescription.trim(),
-          created_by: currentUserId
-        })
-        .select()
-        .single();
+      console.log('Group created successfully:', newGroup);
       
-      console.log('Group creation result:', { newGroup, groupError });
-      
-      if (groupError) {
-        console.error('Error creating group:', groupError);
-        Alert.alert('Error', `Failed to create group: ${groupError.message}`);
-        return;
-      }
-      
-      // Check if admin already exists (might be from previous failed attempt)
-      const { data: existingAdmin } = await supabase
+      // Add creator as admin
+      const { error: adminError } = await supabase
         .from('group_members')
-        .select('*')
-        .eq('group_id', newGroup.id)
-        .eq('user_id', currentUserId)
-        .single();
-      
-      if (!existingAdmin) {
-        // Add creator as admin only if not already exists
-        const { error: adminError } = await supabase
-          .from('group_members')
-          .insert({
-            group_id: newGroup.id,
-            user_id: currentUserId,
-            role: 'admin'
-          });
-        
-        if (adminError) {
-          console.error('Error adding admin:', adminError);
-          await supabase.from('groups').delete().eq('id', newGroup.id);
-          Alert.alert('Error', 'Failed to create group admin. Please try again.');
-          return;
-        }
-      } else {
-        console.log('Admin already exists for this group');
-      }
+        .insert({
+          group_id: newGroup.id,
+          user_id: currentUserId,
+          role: 'admin'
+        });
       
       // Then add selected members (excluding creator if they selected themselves)
       const filteredMembers = selectedMembers.filter(member => member.id !== currentUserId);
@@ -292,8 +283,34 @@ const CreateGroupScreen = () => {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Create Group</Text>
-        <TouchableOpacity 
+        <View style={styles.avatarPickerContainer}>
+          <TouchableOpacity
+            style={styles.avatarPicker}
+            onPress={pickImage}
+            activeOpacity={0.7}
+          >
+            {avatar ? (
+              <Image
+                source={{ uri: avatar }}
+                style={styles.avatarImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <Ionicons name="camera" size={32} color="#fff" />
+            )}
+          </TouchableOpacity>
+          {avatar && (
+            <TouchableOpacity
+              style={styles.removeAvatarButton}
+              onPress={removeAvatar}
+            >
+              <Ionicons name="close-circle" size={24} color="#ff6b6b" />
+            </TouchableOpacity>
+          )}
+          <Text style={styles.avatarLabel}>Group Photo</Text>
+        </View>
+        <Text style={styles.modalTitle}>Create Group</Text>
+        <TouchableOpacity
           onPress={createGroup}
           disabled={creating || !groupName.trim() || selectedMembers.length === 0}
           style={[styles.createButton, (creating || !groupName.trim() || selectedMembers.length === 0) && styles.createButtonDisabled]}
@@ -310,7 +327,7 @@ const CreateGroupScreen = () => {
         {/* Group Info Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Group Information</Text>
-          
+
           <View style={styles.inputContainer}>
             <Text style={styles.inputLabel}>Group Name *</Text>
             <TextInput
@@ -356,7 +373,7 @@ const CreateGroupScreen = () => {
         {/* Search Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Add Members</Text>
-          
+
           <View style={styles.searchContainer}>
             <Ionicons name="search" size={20} color="rgba(255,255,255,0.6)" style={styles.searchIcon} />
             <TextInput
@@ -409,6 +426,47 @@ const styles = StyleSheet.create({
     padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.1)',
+  },
+  avatarPickerContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  avatarPicker: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  removeAvatarButton: {
+    position: 'absolute',
+    top: 5,
+    right: 5,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    borderRadius: 12,
+    padding: 4,
+  },
+  avatarLabel: {
+    color: '#fff',
+    fontSize: 14,
+    marginTop: 5,
+    opacity: 0.8,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginLeft: 10,
+    marginTop: 10,
   },
   headerTitle: {
     fontSize: 20,

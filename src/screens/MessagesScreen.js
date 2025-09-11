@@ -480,28 +480,84 @@ const MessagesScreen = () => {
     }
   };
   
-  // Fetch groups function - using RPC to completely bypass RLS
+  // State to track failed image loads
+  const [failedImageLoads, setFailedImageLoads] = useState({});
+
+  // Function to validate avatar URL
+  const validateAvatarUrl = (url) => {
+    if (!url) return false;
+    // Check if URL is valid and has a protocol
+    try {
+      const urlObj = new URL(url);
+      // Check if URL has a valid protocol (http: or https:)
+      return urlObj.protocol === 'http:' || urlObj.protocol === 'https:';
+    } catch (e) {
+      console.log('Invalid avatar URL:', url, e);
+      return false;
+    }
+  };
+
+  // Handle image load errors
+  const handleImageError = (groupId, error) => {
+    console.log(`Image load failed for group ${groupId}:`, error);
+    setFailedImageLoads(prev => ({
+      ...prev,
+      [groupId]: true
+    }));
+  };
+
+  // Reset failed image loads when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      // Reset failed image loads when screen comes into focus
+      setFailedImageLoads({});
+      
+      // Cleanup function
+      return () => {};
+    }, [])
+  );
+
+  // Fetch groups function - using RPC to get user's groups with avatar_url
   const fetchGroups = async (userId) => {
     try {
       if (!userId) {
-        console.log('No user ID provided to fetchGroups');
-        setGroups([]);
+        console.error('No user ID provided to fetchGroups');
         return;
       }
       
-      // Use RPC function to get all user groups (bypasses RLS completely)
+      // First, get all groups where user is a member
       const { data: allGroups, error } = await supabase
-        .rpc('get_all_user_groups', { user_id_param: userId });
+        .from('group_members')
+        .select(`
+          group_id,
+          groups (
+            id,
+            name,
+            avatar_url,
+            created_at,
+            created_by
+          )
+        `)
+        .eq('user_id', userId);
       
       if (error) {
         console.error('Error fetching groups:', error);
-        setGroups([]);
         return;
       }
       
+      // Flatten the nested groups data
+      const flattenedGroups = allGroups
+        .filter(item => item.groups) // Filter out any null groups
+        .map(item => ({
+          ...item.groups,
+          // Add any additional fields you need from the join
+        }));
+      
+      console.log('Fetched groups with avatars:', JSON.stringify(flattenedGroups, null, 2));
+      
       // Get member counts and latest messages for each group
       const groupsWithDetails = await Promise.all(
-        (allGroups || []).map(async (group) => {
+        (flattenedGroups || []).map(async (group) => {
           // Get member count
           const { count: memberCount } = await supabase
             .from('group_members')
@@ -853,13 +909,16 @@ const MessagesScreen = () => {
                   key={group.id}
                   onPress={() => navigation.navigate('GroupChatScreen', { 
                     groupId: group.id, 
-                    groupName: group.name 
+                    groupName: group.name,
+                    groupAvatar: group.avatar_url
                   })}
                   onLongPress={() => {
                     console.log('Group info pressed for group:', group.id);
                     try {
                       navigation.navigate('GroupInfoScreen', { 
-                        groupId: group.id 
+                        groupId: group.id,
+                        groupName: group.name,
+                        groupAvatar: group.avatar_url
                       });
                     } catch (error) {
                       console.error('Navigation error:', error);
@@ -872,10 +931,27 @@ const MessagesScreen = () => {
                     style={styles.messageItemGradient}
                   >
                     <View style={styles.avatarContainer}>
-                      {group.avatar_url ? (
+                      {(() => {
+                        console.log(`Group ${group.name} avatar check:`, {
+                          avatar_url: group.avatar_url,
+                          isValid: validateAvatarUrl(group.avatar_url),
+                          hasFailed: failedImageLoads[group.id]
+                        });
+                        return group.avatar_url && validateAvatarUrl(group.avatar_url) && !failedImageLoads[group.id];
+                      })() ? (
                         <Image 
-                          source={{ uri: group.avatar_url }} 
+                          source={{ 
+                            uri: group.avatar_url,
+                            cache: 'force-cache'
+                          }} 
                           style={styles.groupAvatarImage}
+                          onError={(e) => {
+                            console.log(`Image error for ${group.name}:`, e.nativeEvent.error);
+                            handleImageError(group.id, e.nativeEvent.error);
+                          }}
+                          onLoad={() => console.log(`Image loaded successfully for ${group.name}`)}
+                          onLoadStart={() => console.log(`Image load started for ${group.name}`)}
+                          resizeMode="cover"
                         />
                       ) : (
                         <LinearGradient
@@ -1173,18 +1249,52 @@ const styles = StyleSheet.create({
   messageItemGradient: {
     flexDirection: 'row',
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.06)',
+    paddingVertical: 18,
+    marginHorizontal: 16,
+    marginVertical: 6,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   avatarContainer: {
-    marginRight: 15,
+    width: 56,
+    height: 56,
+    marginRight: 18,
     position: 'relative',
   },
   avatar: {
     width: 50,
     height: 50,
     borderRadius: 25,
+  },
+  groupAvatarImage: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 2,
+    borderColor: 'rgba(156, 136, 255, 0.3)',
+  },
+  groupAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(156, 136, 255, 0.3)',
+  },
+  groupAvatarText: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: '700',
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   onlineIndicator: {
     position: 'absolute',
@@ -1213,11 +1323,24 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   name: {
-    fontSize: 17,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: '700',
     color: '#fff',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
     flex: 1,
+    textShadowColor: 'rgba(0,0,0,0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  groupName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#fff',
+    letterSpacing: 0.8,
+    flex: 1,
+    textShadowColor: 'rgba(0,0,0,0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   unreadName: {
     color: '#9c88ff',
@@ -1228,8 +1351,12 @@ const styles = StyleSheet.create({
   },
   time: {
     fontSize: 13,
-    color: 'rgba(255,255,255,0.5)',
+    color: 'rgba(255,255,255,0.8)',
     marginLeft: 10,
+    fontWeight: '600',
+    textShadowColor: 'rgba(0,0,0,0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 1,
   },
   lastMessageContainer: {
     flexDirection: 'row',
@@ -1240,9 +1367,19 @@ const styles = StyleSheet.create({
   },
   messageText: {
     fontSize: 15,
-    color: 'rgba(255,255,255,0.7)',
+    color: 'rgba(255,255,255,0.85)',
     lineHeight: 20,
     flex: 1,
+    fontWeight: '500',
+  },
+  memberCount: {
+    fontSize: 14,
+    color: 'rgba(156, 136, 255, 0.9)',
+    fontWeight: '600',
+    marginBottom: 2,
+    textShadowColor: 'rgba(156, 136, 255, 0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 1,
   },
   unreadMessageText: {
     color: '#fff',

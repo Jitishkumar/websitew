@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, Image, ActivityIndicator, Alert, ScrollView, Modal } from 'react-native';
+import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, Image, ActivityIndicator, Alert, ScrollView, Modal, Platform, ActionSheetIOS } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { GroupsService } from '../services/GroupsService';
+import { uploadToCloudinary, deleteFromCloudinary } from '../config/cloudinary';
 
 const GroupInfoScreen = () => {
   const navigation = useNavigation();
@@ -41,9 +43,177 @@ const GroupInfoScreen = () => {
   }, [isAdmin, group]);
 
   const getCurrentUser = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      setCurrentUserId(user.id);
+    try {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      console.log('getCurrentUser result:', { user: user?.id, error });
+      if (user) {
+        setCurrentUserId(user.id);
+        console.log('Current user ID set to:', user.id);
+      } else {
+        console.log('No current user ID available');
+      }
+    } catch (error) {
+      console.error('Error getting current user:', error);
+    }
+  };
+
+  const updateGroupAvatar = async (uri) => {
+    try {
+      setUploadingAvatar(true);
+      
+      // Upload image to Cloudinary
+      const cloudinaryResult = await uploadToCloudinary(uri, 'image');
+      
+      // Update group avatar URL in Supabase
+      const { error } = await supabase
+        .from('groups')
+        .update({ 
+          avatar_url: cloudinaryResult.url
+        })
+        .eq('id', groupId);
+
+      if (error) throw error;
+      
+      // Update the local state
+      setGroup(prev => ({
+        ...prev,
+        avatar_url: cloudinaryResult.url,
+        avatar_public_id: cloudinaryResult.publicId // Keep locally for deletion
+      }));
+      
+      Alert.alert('Success', 'Group avatar updated successfully');
+    } catch (error) {
+      console.error('Error updating group avatar:', error);
+      Alert.alert('Error', error.message || 'Failed to update group avatar. Please try again.');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+  
+  const removeGroupAvatar = async () => {
+    try {
+      setUploadingAvatar(true);
+      
+      // Delete from Cloudinary if public_id exists
+      if (group?.avatar_public_id) {
+        try {
+          await deleteFromCloudinary(group.avatar_public_id, 'image');
+        } catch (cloudinaryError) {
+          console.warn('Failed to delete from Cloudinary:', cloudinaryError);
+          // Continue with database update even if Cloudinary deletion fails
+        }
+      }
+      
+      // Remove avatar URL from Supabase
+      const { error } = await supabase
+        .from('groups')
+        .update({ 
+          avatar_url: null
+        })
+        .eq('id', groupId);
+
+      if (error) throw error;
+      
+      // Update the local state
+      setGroup(prev => ({
+        ...prev,
+        avatar_url: null,
+        avatar_public_id: null
+      }));
+      
+      Alert.alert('Success', 'Group avatar removed');
+    } catch (error) {
+      console.error('Error removing group avatar:', error);
+      Alert.alert('Error', 'Failed to remove group avatar. Please try again.');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+  
+  const handleAvatarPress = async () => {
+    console.log('Avatar pressed - isAdmin:', isAdmin, 'currentUserId:', currentUserId);
+    if (!isAdmin) {
+      console.log('User is not admin, returning');
+      return;
+    }
+    
+    const options = ['Take Photo', 'Choose from Library'];
+    if (group?.avatar_url) {
+      options.push('Remove Photo');
+    }
+    options.push('Cancel');
+    
+    const { action: buttonIndex, options: iosOptions } = await new Promise((resolve) => {
+      // For iOS, we'll use ActionSheetIOS
+      if (Platform.OS === 'ios') {
+        ActionSheetIOS.showActionSheetWithOptions(
+          {
+            options,
+            cancelButtonIndex: options.length - 1,
+            userInterfaceStyle: 'dark',
+          },
+          (buttonIndex) => resolve({ action: buttonIndex, options })
+        );
+      } else {
+        // For Android, we'll use Alert
+        Alert.alert(
+          'Update Group Photo',
+          null,
+          options.map((option, index) => ({
+            text: option,
+            onPress: () => resolve({ action: index, options }),
+            style: option === 'Cancel' ? 'cancel' : 'default',
+          })),
+          { cancelable: true, onDismiss: () => resolve({ action: options.length - 1, options }) }
+        );
+      }
+    });
+    
+    const selectedOption = options[buttonIndex];
+    
+    if (selectedOption === 'Take Photo') {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission required', 'Camera permission is required to take photos');
+        return;
+      }
+      
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      
+      if (!result.canceled && result.assets && result.assets[0]) {
+        await updateGroupAvatar(result.assets[0].uri);
+      }
+    } else if (selectedOption === 'Choose from Library') {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission required', 'Photo library permission is required to select photos');
+        return;
+      }
+      
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      
+      if (!result.canceled && result.assets && result.assets[0]) {
+        await updateGroupAvatar(result.assets[0].uri);
+      }
+    } else if (selectedOption === 'Remove Photo') {
+      Alert.alert(
+        'Remove Photo',
+        'Are you sure you want to remove the group photo?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Remove', style: 'destructive', onPress: removeGroupAvatar }
+        ]
+      );
     }
   };
 
@@ -276,7 +446,7 @@ const GroupInfoScreen = () => {
     );
   };
 
-  const uploadGroupAvatar = async () => {
+  const uploadAvatar = async () => {
     try {
       // Request permission
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -294,47 +464,11 @@ const GroupInfoScreen = () => {
       });
 
       if (!result.canceled && result.assets[0]) {
-        setUploadingAvatar(true);
-        const image = result.assets[0];
-        
-        // Create form data
-        const formData = new FormData();
-        formData.append('file', {
-          uri: image.uri,
-          type: 'image/jpeg',
-          name: `group_avatar_${Date.now()}.jpg`,
-        });
-
-        // Upload to Supabase storage
-        const fileName = `${groupId}/avatar_${Date.now()}.jpg`;
-        const { data, error } = await supabase.storage
-          .from('media')
-          .upload(fileName, formData);
-
-        if (error) throw error;
-
-        // Get public URL
-        const { data: { publicUrl } } = supabase.storage
-          .from('media')
-          .getPublicUrl(fileName);
-
-        // Update group avatar in database
-        const { error: updateError } = await supabase
-          .from('groups')
-          .update({ avatar_url: publicUrl })
-          .eq('id', groupId);
-
-        if (updateError) throw updateError;
-
-        // Update local state
-        setGroup({ ...group, avatar_url: publicUrl });
-        Alert.alert('Success', 'Group avatar updated successfully!');
+        await updateGroupAvatar(result.assets[0].uri);
       }
     } catch (error) {
       console.error('Error uploading avatar:', error);
       Alert.alert('Error', 'Failed to upload group avatar');
-    } finally {
-      setUploadingAvatar(false);
     }
   };
 
@@ -614,18 +748,23 @@ const GroupInfoScreen = () => {
           <Text style={styles.sectionTitle}>Group Avatar</Text>
           <View style={styles.avatarSection}>
             <TouchableOpacity 
-              onPress={isAdmin ? uploadGroupAvatar : null}
-              style={[styles.groupAvatarContainer, !isAdmin && styles.disabledAvatar]}
-              disabled={uploadingAvatar}
+              onPress={isAdmin ? handleAvatarPress : null}
+              style={[styles.groupAvatarContainer, isAdmin && styles.editableAvatar]}
+              disabled={!isAdmin || uploadingAvatar}
+              activeOpacity={isAdmin ? 0.7 : 1}
             >
-              {group?.avatar_url ? (
+              {uploadingAvatar ? (
+                <View style={styles.groupAvatarPlaceholder}>
+                  <ActivityIndicator size="small" color="#fff" />
+                </View>
+              ) : group?.avatar_url ? (
                 <Image 
                   source={{ uri: group.avatar_url }}
                   style={styles.groupAvatarImage}
                 />
               ) : (
                 <LinearGradient
-                  colors={['rgba(255, 107, 107, 0.8)', 'rgba(255, 82, 82, 0.6)']}
+                  colors={['rgba(102, 126, 234, 0.8)', 'rgba(156, 136, 255, 0.8)']}
                   style={styles.groupAvatarPlaceholder}
                 >
                   <Ionicons name="people" size={40} color="#fff" />
@@ -633,16 +772,12 @@ const GroupInfoScreen = () => {
               )}
               {isAdmin && (
                 <View style={styles.avatarEditOverlay}>
-                  {uploadingAvatar ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <Ionicons name="camera" size={20} color="#fff" />
-                  )}
+                  <Ionicons name="camera" size={20} color="#fff" />
                 </View>
               )}
             </TouchableOpacity>
             {isAdmin && (
-              <Text style={styles.avatarHint}>Tap to change group avatar</Text>
+              <Text style={styles.avatarHint}>Tap to change group photo</Text>
             )}
           </View>
         </View>
@@ -909,8 +1044,792 @@ const GroupInfoScreen = () => {
 };
 
 const styles = StyleSheet.create({
+  // Layout
   container: {
     flex: 1,
+    backgroundColor: '#1a1a2e',
+  },
+  content: {
+    flex: 1,
+    padding: 16,
+  },
+  section: {
+    marginBottom: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 12,
+    padding: 16,
+  },
+  
+  // Header
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff',
+    flex: 1,
+    textAlign: 'center',
+  },
+  headerRight: {
+    width: 24,
+  },
+  
+  // Avatar Section
+  avatarSection: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  groupAvatarContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    overflow: 'hidden',
+    alignSelf: 'center',
+    marginBottom: 12,
+    position: 'relative',
+  },
+  groupAvatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  groupAvatarPlaceholder: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  editableAvatar: {
+    borderWidth: 2,
+    borderColor: 'rgba(102, 126, 234, 0.8)',
+  },
+  avatarEditOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarHint: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.5)',
+    marginTop: 8,
+  },
+  
+  // Edit Controls
+  editContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  editInput: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
+    padding: 10,
+    color: '#fff',
+    marginRight: 8,
+  },
+  editButtons: {
+    flexDirection: 'row',
+  },
+  saveButton: {
+    backgroundColor: '#4CAF50',
+    padding: 8,
+    borderRadius: 8,
+    marginRight: 8,
+  },
+  cancelButton: {
+    backgroundColor: '#f44336',
+    padding: 8,
+    borderRadius: 8,
+  },
+  buttonText: {
+    color: '#fff',
+    fontWeight: '500',
+  },
+  
+  // Members List
+  membersList: {
+    maxHeight: 400,
+  },
+  memberItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 8,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  memberAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 12,
+  },
+  memberInfo: {
+    flex: 1,
+  },
+  memberName: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  memberRole: {
+    color: 'rgba(255, 255, 255, 0.6)',
+    fontSize: 14,
+  },
+  adminBadge: {
+    backgroundColor: 'rgba(76, 175, 80, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginLeft: 8,
+  },
+  adminBadgeText: {
+    color: '#4CAF50',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  
+  // Search Section
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  searchIcon: {
+    marginRight: 12,
+  },
+  searchInput: {
+    flex: 1,
+    height: 50,
+    color: '#fff',
+    fontSize: 16,
+  },
+  searchResults: {
+    maxHeight: 200,
+  },
+  searchResultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 8,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  searchAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+  },
+  searchUserInfo: {
+    flex: 1,
+  },
+  searchUsername: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  searchFullName: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 14,
+  },
+  
+  // Action Buttons
+  actionButton: {
+    padding: 8,
+    borderRadius: 20,
+  },
+  addMemberButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 255, 136, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  addMemberText: {
+    color: '#00ff88',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  
+  // Modals
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#1a1a2e',
+    borderRadius: 12,
+    padding: 20,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  closeButton: {
+    padding: 8,
+  },
+  
+  // Join Requests
+  requestItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 8,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  requestInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  requestName: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  requestUsername: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 14,
+  },
+  requestActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  approveButton: {
+    backgroundColor: '#00ff88',
+    borderRadius: 20,
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  rejectButton: {
+    backgroundColor: '#ff6b6b',
+    borderRadius: 20,
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  
+  // Utility
+  loader: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyText: {
+    color: 'rgba(255, 255, 255, 0.6)',
+    textAlign: 'center',
+    marginTop: 20,
+  },
+  sectionTitle: {
+  // Layout
+  container: {
+    flex: 1,
+    backgroundColor: '#1a1a2e',
+  },
+  content: {
+    flex: 1,
+    padding: 16,
+  },
+  section: {
+    marginBottom: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 12,
+    padding: 16,
+  },
+  
+  // Header
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff',
+    flex: 1,
+    textAlign: 'center',
+  },
+  headerRight: {
+    width: 24,
+  },
+  
+  // Avatar Section
+  avatarSection: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  groupAvatarContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    overflow: 'hidden',
+    alignSelf: 'center',
+    marginBottom: 12,
+    position: 'relative',
+  },
+  groupAvatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  groupAvatarPlaceholder: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  editableAvatar: {
+    borderWidth: 2,
+    borderColor: 'rgba(102, 126, 234, 0.8)',
+  },
+  avatarEditOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarHint: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.5)',
+    marginTop: 8,
+  },
+  
+  // Edit Controls
+  editContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  editInput: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
+    padding: 10,
+    color: '#fff',
+    marginRight: 8,
+  },
+  editButtons: {
+    flexDirection: 'row',
+  },
+  saveButton: {
+    backgroundColor: '#4CAF50',
+    padding: 8,
+    borderRadius: 8,
+    marginRight: 8,
+  },
+  cancelButton: {
+    backgroundColor: '#f44336',
+    padding: 8,
+    borderRadius: 8,
+  },
+  buttonText: {
+    color: '#fff',
+    fontWeight: '500',
+  },
+  
+  // Members List
+  membersList: {
+    maxHeight: 400,
+  },
+  memberItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 8,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  memberAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 12,
+  },
+  memberInfo: {
+    flex: 1,
+  },
+  memberName: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  memberRole: {
+    color: 'rgba(255, 255, 255, 0.6)',
+    fontSize: 14,
+  },
+  adminBadge: {
+    backgroundColor: 'rgba(76, 175, 80, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginLeft: 8,
+  },
+  adminBadgeText: {
+    color: '#4CAF50',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  
+  // Search Section
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  searchIcon: {
+    marginRight: 12,
+  },
+  searchInput: {
+    flex: 1,
+    height: 50,
+    color: '#fff',
+    fontSize: 16,
+  },
+  searchResults: {
+    maxHeight: 200,
+  },
+  searchResultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 8,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  searchAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+  },
+  searchUserInfo: {
+    flex: 1,
+  },
+  searchUsername: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  searchFullName: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 14,
+  },
+  
+  // Action Buttons
+  actionButton: {
+    padding: 8,
+    borderRadius: 20,
+  },
+  addMemberButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 255, 136, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  addMemberText: {
+    color: '#00ff88',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  
+  // Modals
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#1a1a2e',
+    borderRadius: 12,
+    padding: 20,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  closeButton: {
+    padding: 8,
+  },
+  
+  // Utility
+  loader: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyText: {
+    color: 'rgba(255, 255, 255, 0.6)',
+    textAlign: 'center',
+    marginTop: 20,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.7)',
+    marginBottom: 12,
+  },
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  headerRight: {
+    width: 24,
+  },
+  content: {
+    flex: 1,
+    padding: 16,
+  },
+  section: {
+    marginBottom: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 12,
+    padding: 16,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.7)',
+    marginBottom: 12,
+  },
+  avatarSection: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  groupAvatarContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    overflow: 'hidden',
+    alignSelf: 'center',
+    marginBottom: 12,
+    position: 'relative',
+  },
+  groupAvatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  groupAvatarPlaceholder: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  editableAvatar: {
+    borderWidth: 2,
+    borderColor: 'rgba(102, 126, 234, 0.8)',
+  },
+  avatarEditOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarHint: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.5)',
+    marginTop: 8,
+  },
+  editContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  editInput: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
+    padding: 10,
+    color: '#fff',
+    marginRight: 8,
+  },
+  editButtons: {
+    flexDirection: 'row',
+  },
+  saveButton: {
+    backgroundColor: '#4CAF50',
+    padding: 8,
+    borderRadius: 8,
+    marginRight: 8,
+  },
+  cancelButton: {
+    backgroundColor: '#f44336',
+    padding: 8,
+    borderRadius: 8,
+  },
+  buttonText: {
+    color: '#fff',
+    fontWeight: '500',
+  },
+  memberItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  memberAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+  },
+  memberInfo: {
+    flex: 1,
+  },
+  memberName: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  memberRole: {
+    color: 'rgba(255, 255, 255, 0.6)',
+    fontSize: 12,
+  },
+  adminBadge: {
+    backgroundColor: 'rgba(76, 175, 80, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginLeft: 8,
+  },
+  adminBadgeText: {
+    color: '#4CAF50',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  actionButton: {
+    padding: 8,
+    borderRadius: 20,
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#1a1a2e',
+    borderRadius: 12,
+    padding: 20,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  closeButton: {
+    padding: 8,
+  },
+  searchInput: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
+    padding: 10,
+    color: '#fff',
+    marginBottom: 16,
+  },
+  searchResultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  searchAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+  },
+  searchUserInfo: {
+    flex: 1,
+  },
+  searchUsername: {
+    color: '#fff',
+    fontWeight: '500',
+  },
+  searchFullName: {
+    color: 'rgba(255, 255, 255, 0.6)',
+    fontSize: 12,
+  },
+  loader: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyText: {
+    color: 'rgba(255, 255, 255, 0.6)',
+    textAlign: 'center',
+    marginTop: 20,
   },
   header: {
     flexDirection: 'row',
@@ -1127,32 +2046,37 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
   },
   groupAvatarContainer: {
-    position: 'relative',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    overflow: 'hidden',
+    alignSelf: 'center',
     marginBottom: 12,
+    position: 'relative',
   },
   groupAvatarImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: '100%',
+    height: '100%',
   },
   groupAvatarPlaceholder: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: '100%',
+    height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
-  disabledAvatar: {
-    opacity: 0.7,
+  editableAvatar: {
+    borderWidth: 2,
+    borderColor: 'rgba(102, 126, 234, 0.8)',
   },
   avatarEditOverlay: {
     position: 'absolute',
     bottom: 0,
     right: 0,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    borderRadius: 15,
-    width: 30,
-    height: 30,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
