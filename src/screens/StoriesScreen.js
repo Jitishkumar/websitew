@@ -10,7 +10,8 @@ import {
   Alert,
   ActivityIndicator,
   Modal,
-  Platform
+  Platform,
+  Animated
 } from 'react-native';
 import { Video } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
@@ -41,10 +42,20 @@ const StoriesScreen = () => {
   const storyTimeout = useRef(null);
   const touchTimer = useRef(null);
   const isTouchHolding = useRef(false);
+
+  // Animation refs for ultra-premium effects
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+  const scaleAnim = useRef(new Animated.Value(0.8)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const glowAnim = useRef(new Animated.Value(0)).current;
+  const shimmerAnim = useRef(new Animated.Value(0)).current;
+  const progressAnim = useRef(new Animated.Value(0)).current;
   
   // Load stories when component mounts
   useEffect(() => {
     loadStories();
+    initializeAnimations();
     
     // Cleanup on unmount
     return () => {
@@ -52,6 +63,68 @@ const StoriesScreen = () => {
       clearTimeout(storyTimeout.current);
     };
   }, []);
+
+  const initializeAnimations = () => {
+    // Main entrance animations
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // Continuous pulse animation
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.05,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+
+    // Continuous glow animation
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowAnim, {
+          toValue: 1,
+          duration: 3000,
+          useNativeDriver: false,
+        }),
+        Animated.timing(glowAnim, {
+          toValue: 0,
+          duration: 3000,
+          useNativeDriver: false,
+        }),
+      ])
+    ).start();
+
+    // Continuous shimmer animation
+    Animated.loop(
+      Animated.timing(shimmerAnim, {
+        toValue: 1,
+        duration: 2500,
+        useNativeDriver: true,
+      })
+    ).start();
+  };
   
   // Handle story progress and auto-advance
   useEffect(() => {
@@ -276,9 +349,12 @@ const StoriesScreen = () => {
   
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#ff00ff" />
-      </View>
+      <LinearGradient colors={['#000000', '#1a0033', '#000000']} style={styles.loadingContainer}>
+        <Animated.View style={[styles.loadingContent, { opacity: fadeAnim, transform: [{ scale: pulseAnim }] }]}>
+          <ActivityIndicator size="large" color="#ff00ff" />
+          <Animated.View style={[styles.loadingGlow, { opacity: glowAnim }]} />
+        </Animated.View>
+      </LinearGradient>
     );
   }
   
@@ -289,82 +365,114 @@ const StoriesScreen = () => {
   const currentStory = stories[currentIndex];
   
   return (
-    <View style={styles.container}>
+    <LinearGradient colors={['#000000', '#1a0033', '#000000']} style={styles.container}>
       <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
       
       {/* Story Content */}
-      <TouchableOpacity 
-        activeOpacity={1} 
-        style={styles.storyContainer}
-        onPress={handlePress}
-        onPressIn={handleTouchStart}
-        onPressOut={handleTouchEnd}
-      >
-        {/* Progress Bar */}
-        <View style={[styles.progressContainer, { paddingTop: insets.top }]}>
-          {stories.map((_, index) => (
-            <View key={index} style={styles.progressBarBackground}>
-              <View 
-                style={[styles.progressBar, { 
-                  width: index === currentIndex ? `${progress * 100}%` : index < currentIndex ? '100%' : '0%' 
-                }]}
-              />
-            </View>
-          ))}
-        </View>
-        
-        {/* User Info */}
-        <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-          <View style={styles.userInfo}>
-            <Image 
-              source={{ uri: userInfo?.avatar_url || 'https://via.placeholder.com/40' }} 
-              style={styles.avatar} 
-            />
-            <Text style={styles.username}>{userInfo?.username}</Text>
-            <Text style={styles.timestamp}>
-              {new Date(currentStory?.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </Text>
-          </View>
+      <Animated.View style={[styles.storyWrapper, { opacity: fadeAnim, transform: [{ translateY: slideAnim }, { scale: scaleAnim }] }]}>
+        <TouchableOpacity 
+          activeOpacity={1} 
+          style={styles.storyContainer}
+          onPress={handlePress}
+          onPressIn={handleTouchStart}
+          onPressOut={handleTouchEnd}
+        >
+          {/* Progress Bar */}
+          <Animated.View style={[styles.progressContainer, { paddingTop: insets.top, opacity: fadeAnim }]}>
+            {stories.map((_, index) => (
+              <View key={index} style={styles.progressBarBackground}>
+                <LinearGradient
+                  colors={['#ff00ff', '#ff6b9d', '#00ffff']}
+                  start={{x: 0, y: 0}}
+                  end={{x: 1, y: 0}}
+                  style={[styles.progressBar, { 
+                    width: index === currentIndex ? `${progress * 100}%` : index < currentIndex ? '100%' : '0%' 
+                  }]}
+                />
+                <Animated.View style={[styles.progressGlow, { opacity: glowAnim }]} />
+              </View>
+            ))}
+          </Animated.View>
           
-          {/* Menu Button (only show for user's own stories) */}
-          {currentStory.user_id === userId && (
-            <TouchableOpacity 
-              style={styles.menuButton}
-              onPress={() => {
-                setPaused(true);
-                setMenuVisible(true);
-              }}
-            >
-              <Ionicons name="ellipsis-vertical" size={24} color="#fff" />
-            </TouchableOpacity>
-          )}
-        </View>
-        
-        {/* Story Media */}
-        <View style={styles.mediaContainer}>
-          {currentStory.type === 'video' ? (
-            <Video
-              ref={videoRef}
-              source={{ uri: currentStory.media_url }}
-              style={styles.media}
-              resizeMode="contain"
-              play={!paused && !isTouchHolding.current}
-              loop={false}
-              onPlaybackStatusUpdate={(status) => {
-                if (status.didJustFinish) {
-                  goToNextStory();
-                }
-              }}
-            />
-          ) : (
-            <Image
-              source={{ uri: currentStory.media_url }}
-              style={styles.media}
-              resizeMode="contain"
-            />
-          )}
-        </View>
-      </TouchableOpacity>
+          {/* User Info */}
+          <Animated.View style={[styles.header, { paddingTop: insets.top + 10, opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+            <LinearGradient colors={['rgba(255, 0, 255, 0.1)', 'rgba(0, 255, 255, 0.1)', 'transparent']} style={styles.headerGradient}>
+              <View style={styles.userInfo}>
+                <Animated.View style={[styles.avatarContainer, { transform: [{ scale: pulseAnim }] }]}>
+                  <LinearGradient colors={['#ff00ff', '#ff6b9d', '#00ffff']} style={styles.avatarBorder}>
+                    <Image 
+                      source={{ uri: userInfo?.avatar_url || 'https://via.placeholder.com/40' }} 
+                      style={styles.avatar} 
+                    />
+                  </LinearGradient>
+                  <Animated.View style={[styles.avatarGlow, { opacity: glowAnim }]} />
+                </Animated.View>
+                <View style={styles.userTextContainer}>
+                  <Text style={styles.username}>{userInfo?.username}</Text>
+                  <Text style={styles.timestamp}>
+                    {new Date(currentStory?.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                </View>
+              </View>
+              
+              {/* Menu Button (only show for user's own stories) */}
+              {currentStory.user_id === userId && (
+                <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+                  <TouchableOpacity 
+                    style={styles.menuButton}
+                    onPress={() => {
+                      setPaused(true);
+                      setMenuVisible(true);
+                    }}
+                  >
+                    <LinearGradient colors={['rgba(255, 0, 255, 0.3)', 'rgba(0, 255, 255, 0.3)']} style={styles.menuButtonGradient}>
+                      <Ionicons name="ellipsis-vertical" size={24} color="#fff" />
+                    </LinearGradient>
+                    <Animated.View style={[styles.menuButtonGlow, { opacity: glowAnim }]} />
+                  </TouchableOpacity>
+                </Animated.View>
+              )}
+            </LinearGradient>
+          </Animated.View>
+          
+          {/* Story Media */}
+          <Animated.View style={[styles.mediaContainer, { transform: [{ scale: scaleAnim }] }]}>
+            <Animated.View style={[styles.mediaGlow, { opacity: glowAnim }]} />
+            {currentStory.type === 'video' ? (
+              <Video
+                ref={videoRef}
+                source={{ uri: currentStory.media_url }}
+                style={styles.media}
+                resizeMode="contain"
+                play={!paused && !isTouchHolding.current}
+                loop={false}
+                onPlaybackStatusUpdate={(status) => {
+                  if (status.didJustFinish) {
+                    goToNextStory();
+                  }
+                }}
+              />
+            ) : (
+              <Image
+                source={{ uri: currentStory.media_url }}
+                style={styles.media}
+                resizeMode="contain"
+              />
+            )}
+            <Animated.View style={[styles.shimmerOverlay, { 
+              opacity: shimmerAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 0.3, 0] }),
+              transform: [{ translateX: shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: [-width, width] }) }]
+            }]}>
+              <LinearGradient 
+                colors={['transparent', 'rgba(255, 0, 255, 0.4)', 'rgba(0, 255, 255, 0.4)', 'transparent']} 
+                start={{x: 0, y: 0}} 
+                end={{x: 1, y: 0}} 
+                style={styles.shimmerGradient} 
+              />
+            </Animated.View>
+          </Animated.View>
+        </TouchableOpacity>
+      </Animated.View>
       
       {/* Menu Modal */}
       <Modal
@@ -384,110 +492,47 @@ const StoriesScreen = () => {
             setPaused(false);
           }}
         >
-          <View style={[styles.menuContainer, { paddingBottom: insets.bottom > 0 ? insets.bottom : 20 }]}>
-            <TouchableOpacity style={styles.menuItem} onPress={handleDeleteStory}>
-              <Ionicons name="trash-outline" size={24} color="#ff3b30" />
-              <Text style={[styles.menuItemText, { color: '#ff3b30' }]}>Delete Story</Text>
-            </TouchableOpacity>
-          </View>
+          <LinearGradient colors={['#1a1a1a', '#2a0a3a', '#1a1a1a']} style={[styles.menuContainer, { paddingBottom: insets.bottom > 0 ? insets.bottom : 20 }]}>
+            <Animated.View style={{ opacity: fadeAnim, transform: [{ scale: pulseAnim }] }}>
+              <TouchableOpacity style={styles.menuItem} onPress={handleDeleteStory}>
+                <Ionicons name="trash-outline" size={24} color="#ff3b30" />
+                <Text style={[styles.menuItemText, { color: '#ff3b30' }]}>Delete Story</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          </LinearGradient>
         </TouchableOpacity>
       </Modal>
-    </View>
+    </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#000',
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  loadingContent: {
     alignItems: 'center',
-    paddingHorizontal: 15,
-    paddingTop: Platform.OS === 'ios' ? 50 : 40, // Extra padding for iOS notch
-    paddingBottom: 10,
-  },
-  userInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  avatar: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    marginRight: 10,
-  },
-  username: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  menuButton: {
-    padding: 5,
-  },
-  progressContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 10,
-    paddingTop: 10,
-    gap: 5,
-  },
-  progressBar: {
-    flex: 1,
-    height: 2,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    borderRadius: 1,
-    overflow: 'hidden',
-  },
-  progress: {
-    height: '100%',
-    borderRadius: 1,
-  },
-  content: {
-    flex: 1,
     justifyContent: 'center',
   },
-  media: {
-    width: '100%',
-    height: '100%',
+  loadingGlow: {
+    position: 'absolute',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(255, 0, 255, 0.3)',
+    shadowColor: '#ff00ff',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 20,
+    elevation: 20,
   },
-  modalOverlay: {
+  storyWrapper: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  menuContainer: {
-    backgroundColor: '#1a1a1a',
-    borderTopLeftRadius: 15,
-    borderTopRightRadius: 15,
-    padding: 20,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 15,
-  },
-  menuText: {
-    fontSize: 16,
-    marginLeft: 15,
-    color: '#fff',
-  },
-  container: {
-    flex: 1,
-    backgroundColor: '#000',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#000',
   },
   storyContainer: {
     flex: 1,
@@ -496,7 +541,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: 8,
-    paddingTop: 50, // Extra padding to avoid notch
     position: 'absolute',
     top: 0,
     left: 0,
@@ -505,81 +549,193 @@ const styles = StyleSheet.create({
   },
   progressBarBackground: {
     flex: 1,
-    height: 3,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    height: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     marginHorizontal: 2,
-    borderRadius: 3,
+    borderRadius: 4,
     overflow: 'hidden',
+    position: 'relative',
   },
   progressBar: {
     height: '100%',
-    backgroundColor: '#fff',
+    borderRadius: 4,
+  },
+  progressGlow: {
+    position: 'absolute',
+    top: -2,
+    left: -2,
+    right: -2,
+    bottom: -2,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255, 0, 255, 0.3)',
+    shadowColor: '#ff00ff',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 10,
+    elevation: 10,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 60, // Extra padding to avoid notch
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     zIndex: 5,
   },
+  headerGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+  },
   userInfo: {
     flexDirection: 'row',
     alignItems: 'center',
   },
+  avatarContainer: {
+    position: 'relative',
+  },
+  avatarBorder: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    padding: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    marginRight: 8,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+  },
+  avatarGlow: {
+    position: 'absolute',
+    top: -4,
+    left: -4,
+    right: -4,
+    bottom: -4,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255, 0, 255, 0.3)',
+    shadowColor: '#ff00ff',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 15,
+    elevation: 15,
+  },
+  userTextContainer: {
+    marginLeft: 12,
   },
   username: {
     color: '#fff',
     fontWeight: 'bold',
-    fontSize: 14,
-    marginRight: 8,
+    fontSize: 16,
+    textShadowColor: 'rgba(255, 0, 255, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   timestamp: {
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: 'rgba(255, 255, 255, 0.8)',
     fontSize: 12,
+    textShadowColor: 'rgba(0, 255, 255, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   menuButton: {
+    position: 'relative',
+  },
+  menuButtonGradient: {
     padding: 8,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuButtonGlow: {
+    position: 'absolute',
+    top: -4,
+    left: -4,
+    right: -4,
+    bottom: -4,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 0, 255, 0.2)',
+    shadowColor: '#ff00ff',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 10,
+    elevation: 10,
   },
   mediaContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
+  },
+  mediaGlow: {
+    position: 'absolute',
+    top: -10,
+    left: -10,
+    right: -10,
+    bottom: -10,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 255, 255, 0.1)',
+    shadowColor: '#00ffff',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 25,
+    elevation: 15,
   },
   media: {
     width: '100%',
     height: '100%',
+    borderRadius: 10,
+  },
+  shimmerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 10,
+  },
+  shimmerGradient: {
+    flex: 1,
+    borderRadius: 10,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'flex-end',
   },
   menuContainer: {
-    backgroundColor: '#1a1a1a',
-    borderTopLeftRadius: 15,
-    borderTopRightRadius: 15,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     paddingVertical: 20,
+    shadowColor: '#ff00ff',
+    shadowOffset: { width: 0, height: -5 },
+    shadowOpacity: 0.3,
+    shadowRadius: 15,
+    elevation: 20,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 15,
     paddingHorizontal: 20,
+    borderRadius: 12,
+    marginHorizontal: 10,
   },
   menuItemText: {
     fontSize: 16,
     marginLeft: 12,
-    color: '#fff',
+    fontWeight: '600',
+    textShadowColor: 'rgba(255, 59, 48, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
 });
 

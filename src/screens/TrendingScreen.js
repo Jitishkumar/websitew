@@ -1,25 +1,23 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
-  FlatList,
   TouchableOpacity,
-  SafeAreaView,
-  TextInput,
-  ActivityIndicator,
-  RefreshControl,
-  Alert,
-  Image,
-  Dimensions,
-  Animated,
   ScrollView,
+  Image,
+  FlatList,
+  ActivityIndicator,
+  Dimensions,
+  RefreshControl,
+  TextInput,
+  Animated,
+  StyleSheet
 } from 'react-native';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
-import { supabase } from '../config/supabase';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { supabase } from '../lib/supabase';
 import { Video } from 'expo-av';
 
 const { width } = Dimensions.get('window');
@@ -29,29 +27,46 @@ const TrendingScreen = () => {
   const insets = useSafeAreaInsets();
 
   // State management
-  const [activeTab, setActiveTab] = useState('posts'); // 'posts' or 'hashtags'
-  const [posts, setPosts] = useState([]);
-  const [hashtags, setHashtags] = useState([]);
+  const [activeTab, setActiveTab] = useState('all');
+  const [trendingPosts, setTrendingPosts] = useState([]);
+  const [filteredPosts, setFilteredPosts] = useState([]);
+  const [trendingTopics, setTrendingTopics] = useState([]);
+  const [filteredTopics, setFilteredTopics] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [currentUser, setCurrentUser] = useState(null);
+  const [isSearching, setIsSearching] = useState(false);
+  const videoRefs = useRef({});
 
-  // Animation refs
+  // Animation refs for ultra-premium effects
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(30)).current;
-  const scaleAnim = useRef(new Animated.Value(0.9)).current;
-  const tabIndicatorAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+  const scaleAnim = useRef(new Animated.Value(0.8)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const glowAnim = useRef(new Animated.Value(0)).current;
+  const shimmerAnim = useRef(new Animated.Value(0)).current;
+  const tabSlideAnim = useRef(new Animated.Value(0)).current;
   const searchFocusAnim = useRef(new Animated.Value(0)).current;
 
-  useEffect(() => {
-    fetchCurrentUser();
-    fetchTrendingPosts();
-    fetchTrendingHashtags();
-    startInitialAnimations();
-  }, []);
+  // Tab configuration
+  const tabs = [
+    { id: 'all', label: 'All', icon: 'apps' },
+    { id: 'videos', label: 'Videos', icon: 'play-circle' },
+    { id: 'topics', label: 'Hashtags', icon: 'trending-up' }
+  ];
 
-  const startInitialAnimations = () => {
+  useEffect(() => {
+    fetchTrendingContent();
+    initializeAnimations();
+  }, [activeTab]);
+
+  const initializeAnimations = () => {
+    // Reset animations for tab changes
+    fadeAnim.setValue(0);
+    slideAnim.setValue(50);
+    scaleAnim.setValue(0.8);
+
+    // Main entrance animations
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -63,17 +78,58 @@ const TrendingScreen = () => {
         duration: 600,
         useNativeDriver: true,
       }),
-      Animated.spring(scaleAnim, {
+      Animated.timing(scaleAnim, {
         toValue: 1,
-        tension: 50,
-        friction: 8,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // Continuous pulse animation
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.05,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+
+    // Continuous glow animation
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowAnim, {
+          toValue: 1,
+          duration: 3000,
+          useNativeDriver: false,
+        }),
+        Animated.timing(glowAnim, {
+          toValue: 0,
+          duration: 3000,
+          useNativeDriver: false,
+        }),
+      ])
+    ).start();
+
+    // Continuous shimmer animation
+    Animated.loop(
+      Animated.timing(shimmerAnim, {
+        toValue: 1,
+        duration: 2500,
         useNativeDriver: true,
       })
-    ]).start();
+    ).start();
   };
 
-  const animateTabSwitch = (tabIndex) => {
-    Animated.spring(tabIndicatorAnim, {
+  const animateTabChange = (tabId) => {
+    const tabIndex = tabs.findIndex(tab => tab.id === tabId);
+    Animated.spring(tabSlideAnim, {
       toValue: tabIndex,
       tension: 100,
       friction: 8,
@@ -84,14 +140,31 @@ const TrendingScreen = () => {
   const animateSearchFocus = (focused) => {
     Animated.timing(searchFocusAnim, {
       toValue: focused ? 1 : 0,
-      duration: 200,
+      duration: 300,
       useNativeDriver: false,
     }).start();
   };
 
-  const fetchTrendingPosts = async () => {
+  const fetchTrendingContent = async () => {
     try {
       setLoading(true);
+
+      if (activeTab === 'topics') {
+        await fetchTrendingTopics();
+      } else {
+        await fetchTrendingPosts();
+      }
+    } catch (error) {
+      console.error('Error fetching trending content:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchTrendingPosts = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
       // Fetch trending posts using the new RPC function
       const { data: posts, error: postsError } = await supabase.rpc('get_trending_posts', {
@@ -105,7 +178,7 @@ const TrendingScreen = () => {
       }
 
       if (!posts || posts.length === 0) {
-        setPosts([]);
+        setTrendingPosts([]);
         return;
       }
 
@@ -123,7 +196,7 @@ const TrendingScreen = () => {
       const { data: userLikes, error: userLikesError } = await supabase
         .from('post_likes')
         .select('post_id')
-        .eq('user_id', currentUser.id)
+        .eq('user_id', user.id)
         .in('post_id', postIds);
 
       if (userLikesError) throw userLikesError;
@@ -143,17 +216,33 @@ const TrendingScreen = () => {
         };
       });
 
-      setPosts(processedPosts);
+      // Filter by active tab (videos or all)
+      const finalPosts = activeTab === 'videos'
+        ? processedPosts.filter(p => p.type === 'video')
+        : processedPosts;
+
+      setTrendingPosts(finalPosts);
+      setFilteredPosts(finalPosts);
     } catch (error) {
       console.error('Error fetching trending posts:', error);
-    } finally {
-      setLoading(false);
     }
   };
 
-  const fetchTrendingHashtags = async () => {
+  // Helper function to extract hashtags from text
+  const extractHashtags = (text) => {
+    if (!text) return [];
+    // More permissive regex to catch hashtags like #can, #power, etc.
+    const hashtagRegex = /#[a-zA-Z0-9_\u00c0-\u024f\u1e00-\u1eff]+/g;
+    const matches = text.match(hashtagRegex);
+    console.log('Extracting hashtags from:', text);
+    console.log('Found hashtags:', matches);
+    return matches ? matches.map(tag => tag.toLowerCase()) : [];
+  };
+
+  const fetchTrendingTopics = async () => {
     try {
-      setLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
       // Get private account user IDs
       const { data: privateUsers, error: privateError } = await supabase
@@ -189,7 +278,7 @@ const TrendingScreen = () => {
       if (postsError) throw postsError;
 
       if (!posts) {
-        setHashtags([]);
+        setTrendingTopics([]);
         return;
       }
 
@@ -257,7 +346,7 @@ const TrendingScreen = () => {
 
       // Calculate trending score (engagement + recency + post count)
       const now = Date.now();
-      const trendingHashtags = Array.from(hashtagsMap.values())
+      const topics = Array.from(hashtagsMap.values())
         .map(hashtag => {
           // Calculate trending score based on multiple factors
           const engagementWeight = hashtag.engagement_score * 2;
@@ -274,131 +363,16 @@ const TrendingScreen = () => {
         .sort((a, b) => b.trending_rank - a.trending_rank)
         .slice(0, 20); // Show top 20 hashtags
 
-      console.log('Final hashtags for trending:', trendingHashtags);
-      setHashtags(trendingHashtags);
+      console.log('Final hashtags for trending:', topics);
+      setTrendingTopics(topics);
+      setFilteredTopics(topics);
     } catch (error) {
       console.error('Error fetching trending hashtags:', error);
-      setHashtags([]);
-    } finally {
-      setLoading(false);
+      setTrendingTopics([]);
     }
   };
 
-  const fetchCurrentUser = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      setCurrentUser(user);
-    } catch (error) {
-      console.error('Error fetching current user:', error);
-    }
-  };
-
-  const handleTabPress = (tab) => {
-    setActiveTab(tab);
-    animateTabSwitch(tab === 'posts' ? 0 : 1);
-  };
-
-  // Helper function to extract hashtags from text
-  const extractHashtags = (text) => {
-    const hashtagRegex = /#[\w]+/g;
-    return text.match(hashtagRegex) || [];
-  };
-
-  // Filter data based on search query
-  const filteredPosts = posts.filter(post => {
-    if (!searchQuery) return true;
-    const lowercaseQuery = searchQuery.toLowerCase();
-    const captionMatch = post.caption?.toLowerCase().includes(lowercaseQuery);
-    const usernameMatch = post.username?.toLowerCase().includes(lowercaseQuery);
-    const hashtagMatch = extractHashtags(post.caption || '').some(hashtag => 
-      hashtag.toLowerCase().includes(lowercaseQuery)
-    );
-    return captionMatch || usernameMatch || hashtagMatch;
-  });
-
-  const filteredHashtags = hashtags.filter(hashtag => {
-    if (!searchQuery) return true;
-    const lowercaseQuery = searchQuery.toLowerCase();
-    return hashtag.hashtag.toLowerCase().includes(lowercaseQuery) ||
-      hashtag.recent_posts.some(post => 
-        post.caption.toLowerCase().includes(lowercaseQuery) ||
-        post.username.toLowerCase().includes(lowercaseQuery)
-      );
-  });
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    setSearchQuery('');
-    await fetchTrendingPosts();
-    await fetchTrendingHashtags();
-    setRefreshing(false);
-  };
-
-  const handleUsernamePress = (userId, username) => {
-    // Since we only show public accounts in trending, we can navigate directly
-    // But still use privacy check for consistency
-    handlePrivacyNavigation(userId);
-  };
-
-  const handlePostPress = async (post, index) => {
-    // Since we only show posts from public accounts in trending,
-    // we can navigate directly to view the post without additional privacy checks
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        navigation.navigate('Login');
-        return;
-      }
-
-      // Don't check privacy for own posts
-      if (user.id === post.user_id) {
-        if (post.type === 'video') {
-          const videoData = posts.filter(p => p.type === 'video');
-          const videoIndex = videoData.findIndex(p => p.id === post.id);
-          navigation.navigate('Shorts', {
-            posts: videoData,
-            initialIndex: videoIndex
-          });
-        } else {
-          navigation.navigate('PostViewer', {
-            post,
-            posts: posts.filter(p => p.type !== 'video'),
-            initialIndex: posts.findIndex(p => p.id === post.id)
-          });
-        }
-        return;
-      }
-
-      // Since all posts in trending are from public accounts, navigate directly
-      if (post.type === 'video') {
-        const videoData = posts.filter(p => p.type === 'video');
-        const videoIndex = videoData.findIndex(p => p.id === post.id);
-        navigation.navigate('Shorts', {
-          posts: videoData,
-          initialIndex: videoIndex
-        });
-      } else {
-        navigation.navigate('PostViewer', {
-          post,
-          posts: posts.filter(p => p.type !== 'video'),
-          initialIndex: posts.findIndex(p => p.id === post.id)
-        });
-      }
-    } catch (error) {
-      console.error('Error viewing post:', error);
-      // Fallback to profile navigation
-      handlePrivacyNavigation(post.user_id);
-    }
-  };
-
-  const handleTopicPress = (topic) => {
-    // Navigate to search screen with hashtag query
-    navigation.navigate('Search', {
-      initialQuery: topic.hashtag,
-      searchType: 'hashtag'
-    });
-  };
-
+  // Privacy check function similar to SearchScreen
   const handlePrivacyNavigation = async (userId) => {
     try {
       // Get the current user's ID
@@ -475,73 +449,298 @@ const TrendingScreen = () => {
     }
   };
 
-  const renderPostItem = ({ item, index }) => (
-    <TouchableOpacity
-      style={styles.postCard}
-      onPress={() => handlePostPress(item, index)}
-    >
-      <View style={styles.postContent}>
-        {item.type === 'video' ? (
-          <View style={styles.videoContainer}>
-            <Video
-              source={{ uri: item.media_url }}
-              style={styles.postVideo}
-              resizeMode="cover"
-              shouldPlay={false}
-              isLooping={false}
-              isMuted={true}
-              useNativeControls={false}
-            />
-            <View style={styles.playIconOverlay}>
-              <Ionicons name="play" size={40} color="rgba(255, 255, 255, 0.9)" />
-            </View>
-          </View>
-        ) : (
-          <Image source={{ uri: item.media_url }} style={styles.postImage} />
-        )}
+  // Search functionality
+  const handleSearch = (query) => {
+    setSearchQuery(query);
+    setIsSearching(query.length > 0);
+    
+    if (query.length === 0) {
+      // Reset to original data when search is cleared
+      setFilteredPosts(trendingPosts);
+      setFilteredTopics(trendingTopics);
+      return;
+    }
 
-        <View style={styles.postInfo}>
-          <View style={styles.userInfo}>
-            <Image
-              source={{
-                uri: item.avatar_url || 'https://via.placeholder.com/40x40.png?text=User'
-              }}
-              style={styles.userAvatar}
-            />
-            <TouchableOpacity
-              onPress={() => handleUsernamePress(item.user_id, item.username)}
-              style={styles.usernameContainer}
+    const lowercaseQuery = query.toLowerCase();
+
+    if (activeTab === 'topics') {
+      // Filter hashtags
+      const filtered = trendingTopics.filter(topic => 
+        topic.hashtag.toLowerCase().includes(lowercaseQuery) ||
+        topic.recent_posts.some(post => 
+          post.caption.toLowerCase().includes(lowercaseQuery) ||
+          post.username.toLowerCase().includes(lowercaseQuery)
+        )
+      );
+      setFilteredTopics(filtered);
+    } else {
+      // Filter posts by caption, username, or hashtags
+      const filtered = trendingPosts.filter(post => {
+        const captionMatch = post.caption?.toLowerCase().includes(lowercaseQuery);
+        const usernameMatch = post.username?.toLowerCase().includes(lowercaseQuery);
+        const hashtagMatch = extractHashtags(post.caption || '').some(hashtag => 
+          hashtag.toLowerCase().includes(lowercaseQuery)
+        );
+        return captionMatch || usernameMatch || hashtagMatch;
+      });
+      setFilteredPosts(filtered);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    setSearchQuery('');
+    setIsSearching(false);
+    await fetchTrendingContent();
+    setRefreshing(false);
+  };
+
+  const handleUsernamePress = (userId, username) => {
+    // Since we only show public accounts in trending, we can navigate directly
+    // But still use privacy check for consistency
+    handlePrivacyNavigation(userId);
+  };
+
+  const handlePostPress = async (post, index) => {
+    // Since we only show posts from public accounts in trending,
+    // we can navigate directly to view the post without additional privacy checks
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        navigation.navigate('Login');
+        return;
+      }
+
+      // Don't check privacy for own posts
+      if (user.id === post.user_id) {
+        if (post.type === 'video') {
+          const videoData = trendingPosts.filter(p => p.type === 'video');
+          const videoIndex = videoData.findIndex(p => p.id === post.id);
+          navigation.navigate('Shorts', {
+            posts: videoData,
+            initialIndex: videoIndex
+          });
+        } else {
+          navigation.navigate('PostViewer', {
+            post,
+            posts: trendingPosts.filter(p => p.type !== 'video'),
+            initialIndex: trendingPosts.findIndex(p => p.id === post.id)
+          });
+        }
+        return;
+      }
+
+      // Since all posts in trending are from public accounts, navigate directly
+      if (post.type === 'video') {
+        const videoData = trendingPosts.filter(p => p.type === 'video');
+        const videoIndex = videoData.findIndex(p => p.id === post.id);
+        navigation.navigate('Shorts', {
+          posts: videoData,
+          initialIndex: videoIndex
+        });
+      } else {
+        navigation.navigate('PostViewer', {
+          post,
+          posts: trendingPosts.filter(p => p.type !== 'video'),
+          initialIndex: trendingPosts.findIndex(p => p.id === post.id)
+        });
+      }
+    } catch (error) {
+      console.error('Error viewing post:', error);
+      // Fallback to profile navigation
+      handlePrivacyNavigation(post.user_id);
+    }
+  };
+
+  const handleTopicPress = (topic) => {
+    // Navigate to search screen with hashtag query
+    navigation.navigate('Search', {
+      initialQuery: topic.hashtag,
+      searchType: 'hashtag'
+    });
+  };
+
+  const renderTabButtons = () => (
+    <Animated.View style={[styles.tabContainer, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+      <Animated.View style={[styles.tabIndicator, {
+        transform: [{
+          translateX: tabSlideAnim.interpolate({
+            inputRange: [0, 1, 2],
+            outputRange: [0, (width - 30) / 3, ((width - 30) / 3) * 2]
+          })
+        }]
+      }]} />
+      <Animated.View style={[styles.tabGlow, { opacity: glowAnim }]} />
+      {tabs.map((tab, index) => (
+        <Animated.View key={tab.id} style={{ transform: [{ scale: pulseAnim }] }}>
+          <TouchableOpacity
+            style={[
+              styles.tabButton,
+              activeTab === tab.id && styles.activeTabButton
+            ]}
+            onPress={() => {
+              setActiveTab(tab.id);
+              animateTabChange(tab.id);
+            }}
+          >
+            <LinearGradient
+              colors={activeTab === tab.id ? ['rgba(59, 130, 246, 0.8)', 'rgba(147, 51, 234, 0.8)'] : ['transparent', 'transparent']}
+              style={styles.tabButtonGradient}
             >
-              <Text style={styles.username}>@{item.username}</Text>
-            </TouchableOpacity>
-          </View>
+              <Ionicons
+                name={tab.icon}
+                size={20}
+                color={activeTab === tab.id ? '#ffffff' : '#888888'}
+                style={styles.tabIcon}
+              />
+              <Text style={[
+                styles.tabText,
+                activeTab === tab.id && styles.activeTabText
+              ]}>
+                {tab.label}
+              </Text>
+            </LinearGradient>
+            {activeTab === tab.id && (
+              <Animated.View style={[styles.tabButtonGlow, { opacity: glowAnim }]} />
+            )}
+          </TouchableOpacity>
+        </Animated.View>
+      ))}
+    </Animated.View>
+  );
+
+  const renderPostItem = ({ item, index }) => (
+    <Animated.View style={[
+      styles.postWrapper,
+      {
+        opacity: fadeAnim,
+        transform: [
+          { translateY: slideAnim },
+          { scale: scaleAnim }
+        ]
+      }
+    ]}>
+      <TouchableOpacity
+        style={styles.postCard}
+        onPress={() => handlePostPress(item, index)}
+      >
+        <LinearGradient
+          colors={['rgba(25, 25, 25, 0.9)', 'rgba(35, 35, 35, 0.9)']}
+          style={styles.postCardGradient}
+        >
+          <Animated.View style={[styles.postGlow, { opacity: glowAnim }]} />
+          
+          <View style={styles.postContent}>
+            {item.type === 'video' ? (
+              <Animated.View style={[styles.videoContainer, { transform: [{ scale: pulseAnim }] }]}>
+                <Video
+                  source={{ uri: item.media_url }}
+                  style={styles.postVideo}
+                  resizeMode="cover"
+                  shouldPlay={false}
+                  isLooping={false}
+                  isMuted={true}
+                  useNativeControls={false}
+                />
+                <LinearGradient
+                  colors={['transparent', 'rgba(0, 0, 0, 0.3)']}
+                  style={styles.playIconOverlay}
+                >
+                  <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+                    <LinearGradient
+                      colors={['rgba(59, 130, 246, 0.8)', 'rgba(147, 51, 234, 0.8)']}
+                      style={styles.playButton}
+                    >
+                      <Ionicons name="play" size={24} color="white" />
+                    </LinearGradient>
+                  </Animated.View>
+                </LinearGradient>
+                <Animated.View style={[styles.videoGlow, { opacity: glowAnim }]} />
+              </Animated.View>
+            ) : (
+              <Animated.View style={[styles.imageContainer, { transform: [{ scale: scaleAnim }] }]}>
+                <Image source={{ uri: item.media_url }} style={styles.postImage} />
+                <Animated.View style={[styles.imageGlow, { opacity: glowAnim }]} />
+              </Animated.View>
+            )}
+            
+            <Animated.View style={[styles.shimmerOverlay, { 
+              opacity: shimmerAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 0.3, 0] }),
+              transform: [{ translateX: shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: [-width, width] }) }]
+            }]}>
+              <LinearGradient 
+                colors={['transparent', 'rgba(59, 130, 246, 0.4)', 'rgba(147, 51, 234, 0.4)', 'transparent']} 
+                start={{x: 0, y: 0}} 
+                end={{x: 1, y: 0}} 
+                style={styles.shimmerGradient} 
+              />
+            </Animated.View>
+
+            <View style={styles.postInfo}>
+              <View style={styles.userInfo}>
+                <Animated.View style={[styles.avatarContainer, { transform: [{ scale: pulseAnim }] }]}>
+                  <LinearGradient
+                    colors={['rgba(59, 130, 246, 0.8)', 'rgba(147, 51, 234, 0.8)']}
+                    style={styles.avatarBorder}
+                  >
+                    <Image
+                      source={{
+                        uri: item.avatar_url || 'https://via.placeholder.com/40x40.png?text=User'
+                      }}
+                      style={styles.userAvatar}
+                    />
+                  </LinearGradient>
+                  <Animated.View style={[styles.avatarGlow, { opacity: glowAnim }]} />
+                </Animated.View>
+                <TouchableOpacity
+                  onPress={() => handleUsernamePress(item.user_id, item.username)}
+                  style={styles.usernameContainer}
+                >
+                  <Text style={styles.username}>@{item.username}</Text>
+                </TouchableOpacity>
+              </View>
 
           <Text style={styles.postCaption} numberOfLines={2}>
             {item.caption}
           </Text>
 
-          <View style={styles.postStats}>
-            <View style={styles.statItem}>
-              <Ionicons name="heart" size={16} color="#ef4444" />
-              <Text style={styles.statText}>{item.likes_count || 0}</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Ionicons name="chatbubble" size={16} color="#3b82f6" />
-              <Text style={styles.statText}>{item.comments_count || 0}</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Ionicons name="time" size={16} color="#888888" />
-              <Text style={styles.statText}>
-                {new Date(item.created_at).toLocaleDateString()}
-              </Text>
+              <View style={styles.postStats}>
+                <Animated.View style={[styles.statItem, { transform: [{ scale: pulseAnim }] }]}>
+                  <LinearGradient
+                    colors={['rgba(239, 68, 68, 0.2)', 'rgba(239, 68, 68, 0.1)']}
+                    style={styles.statBackground}
+                  >
+                    <Ionicons name="heart" size={16} color="#ef4444" />
+                    <Text style={styles.statText}>{item.likes_count || 0}</Text>
+                  </LinearGradient>
+                </Animated.View>
+                <Animated.View style={[styles.statItem, { transform: [{ scale: pulseAnim }] }]}>
+                  <LinearGradient
+                    colors={['rgba(59, 130, 246, 0.2)', 'rgba(59, 130, 246, 0.1)']}
+                    style={styles.statBackground}
+                  >
+                    <Ionicons name="chatbubble" size={16} color="#3b82f6" />
+                    <Text style={styles.statText}>{item.comments_count || 0}</Text>
+                  </LinearGradient>
+                </Animated.View>
+                <Animated.View style={[styles.statItem, { transform: [{ scale: pulseAnim }] }]}>
+                  <LinearGradient
+                    colors={['rgba(136, 136, 136, 0.2)', 'rgba(136, 136, 136, 0.1)']}
+                    style={styles.statBackground}
+                  >
+                    <Ionicons name="eye" size={16} color="#888888" />
+                    <Text style={styles.statText}>{item.views_count || 0}</Text>
+                  </LinearGradient>
+                </Animated.View>
+              </View>
             </View>
           </View>
-        </View>
-      </View>
-    </TouchableOpacity>
+        </LinearGradient>
+      </TouchableOpacity>
+    </Animated.View>
   );
 
-  const renderHashtagItem = ({ item, index }) => {
+  const renderTopicItem = ({ item, index }) => {
     // Determine gradient colors based on trending rank - premium dark theme
     const getGradientColors = (rank) => {
       if (rank >= 50) return ['rgba(59, 130, 246, 0.8)', 'rgba(147, 51, 234, 0.8)']; // High trending - blue to purple
@@ -549,265 +748,291 @@ const TrendingScreen = () => {
       return ['rgba(34, 197, 94, 0.8)', 'rgba(59, 130, 246, 0.8)']; // Low trending - green to blue
     };
 
-    const getRankIcon = (rank) => {
-      if (rank >= 50) return 'flame';
-      if (rank >= 20) return 'trending-up';
-      return 'pulse';
-    };
+    return (
+      <Animated.View style={[
+        styles.topicWrapper,
+        {
+          opacity: fadeAnim,
+          transform: [
+            { translateY: slideAnim },
+            { scale: scaleAnim }
+          ]
+        }
+      ]}>
+        <TouchableOpacity
+          style={styles.topicCard}
+          onPress={() => handleTopicPress(item)}
+        >
+          <LinearGradient
+            colors={getGradientColors(item.trending_rank)}
+            style={styles.topicGradient}
+          >
+            <Animated.View style={[styles.topicGlow, { opacity: glowAnim }]} />
+            
+            <View style={styles.topicHeader}>
+              <Animated.View style={[styles.topicRank, { transform: [{ scale: pulseAnim }] }]}>
+                <LinearGradient
+                  colors={['rgba(255, 255, 255, 0.3)', 'rgba(255, 255, 255, 0.1)']}
+                  style={styles.rankContainer}
+                >
+                  <Text style={styles.rankNumber}>#{index + 1}</Text>
+                </LinearGradient>
+              </Animated.View>
+              
+              <View style={styles.topicInfo}>
+                <View style={styles.hashtagRow}>
+                  <Ionicons name="trending-up" size={20} color="#ffffff" />
+                  <Text style={styles.hashtagText}>{item.hashtag}</Text>
+                </View>
+                <Text style={styles.topicStats}>
+                  {item.post_count} posts • {item.engagement_score} engagement
+                </Text>
+              </View>
+              
+              <Animated.View style={[styles.trendingBadge, { transform: [{ scale: pulseAnim }] }]}>
+                <LinearGradient
+                  colors={['rgba(255, 255, 255, 0.2)', 'rgba(255, 255, 255, 0.1)']}
+                  style={styles.badgeGradient}
+                >
+                  <Text style={styles.trendingScore}>
+                    {Math.round(item.trending_rank)}
+                  </Text>
+                </LinearGradient>
+              </Animated.View>
+            </View>
+
+            <Animated.View style={[styles.shimmerOverlay, { 
+              opacity: shimmerAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 0.3, 0] }),
+              transform: [{ translateX: shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: [-width, width] }) }]
+            }]}>
+              <LinearGradient 
+                colors={['transparent', 'rgba(255, 255, 255, 0.3)', 'transparent']} 
+                start={{x: 0, y: 0}} 
+                end={{x: 1, y: 0}} 
+                style={styles.shimmerGradient} 
+              />
+            </Animated.View>
+
+            {item.recent_posts && item.recent_posts.length > 0 && (
+              <View style={styles.previewContainer}>
+                <Text style={styles.previewLabel}>Recent posts:</Text>
+                {item.recent_posts.slice(0, 2).map((post, postIndex) => (
+                  <Animated.View key={postIndex} style={[styles.previewPost, { transform: [{ scale: pulseAnim }] }]}>
+                    <Text style={styles.previewUsername}>@{post.username}</Text>
+                    <Text style={styles.previewCaption} numberOfLines={1}>
+                      {post.caption}
+                    </Text>
+                  </Animated.View>
+                ))}
+              </View>
+            )}
+          </LinearGradient>
+        </TouchableOpacity>
+      </Animated.View>
+    );
+  };
+
+
+  const renderContent = () => {
+    if (loading) {
+      return (
+        <LinearGradient colors={['#0a0a0a', '#1a1a2a', '#0a0a0a']} style={styles.loadingContainer}>
+          <Animated.View style={[styles.loadingContent, { opacity: fadeAnim, transform: [{ scale: pulseAnim }] }]}>
+            <ActivityIndicator size="large" color="#3b82f6" />
+            <Text style={styles.loadingText}>Loading trending content...</Text>
+            <Animated.View style={[styles.loadingGlow, { opacity: glowAnim }]} />
+          </Animated.View>
+        </LinearGradient>
+      );
+    }
+
+    if (activeTab === 'topics') {
+      return (
+        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+          <FlatList
+            data={filteredTopics}
+            renderItem={renderTopicItem}
+            keyExtractor={(item) => item.id}
+            numColumns={1}
+            contentContainerStyle={styles.topicsList}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={['#3b82f6']}
+                tintColor="#3b82f6"
+              />
+            }
+            ListEmptyComponent={() => (
+              <Animated.View style={[styles.emptyContainer, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}>
+                <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+                  <LinearGradient
+                    colors={['rgba(59, 130, 246, 0.2)', 'rgba(147, 51, 234, 0.2)']}
+                    style={styles.emptyIconContainer}
+                  >
+                    <Ionicons name={isSearching ? 'search' : 'trending-up'} size={60} color="#3b82f6" />
+                  </LinearGradient>
+                </Animated.View>
+                <Text style={styles.emptyText}>
+                  {isSearching 
+                    ? `No hashtags found for "${searchQuery}"` 
+                    : 'No trending hashtags found'
+                  }
+                </Text>
+                <Text style={styles.emptySubText}>
+                  {isSearching 
+                    ? 'Try different keywords or clear the search'
+                    : 'Hashtags from posts in the last 7 days will appear here'
+                  }
+                </Text>
+                <Animated.View style={[styles.emptyGlow, { opacity: glowAnim }]} />
+              </Animated.View>
+            )}
+          />
+        </Animated.View>
+      );
+    }
 
     return (
-      <TouchableOpacity
-        style={[styles.topicCard, { marginBottom: 12 }]}
-        onPress={() => handleTopicPress(item)}
-      >
-        <LinearGradient
-          colors={getGradientColors(item.trending_rank)}
-          style={styles.topicGradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        >
-          <View style={styles.topicHeader}>
-            <View style={styles.topicRank}>
-              <Text style={styles.rankNumber}>{index + 1}</Text>
-            </View>
-            <View style={styles.topicInfo}>
-              <View style={styles.hashtagRow}>
-                <Ionicons name={getRankIcon(item.trending_rank)} size={18} color="#fff" />
-                <Text style={styles.hashtagText}>{item.hashtag}</Text>
-              </View>
-              <Text style={styles.topicStats}>
-                {item.display_text} • {item.engagement_score} interactions
+      <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+        <FlatList
+          data={filteredPosts}
+          renderItem={renderPostItem}
+          keyExtractor={(item) => item.id}
+          numColumns={activeTab === 'videos' ? 2 : 1}
+          key={activeTab} // Force re-render when switching tabs
+          contentContainerStyle={styles.postsList}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={['#3b82f6']}
+              tintColor="#3b82f6"
+            />
+          }
+          ListEmptyComponent={() => (
+            <Animated.View style={[styles.emptyContainer, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}>
+              <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+                <LinearGradient
+                  colors={['rgba(59, 130, 246, 0.2)', 'rgba(147, 51, 234, 0.2)']}
+                  style={styles.emptyIconContainer}
+                >
+                  <Ionicons
+                    name={isSearching ? 'search' : (activeTab === 'videos' ? 'videocam' : 'document-text')}
+                    size={60}
+                    color="#3b82f6"
+                  />
+                </LinearGradient>
+              </Animated.View>
+              <Text style={styles.emptyText}>
+                {isSearching 
+                  ? `No results found for "${searchQuery}"` 
+                  : `No trending ${activeTab === 'videos' ? 'videos' : 'posts'} found`
+                }
               </Text>
-            </View>
-            <View style={styles.trendingBadge}>
-              <Text style={styles.trendingScore}>{item.trending_rank}</Text>
-            </View>
-          </View>
-          
-          {/* Preview of recent posts */}
-          {item.recent_posts && item.recent_posts.length > 0 && (
-            <View style={styles.previewContainer}>
-              <Text style={styles.previewLabel}>Recent posts:</Text>
-              {item.recent_posts.slice(0, 2).map((recentPost, idx) => (
-                <View key={idx} style={styles.previewPost}>
-                  <Text style={styles.previewUsername}>@{recentPost.username}</Text>
-                  <Text style={styles.previewCaption} numberOfLines={1}>
-                    {recentPost.caption.replace(/#\w+/g, '').trim()}
-                  </Text>
-                </View>
-              ))}
-            </View>
+              {isSearching && (
+                <Text style={styles.emptySubText}>
+                  Try different keywords or clear the search
+                </Text>
+              )}
+              <Animated.View style={[styles.emptyGlow, { opacity: glowAnim }]} />
+            </Animated.View>
           )}
-        </LinearGradient>
-      </TouchableOpacity>
+        />
+      </Animated.View>
     );
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
+      {/* Header */}
       <LinearGradient
-        colors={['#0a0a2a', '#1a1a4a', '#2a1a4a']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.header}
+        colors={['rgba(15, 15, 15, 0.95)', 'rgba(25, 25, 25, 0.9)']}
+        style={[styles.header, { paddingTop: insets.top > 0 ? insets.top : 50 }]}
       >
-        <Animated.View 
-          style={[
-            styles.headerContent,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }, { scale: scaleAnim }]
-            }
-          ]}
-        >
-          <View style={styles.titleContainer}>
-            <LinearGradient
-              colors={['#ff00ff', '#ff6b9d', '#c44569']}
-              start={{x: 0, y: 0}}
-              end={{x: 1, y: 0}}
-              style={styles.titleGradient}
-            >
-              <MaterialIcons name="trending-up" size={28} color="#fff" />
-              <Text style={styles.headerTitle}>Trending</Text>
-            </LinearGradient>
-          </View>
-          
-          <Animated.View 
-            style={[
-              styles.searchContainer,
-              {
-                borderColor: searchFocusAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: ['rgba(255, 0, 255, 0.3)', 'rgba(255, 0, 255, 0.8)']
-                }),
-                shadowOpacity: searchFocusAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0.2, 0.6]
-                })
-              }
-            ]}
-          >
-            <LinearGradient
-              colors={['rgba(255, 0, 255, 0.1)', 'rgba(255, 0, 255, 0.05)']}
-              style={styles.searchGradient}
-            >
-              <MaterialIcons name="search" size={22} color="#ff00ff" style={styles.searchIcon} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search trending content..."
-                placeholderTextColor="#888"
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                onFocus={() => animateSearchFocus(true)}
-                onBlur={() => animateSearchFocus(false)}
-              />
-              {searchQuery.length > 0 && (
-                <TouchableOpacity 
-                  onPress={() => setSearchQuery('')}
-                  style={styles.clearButton}
-                >
-                  <Ionicons name="close-circle" size={20} color="#ff00ff" />
-                </TouchableOpacity>
-              )}
-            </LinearGradient>
+        <Animated.View style={[styles.headerRow, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+          <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+              <LinearGradient
+                colors={['rgba(59, 130, 246, 0.3)', 'rgba(147, 51, 234, 0.3)']}
+                style={styles.backButtonGradient}
+              >
+                <Ionicons name="arrow-back" size={24} color="#3b82f6" />
+              </LinearGradient>
+              <Animated.View style={[styles.backButtonGlow, { opacity: glowAnim }]} />
+            </TouchableOpacity>
           </Animated.View>
-          
-          <View style={styles.tabContainer}>
-            <View style={styles.tabBackground}>
-              <Animated.View 
-                style={[
-                  styles.tabIndicator,
-                  {
-                    transform: [{
-                      translateX: tabIndicatorAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [0, width * 0.4]
-                      })
-                    }]
-                  }
-                ]}
-              />
-              
-              <TouchableOpacity
-                style={styles.tab}
-                onPress={() => handleTabPress('posts')}
-                activeOpacity={0.7}
-              >
-                <View style={styles.tabContent}>
-                  <MaterialIcons 
-                    name="article" 
-                    size={20} 
-                    color={activeTab === 'posts' ? '#fff' : '#888'} 
-                  />
-                  <Text style={[styles.tabText, activeTab === 'posts' && styles.activeTabText]}>
-                    Posts
-                  </Text>
-                </View>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={styles.tab}
-                onPress={() => handleTabPress('hashtags')}
-                activeOpacity={0.7}
-              >
-                <View style={styles.tabContent}>
-                  <MaterialIcons 
-                    name="tag" 
-                    size={20} 
-                    color={activeTab === 'hashtags' ? '#fff' : '#888'} 
-                  />
-                  <Text style={[styles.tabText, activeTab === 'hashtags' && styles.activeTabText]}>
-                    Hashtags
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            </View>
-          </View>
+          <Text style={styles.headerTitle}>Trending</Text>
+          <Animated.View style={[styles.betaTag, { transform: [{ scale: pulseAnim }] }]}>
+            <LinearGradient
+              colors={['rgba(59, 130, 246, 0.8)', 'rgba(147, 51, 234, 0.8)']}
+              style={styles.betaGradient}
+            >
+              <Text style={styles.betaText}>BETA</Text>
+            </LinearGradient>
+            <Animated.View style={[styles.betaGlow, { opacity: glowAnim }]} />
+          </Animated.View>
         </Animated.View>
-      </LinearGradient>
 
-      <Animated.View 
-        style={[
-          styles.contentContainer,
+        {/* Search Bar */}
+        <Animated.View style={[
+          styles.searchContainer,
           {
             opacity: fadeAnim,
-            transform: [{ translateY: slideAnim }]
+            transform: [{ translateY: slideAnim }],
+            borderColor: searchFocusAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: ['rgba(59, 130, 246, 0.2)', 'rgba(59, 130, 246, 0.8)']
+            }),
+            shadowOpacity: searchFocusAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0.2, 0.6]
+            })
           }
-        ]}
-      >
-        {activeTab === 'posts' ? (
-          <FlatList
-            data={filteredPosts}
-            keyExtractor={(item) => item.id.toString()}
-            renderItem={renderPostItem}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                tintColor="#ff00ff"
-                colors={['#ff00ff', '#ff6b9d']}
-              />
-            }
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.listContainer}
-            ListEmptyComponent={() => (
-              loading ? (
-                <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="large" color="#ff00ff" />
-                  <Text style={styles.loadingText}>Loading trending posts...</Text>
-                </View>
-              ) : (
-                <View style={styles.emptyContainer}>
+        ]}>
+          <LinearGradient
+            colors={['rgba(30, 30, 30, 0.8)', 'rgba(40, 40, 40, 0.8)']}
+            style={styles.searchGradient}
+          >
+            <Ionicons name="search" size={20} color="#3b82f6" style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder={activeTab === 'topics' ? 'Search hashtags...' : 'Search posts, captions...'}
+              placeholderTextColor="#666"
+              value={searchQuery}
+              onChangeText={handleSearch}
+              onFocus={() => animateSearchFocus(true)}
+              onBlur={() => animateSearchFocus(false)}
+              returnKeyType="search"
+            />
+            {searchQuery.length > 0 && (
+              <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+                <TouchableOpacity 
+                  onPress={() => handleSearch('')}
+                  style={styles.clearButton}
+                >
                   <LinearGradient
-                    colors={['rgba(255, 0, 255, 0.1)', 'rgba(255, 0, 255, 0.05)']}
-                    style={styles.emptyIconContainer}
+                    colors={['rgba(59, 130, 246, 0.3)', 'rgba(147, 51, 234, 0.3)']}
+                    style={styles.clearButtonGradient}
                   >
-                    <MaterialIcons name="trending-up" size={60} color="#ff00ff" />
+                    <Ionicons name="close-circle" size={20} color="#3b82f6" />
                   </LinearGradient>
-                  <Text style={styles.emptyText}>No trending posts found</Text>
-                  <Text style={styles.emptySubtext}>Be the first to create trending content!</Text>
-                </View>
-              )
+                </TouchableOpacity>
+              </Animated.View>
             )}
-          />
-        ) : (
-          <FlatList
-            data={filteredHashtags}
-            keyExtractor={(item) => item.hashtag}
-            renderItem={renderHashtagItem}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                tintColor="#ff00ff"
-                colors={['#ff00ff', '#ff6b9d']}
-              />
-            }
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.listContainer}
-            ListEmptyComponent={() => (
-              loading ? (
-                <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="large" color="#ff00ff" />
-                  <Text style={styles.loadingText}>Loading trending hashtags...</Text>
-                </View>
-              ) : (
-                <View style={styles.emptyContainer}>
-                  <LinearGradient
-                    colors={['rgba(255, 0, 255, 0.1)', 'rgba(255, 0, 255, 0.05)']}
-                    style={styles.emptyIconContainer}
-                  >
-                    <MaterialIcons name="tag" size={60} color="#ff00ff" />
-                  </LinearGradient>
-                  <Text style={styles.emptyText}>No trending hashtags found</Text>
-                  <Text style={styles.emptySubtext}>Start using hashtags to see trends!</Text>
-                </View>
-              )
-            )}
-          />
-        )}
-      </Animated.View>
-    </SafeAreaView>
+          </LinearGradient>
+          <Animated.View style={[styles.searchGlow, { opacity: glowAnim }]} />
+        </Animated.View>
+
+        {/* Tab Buttons */}
+        {renderTabButtons()}
+      </LinearGradient>
+
+      {/* Content */}
+      <View style={styles.content}>
+        {renderContent()}
+      </View>
+    </View>
   );
 };
 
@@ -817,324 +1042,549 @@ const styles = StyleSheet.create({
     backgroundColor: '#0a0a0a',
   },
   header: {
-    paddingBottom: 20,
-    paddingTop: 10,
+    paddingBottom: 15,
+    paddingHorizontal: 15,
   },
-  headerContent: {
-    paddingHorizontal: 20,
-  },
-  titleContainer: {
-    marginBottom: 20,
-    alignItems: 'center',
-  },
-  titleGradient: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 15,
-    paddingHorizontal: 25,
-    borderRadius: 30,
-    shadowColor: '#ff00ff',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.5,
-    shadowRadius: 12,
-    elevation: 12,
+    marginBottom: 15,
+  },
+  backButton: {
+    marginRight: 15,
+    position: 'relative',
+  },
+  backButtonGradient: {
+    padding: 8,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backButtonGlow: {
+    position: 'absolute',
+    top: -4,
+    left: -4,
+    right: -4,
+    bottom: -4,
+    borderRadius: 24,
+    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 10,
+    elevation: 10,
   },
   headerTitle: {
-    color: '#fff',
+    color: '#ffffff',
     fontSize: 24,
-    fontWeight: '800',
-    marginLeft: 12,
-    textShadowColor: 'rgba(0, 0, 0, 0.7)',
-    textShadowOffset: { width: 1, height: 2 },
-    textShadowRadius: 6,
+    fontWeight: 'bold',
+    flex: 1,
+    textShadowColor: 'rgba(59, 130, 246, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  betaTag: {
+    position: 'relative',
+  },
+  betaGradient: {
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  betaText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  betaGlow: {
+    position: 'absolute',
+    top: -2,
+    left: -2,
+    right: -2,
+    bottom: -2,
+    borderRadius: 10,
+    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 8,
   },
   searchContainer: {
-    marginBottom: 20,
-    borderRadius: 20,
-    borderWidth: 2,
-    shadowColor: '#ff00ff',
-    shadowOffset: { width: 0, height: 4 },
+    borderRadius: 25,
+    marginBottom: 15,
+    borderWidth: 1,
+    position: 'relative',
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 2 },
     shadowRadius: 8,
     elevation: 8,
   },
   searchGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 15,
     paddingVertical: 12,
-    borderRadius: 18,
+    borderRadius: 24,
   },
   searchIcon: {
-    marginRight: 12,
+    marginRight: 10,
   },
   searchInput: {
     flex: 1,
-    color: '#fff',
+    color: '#ffffff',
     fontSize: 16,
-    fontWeight: '500',
+    paddingVertical: 0,
   },
   clearButton: {
+    position: 'relative',
+  },
+  clearButtonGradient: {
     padding: 4,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 0, 255, 0.1)',
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchGlow: {
+    position: 'absolute',
+    top: -2,
+    left: -2,
+    right: -2,
+    bottom: -2,
+    borderRadius: 27,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 12,
   },
   tabContainer: {
-    marginBottom: 10,
-  },
-  tabBackground: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 25,
-    padding: 4,
     flexDirection: 'row',
-    position: 'relative',
+    backgroundColor: 'rgba(20, 20, 20, 0.8)',
+    borderRadius: 25,
+    padding: 6,
     borderWidth: 1,
-    borderColor: 'rgba(255, 0, 255, 0.2)',
+    borderColor: 'rgba(59, 130, 246, 0.15)',
+    position: 'relative',
+    marginHorizontal: 10,
+    height: 52,
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   tabIndicator: {
     position: 'absolute',
-    top: 4,
-    left: 4,
-    bottom: 4,
-    width: width * 0.4,
-    backgroundColor: '#ff00ff',
-    borderRadius: 21,
-    shadowColor: '#ff00ff',
+    top: 6,
+    left: 6,
+    bottom: 6,
+    width: (width - 40) / 3,
+    borderRadius: 20,
+    backgroundColor: 'rgba(59, 130, 246, 0.8)',
+    shadowColor: '#3b82f6',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.6,
-    shadowRadius: 6,
-    elevation: 6,
+    shadowRadius: 8,
+    elevation: 8,
   },
-  tab: {
+  tabGlow: {
+    position: 'absolute',
+    top: -2,
+    left: -2,
+    right: -2,
+    bottom: -2,
+    borderRadius: 27,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 15,
+    elevation: 15,
+  },
+  tabButton: {
     flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 21,
+    borderRadius: 20,
     zIndex: 1,
+    marginHorizontal: 2,
   },
-  tabContent: {
+  tabButtonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    minHeight: 40,
+  },
+  tabButtonGlow: {
+    position: 'absolute',
+    top: -2,
+    left: -2,
+    right: -2,
+    bottom: -2,
+    borderRadius: 22,
+    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  activeTabButton: {
+    position: 'relative',
+  },
+  tabIcon: {
+    marginRight: 4,
   },
   tabText: {
-    fontSize: 16,
+    color: '#888888',
+    fontSize: 13,
     fontWeight: '600',
-    color: '#888',
-    textAlign: 'center',
   },
   activeTabText: {
-    color: '#fff',
-    fontWeight: '700',
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    color: '#ffffff',
+    fontWeight: 'bold',
+    textShadowColor: 'rgba(59, 130, 246, 0.5)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
   },
-  contentContainer: {
+  content: {
     flex: 1,
   },
-  listContainer: {
-    paddingBottom: 20,
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    color: '#888888',
+    marginTop: 15,
+    fontSize: 16,
+    textShadowColor: 'rgba(59, 130, 246, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  loadingGlow: {
+    position: 'absolute',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 20,
+    elevation: 20,
+  },
+  postsList: {
+    padding: 10,
+  },
+  topicsList: {
+    padding: 15,
+  },
+  postWrapper: {
+    margin: 5,
   },
   postCard: {
-    backgroundColor: '#1a1a4a',
-    borderRadius: 18,
-    marginHorizontal: 20,
-    marginBottom: 16,
-    shadowColor: '#ff00ff',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
+    borderRadius: 15,
+    overflow: 'hidden',
+    flex: 1,
+  },
+  postCardGradient: {
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.1)',
+    borderRadius: 15,
+    position: 'relative',
+  },
+  postGlow: {
+    position: 'absolute',
+    top: -2,
+    left: -2,
+    right: -2,
+    bottom: -2,
+    borderRadius: 17,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
     shadowRadius: 12,
     elevation: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 0, 255, 0.2)',
-    overflow: 'hidden',
   },
   postContent: {
-    padding: 18,
+    padding: 12,
   },
   videoContainer: {
-    width: '100%',
-    height: 200,
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginBottom: 12,
     position: 'relative',
+    borderRadius: 10,
+    overflow: 'hidden',
+    marginBottom: 10,
+  },
+  postVideo: {
+    width: '100%',
+    height: 180,
+    backgroundColor: 'rgba(30, 30, 30, 0.8)',
+  },
+  playIconOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  playButton: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.6,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  videoGlow: {
+    position: 'absolute',
+    top: -5,
+    left: -5,
+    right: -5,
+    bottom: -5,
+    borderRadius: 15,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 15,
+    elevation: 15,
+  },
+  imageContainer: {
+    position: 'relative',
+    borderRadius: 10,
+    overflow: 'hidden',
+    marginBottom: 10,
   },
   postImage: {
     width: '100%',
-    height: 200,
-    borderRadius: 12,
-    marginBottom: 12,
+    height: 180,
+    borderRadius: 10,
+    backgroundColor: 'rgba(30, 30, 30, 0.8)',
   },
-  postHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
+  imageGlow: {
+    position: 'absolute',
+    top: -5,
+    left: -5,
+    right: -5,
+    bottom: -5,
+    borderRadius: 15,
+    backgroundColor: 'rgba(147, 51, 234, 0.1)',
+    shadowColor: '#9333ea',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 15,
+    elevation: 15,
   },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 18,
-    marginRight: 12,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 0, 255, 0.4)',
+  shimmerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 10,
+  },
+  shimmerGradient: {
+    flex: 1,
+    borderRadius: 10,
+  },
+  postInfo: {
+    gap: 8,
   },
   userInfo: {
-    flex: 1,
-  },
-  username: {
-    color: '#ff00ff',
-    fontSize: 16,
-    fontWeight: '700',
-    textShadowColor: 'rgba(255, 0, 255, 0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  },
-  postTime: {
-    color: '#888',
-    fontSize: 12,
-    marginTop: 2,
-  },
-  postCaption: {
-    color: '#fff',
-    fontSize: 15,
-    lineHeight: 22,
-    marginBottom: 12,
-    fontWeight: '400',
-  },
-  postStats: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 0, 255, 0.1)',
-    paddingTop: 12,
   },
-  statItem: {
-    flexDirection: 'row',
+  avatarContainer: {
+    position: 'relative',
+    marginRight: 8,
+  },
+  avatarBorder: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    padding: 2,
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 12,
+    justifyContent: 'center',
   },
-  statText: {
-    color: '#888',
-    marginLeft: 6,
-    fontSize: 13,
-    fontWeight: '500',
+  userAvatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
   },
-  hashtagCard: {
-    marginHorizontal: 20,
-    marginBottom: 16,
-    borderRadius: 18,
-    overflow: 'hidden',
-    shadowColor: '#ff00ff',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
+  avatarGlow: {
+    position: 'absolute',
+    top: -3,
+    left: -3,
+    right: -3,
+    bottom: -3,
+    borderRadius: 20,
+    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
     shadowRadius: 12,
     elevation: 12,
   },
-  hashtagContent: {
-    padding: 20,
-  },
-  hashtagHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 15,
-  },
-  hashtagInfo: {
+  usernameContainer: {
     flex: 1,
   },
-  hashtagName: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: '800',
-    textShadowColor: 'rgba(0, 0, 0, 0.7)',
-    textShadowOffset: { width: 1, height: 2 },
-    textShadowRadius: 6,
-  },
-  hashtagStats: {
-    color: 'rgba(255, 255, 255, 0.8)',
+  username: {
+    color: '#3b82f6',
     fontSize: 14,
-    marginTop: 4,
-    fontWeight: '500',
+    fontWeight: 'bold',
+    textShadowColor: 'rgba(59, 130, 246, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
-  trendingBadge: {
+  postCaption: {
+    color: '#e5e5e5',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  postStats: {
+    flexDirection: 'row',
+    gap: 15,
+  },
+  statItem: {
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  statBackground: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
-  trendingText: {
-    color: '#fff',
+  statText: {
+    color: '#888888',
     fontSize: 12,
-    fontWeight: '700',
-    marginLeft: 6,
+    fontWeight: '600',
+  },
+  topicWrapper: {
+    marginBottom: 15,
+  },
+  topicCard: {
+    borderRadius: 15,
+    overflow: 'hidden',
+  },
+  topicGradient: {
+    padding: 20,
+    position: 'relative',
+  },
+  topicGlow: {
+    position: 'absolute',
+    top: -2,
+    left: -2,
+    right: -2,
+    bottom: -2,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    shadowColor: '#ffffff',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 15,
+    elevation: 15,
+  },
+  topicHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  topicRank: {
+    marginRight: 12,
+  },
+  rankContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  rankNumber: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  topicInfo: {
+    flex: 1,
+  },
+  hashtagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  hashtagText: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginLeft: 8,
     textShadowColor: 'rgba(0, 0, 0, 0.5)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
   },
-  recentPosts: {
-    marginTop: 10,
-  },
-  recentPostsTitle: {
-    color: 'rgba(255, 255, 255, 0.9)',
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 10,
-  },
-  recentPostItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 12,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  recentPostAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 12,
-    marginRight: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 0, 255, 0.3)',
-  },
-  recentPostInfo: {
-    flex: 1,
-  },
-  recentPostUser: {
-    color: '#ff00ff',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  recentPostText: {
+  topicStats: {
     color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 13,
+  },
+  trendingBadge: {
+    position: 'relative',
+  },
+  badgeGradient: {
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  trendingScore: {
+    color: '#ffffff',
     fontSize: 12,
+    fontWeight: 'bold',
+  },
+  previewContainer: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  previewLabel: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 12,
+    marginBottom: 6,
+    fontWeight: '600',
+  },
+  previewPost: {
+    marginBottom: 4,
+  },
+  previewUsername: {
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  previewCaption: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 11,
     marginTop: 2,
   },
-  loadingContainer: {
-    padding: 50,
-    alignItems: 'center',
-  },
-  loadingText: {
-    color: '#fff',
-    marginTop: 15,
-    fontSize: 16,
-    fontWeight: '500',
-  },
   emptyContainer: {
-    padding: 50,
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
+    paddingVertical: 60,
+    position: 'relative',
   },
   emptyIconContainer: {
     width: 100,
@@ -1143,19 +1593,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 20,
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 12,
   },
   emptyText: {
-    color: '#ff00ff',
-    fontSize: 18,
-    fontWeight: '700',
+    color: '#888888',
+    fontSize: 16,
+    marginTop: 15,
     textAlign: 'center',
-    marginBottom: 8,
+    textShadowColor: 'rgba(59, 130, 246, 0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
-  emptySubtext: {
-    color: '#888',
+  emptySubText: {
+    color: '#666666',
     fontSize: 14,
+    marginTop: 8,
     textAlign: 'center',
-    fontWeight: '500',
+    paddingHorizontal: 20,
+  },
+  emptyGlow: {
+    position: 'absolute',
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 30,
+    elevation: 20,
   },
 });
 
