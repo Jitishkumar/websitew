@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, ActivityIndicator, Animated, Alert, FlatList, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, ActivityIndicator, Animated, Alert, FlatList, Modal, Dimensions } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
@@ -132,6 +132,7 @@ const UserProfileScreen = () => {
 
   const startAnimations = () => {
     Animated.parallel([
+      // Basic entrance animations
       Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 800,
@@ -153,7 +154,79 @@ const UserProfileScreen = () => {
         duration: 1000,
         delay: 300,
         useNativeDriver: true,
-      })
+      }),
+      
+      // Ultra-premium continuous animations
+      Animated.loop(
+        Animated.timing(shimmerAnim, {
+          toValue: 1,
+          duration: 3000,
+          useNativeDriver: true,
+        })
+      ),
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(glowAnim, {
+            toValue: 1,
+            duration: 2000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(glowAnim, {
+            toValue: 0.3,
+            duration: 2000,
+            useNativeDriver: true,
+          }),
+        ])
+      ),
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.05,
+            duration: 1500,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 1500,
+            useNativeDriver: true,
+          }),
+        ])
+      ),
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(floatAnim, {
+            toValue: -3,
+            duration: 2500,
+            useNativeDriver: true,
+          }),
+          Animated.timing(floatAnim, {
+            toValue: 3,
+            duration: 2500,
+            useNativeDriver: true,
+          }),
+        ])
+      ),
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(headerGlowAnim, {
+            toValue: 1,
+            duration: 1800,
+            useNativeDriver: true,
+          }),
+          Animated.timing(headerGlowAnim, {
+            toValue: 0.2,
+            duration: 1800,
+            useNativeDriver: true,
+          }),
+        ])
+      ),
+      Animated.loop(
+        Animated.timing(coverShimmerAnim, {
+          toValue: 1,
+          duration: 4000,
+          useNativeDriver: true,
+        })
+      ),
     ]).start();
   };
 
@@ -212,13 +285,22 @@ const UserProfileScreen = () => {
   const [isBlocked, setIsBlocked] = useState(false);
   const [blockReason, setBlockReason] = useState('');
 
-  // Animation refs for premium UI
+  // Animation refs for ultra-premium UI
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
   const profileImageAnim = useRef(new Animated.Value(1)).current;
   const followButtonAnim = useRef(new Animated.Value(1)).current;
   const statsAnim = useRef(new Animated.Value(0)).current;
+  
+  // Ultra-premium animation refs
+  const shimmerAnim = useRef(new Animated.Value(0)).current;
+  const glowAnim = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const floatAnim = useRef(new Animated.Value(0)).current;
+  const headerGlowAnim = useRef(new Animated.Value(0)).current;
+  const tabGlowAnim = useRef(new Animated.Value(0)).current;
+  const coverShimmerAnim = useRef(new Animated.Value(0)).current;
 
   const getProfilePrivacy = async (userId) => {
     try {
@@ -1425,153 +1507,233 @@ const UserProfileScreen = () => {
   };
 
   return (
-    <LinearGradient colors={['#1a1a2e', '#16213e', '#0f3460']} style={styles.container}>
+    <View style={styles.container}>
+      <LinearGradient 
+        colors={['rgba(5, 5, 32, 0.98)', 'rgba(15, 15, 45, 0.95)', 'rgba(25, 25, 60, 0.92)']} 
+        style={styles.backgroundGradient}
+      />
+      
+      {/* Animated shimmer background overlay */}
+      <Animated.View
+        style={[
+          styles.shimmerBackground,
+          {
+            opacity: shimmerAnim.interpolate({
+              inputRange: [0, 0.5, 1],
+              outputRange: [0, 0.3, 0]
+            }),
+            transform: [{
+              translateX: shimmerAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [-Dimensions.get('window').width, Dimensions.get('window').width]
+              })
+            }]
+          }
+        ]}
+      >
+        <LinearGradient
+          colors={['transparent', 'rgba(255, 0, 255, 0.4)', 'rgba(0, 255, 255, 0.4)', 'transparent']}
+          start={{x: 0, y: 0}}
+          end={{x: 1, y: 0}}
+          style={styles.shimmerGradient}
+        />
+      </Animated.View>
+      
       <ProfileViewBlinker 
         gender={userProfile?.gender} 
         viewerGender={viewerGender} 
       />
-      {/* Enhanced Header */}
-      <LinearGradient
-        colors={['#0a0a2a', '#1a1a4a', '#2a1a4a']}
-        style={[styles.header, { paddingTop: insets.top + 10 }]}
+      
+      {/* Ultra-Premium Header */}
+      <Animated.View 
+        style={[
+          styles.header, 
+          { 
+            paddingTop: insets.top + 10,
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }, { scale: scaleAnim }]
+          }
+        ]}
       >
-        <Animated.View 
-          style={[
-            styles.headerContent,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }]
-            }
-          ]}
+        <LinearGradient
+          colors={['rgba(26, 26, 46, 0.95)', 'rgba(22, 33, 62, 0.9)', 'rgba(15, 52, 96, 0.85)']}
+          start={{x: 0, y: 0}}
+          end={{x: 1, y: 1}}
+          style={styles.headerGradient}
         >
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-            activeOpacity={0.7}
+          {/* Header glow effect */}
+          <Animated.View 
+            style={[
+              styles.headerGlow,
+              {
+                opacity: headerGlowAnim,
+                transform: [{
+                  scale: headerGlowAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [1, 1.05]
+                  })
+                }]
+              }
+            ]}
+          />
+          
+          <Animated.View 
+            style={[
+              styles.headerContent,
+              {
+                transform: [{ translateY: floatAnim }]
+              }
+            ]}
           >
-            <LinearGradient
-              colors={['rgba(255, 0, 255, 0.2)', 'rgba(255, 0, 255, 0.1)']}
-              style={styles.backButtonGradient}
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => navigation.goBack()}
+              activeOpacity={0.7}
             >
-              <Ionicons name="arrow-back" size={24} color="#ff00ff" />
-            </LinearGradient>
-          </TouchableOpacity>
-          
-          <View style={styles.headerTitleContainer}>
-            <LinearGradient
-              colors={['#ff00ff', '#ff6b9d', '#c44569']}
-              start={{x: 0, y: 0}}
-              end={{x: 1, y: 0}}
-              style={styles.headerTitleGradient}
+              <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+                <LinearGradient
+                  colors={['rgba(255, 0, 255, 0.3)', 'rgba(255, 0, 255, 0.1)']}
+                  style={styles.backButtonGradient}
+                >
+                  <Ionicons name="arrow-back" size={24} color="#ff00ff" />
+                </LinearGradient>
+              </Animated.View>
+            </TouchableOpacity>
+            
+            <Animated.View 
+              style={[
+                styles.headerTitleContainer,
+                { transform: [{ scale: pulseAnim }] }
+              ]}
             >
-              <MaterialIcons name="person" size={20} color="#fff" />
-              <Text style={styles.headerTitle}>Profile</Text>
-            </LinearGradient>
-          </View>
-          
+              <LinearGradient
+                colors={['#ff00ff', '#ff6b9d', '#c44569']}
+                start={{x: 0, y: 0}}
+                end={{x: 1, y: 0}}
+                style={styles.headerTitleGradient}
+              >
+                <Animated.View 
+                  style={[
+                    styles.titleGlow,
+                    {
+                      opacity: glowAnim,
+                      transform: [{
+                        scale: glowAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [1, 1.1]
+                        })
+                      }]
+                    }
+                  ]}
+                />
+                <MaterialIcons name="person" size={20} color="#fff" />
+                <Text style={styles.headerTitle}>Profile</Text>
+              </LinearGradient>
+            </Animated.View>
           <TouchableOpacity
             style={styles.menuButton}
             onPress={() => {}}
             activeOpacity={0.7}
           >
-            <LinearGradient
-              colors={['rgba(255, 0, 255, 0.2)', 'rgba(255, 0, 255, 0.1)']}
-              style={styles.menuButtonGradient}
-            >
-              <MaterialIcons name="more-vert" size={24} color="#ff00ff" />
-            </LinearGradient>
+            <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+              <LinearGradient
+                colors={['rgba(255, 0, 255, 0.3)', 'rgba(255, 0, 255, 0.1)']}
+                style={styles.menuButtonGradient}
+              >
+                <MaterialIcons name="more-vert" size={24} color="#ff00ff" />
+              </LinearGradient>
+            </Animated.View>
           </TouchableOpacity>
         </Animated.View>
       </LinearGradient>
-      
-      {loading ? (
-        <View style={[styles.container, styles.centered]}>
-          <ActivityIndicator size="large" color="#ff00ff" />
-        </View>
-      ) : isBlocked ? (
-        <View style={[styles.container, styles.centered]}>
-          <Ionicons name="ban" size={60} color="#ff00ff" />
-          <Text style={styles.blockedTitle}>Profile Unavailable</Text>
-          <Text style={styles.blockedText}>{blockReason}</Text>
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Text style={styles.backButtonText}>Go Back</Text>
-          </TouchableOpacity>
-        </View>
-      ) : userProfile ? (
-        activeTab === 'Details' ? (
-          <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom }}>
-            <ProfileHeader />
-            <TabsSection />
-            <View style={styles.detailsSection}>
-              <View style={styles.detailItem}>
-                <Ionicons name="person-outline" size={24} color="#666" />
-                <View style={styles.detailContent}>
-                  <Text style={styles.detailTitle}>About me</Text>
-                  <Text style={styles.detailText}>
-                    {userProfile?.bio || 'No bio added yet'}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.detailItem}>
-                <Ionicons name="trophy-outline" size={24} color="#FFD700" />
-                <View style={styles.detailContent}>
-                  <Text style={styles.detailTitle}>Member Rank</Text>
-                  <Text style={styles.detailText}>
-                    {userProfile?.rank 
-                      ? `Member #${userProfile.rank} on Flexx`
-                      : 'Rank not assigned yet'}
-                  </Text>
-                </View>
+    </Animated.View>
+    {loading ? (
+      <View style={[styles.container, styles.centered]}>
+        <ActivityIndicator size="large" color="#ff00ff" />
+      </View>
+    ) : isBlocked ? (
+      <View style={[styles.container, styles.centered]}>
+        <Ionicons name="ban" size={60} color="#ff00ff" />
+        <Text style={styles.blockedTitle}>Profile Unavailable</Text>
+        <Text style={styles.blockedText}>{blockReason}</Text>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={styles.backButtonText}>Go Back</Text>
+        </TouchableOpacity>
+      </View>
+    ) : userProfile ? (
+      activeTab === 'Details' ? (
+        <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom }}>
+          <ProfileHeader />
+          <TabsSection />
+          <View style={styles.detailsSection}>
+            <View style={styles.detailItem}>
+              <Ionicons name="person-outline" size={24} color="#666" />
+              <View style={styles.detailContent}>
+                <Text style={styles.detailTitle}>About me</Text>
+                <Text style={styles.detailText}>
+                  {userProfile?.bio || 'No bio added yet'}
+                </Text>
               </View>
             </View>
-          </ScrollView>
-        ) : (
-          (!hasPrivateAccount || canViewPrivateContent) ? (
-            <ContentSection />
-          ) : (
-            <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom }}>
-              <ProfileHeader />
-              <TabsSection />
-              <View style={styles.privateAccountMessage}>
-                <Ionicons name="lock-closed" size={40} color="#ff00ff" />
-                <Text style={styles.privateAccountTitle}>This Account is Private</Text>
-                <Text style={styles.privateAccountText}>Follow this account to see their posts and shorts.</Text>
+
+            <View style={styles.detailItem}>
+              <Ionicons name="trophy-outline" size={24} color="#FFD700" />
+              <View style={styles.detailContent}>
+                <Text style={styles.detailTitle}>Member Rank</Text>
+                <Text style={styles.detailText}>
+                  {userProfile?.rank 
+                    ? `Member #${userProfile.rank} on Flexx`
+                    : 'Rank not assigned yet'}
+                </Text>
               </View>
-            </ScrollView>
-          )
-        )
+            </View>
+          </View>
+        </ScrollView>
       ) : (
-        <View style={[styles.container, styles.centered]}>
-          <Text style={styles.errorText}>Could not load profile</Text>
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Text style={styles.backButtonText}>Go Back</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-      {/* Render Connections Modals */}
-      <ConnectionsModal
-        visible={showFollowersModal}
-        onClose={() => setShowFollowersModal(false)}
-        title="Followers"
-        connections={followers}
-        isLoading={loadingConnections}
-      />
-      <ConnectionsModal
-        visible={showFollowingModal}
-        onClose={() => setShowFollowingModal(false)}
-        title="Following"
-        connections={following}
-        isLoading={loadingConnections}
-      />
-    </LinearGradient>
+        (!hasPrivateAccount || canViewPrivateContent) ? (
+          <ContentSection />
+        ) : (
+          <View style={styles.privateAccountMessage}>
+            <Ionicons name="lock-closed" size={60} color="#ff00ff" />
+            <Text style={styles.privateTitle}>Private Account</Text>
+            <Text style={styles.privateText}>This account is private. Follow to see their content.</Text>
+          </View>
+        )
+      )
+    ) : userProfile ? (
+      <ScrollView style={{ flex: 1 }}>
+        <ProfileHeader />
+        <TabsSection />
+        {renderContent()}
+      </ScrollView>
+    ) : (
+      <View style={styles.emptyContainer}>
+        <Text style={styles.emptyText}>Profile not found</Text>
+      </View>
+    )}
+    
+    {/* Modals */}
+    <ConnectionsModal
+      visible={showFollowersModal}
+      onClose={() => setShowFollowersModal(false)}
+      title="Followers"
+      connections={followers}
+      isLoading={loadingConnections}
+    />
+    
+    <ConnectionsModal
+      visible={showFollowingModal}
+      onClose={() => setShowFollowingModal(false)}
+      title="Following"
+      connections={following}
+      isLoading={loadingConnections}
+    />
+  </View>
   );
+  
 };
 
 const styles = StyleSheet.create({

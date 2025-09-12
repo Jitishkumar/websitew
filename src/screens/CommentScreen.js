@@ -13,6 +13,7 @@ import {
   Alert,
   Dimensions,
   Switch,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -33,6 +34,14 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
 
   const insets = useSafeAreaInsets();
   const flatListRef = useRef(null);
+  
+  // Ultra-premium animation refs
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+  const shimmerAnim = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const headerGlowAnim = useRef(new Animated.Value(0)).current;
 
   const handleClose = () => {
     navigation.goBack();
@@ -53,8 +62,70 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
     if (currentPostId) {
       loadComments();
       getCurrentUser();
+      startAnimations();
     }
   }, [currentPostId, currentUserUsername]); // Added currentUserUsername to dependencies for loadComments
+  
+  const startAnimations = () => {
+    Animated.parallel([
+      // Entrance animations
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        tension: 100,
+        friction: 8,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 120,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+      // Continuous shimmer effect
+      Animated.loop(
+        Animated.timing(shimmerAnim, {
+          toValue: 1,
+          duration: 3000,
+          useNativeDriver: true,
+        })
+      ),
+      // Pulse effect
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.03,
+            duration: 2000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 2000,
+            useNativeDriver: true,
+          }),
+        ])
+      ),
+      // Header glow effect
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(headerGlowAnim, {
+            toValue: 1,
+            duration: 1500,
+            useNativeDriver: true,
+          }),
+          Animated.timing(headerGlowAnim, {
+            toValue: 0.3,
+            duration: 1500,
+            useNativeDriver: true,
+          }),
+        ])
+      ),
+    ]).start();
+  };
 
   useEffect(() => {
     if (currentHighlightCommentId && comments.length > 0) {
@@ -591,30 +662,92 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
         style={{ flex: 1, paddingBottom: insets.bottom }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-      <View style={[
-        styles.header,
-        { paddingTop: Platform.OS === 'ios' ? insets.top : 0 }
-      ]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={24} color="#fff" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Comments</Text>
-        <View style={{ width: 24 }} />
-      </View>
+      <Animated.View 
+        style={[
+          styles.header,
+          { 
+            paddingTop: Platform.OS === 'ios' ? insets.top : 0,
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }, { scale: scaleAnim }]
+          }
+        ]}
+      >
+        <LinearGradient
+          colors={['rgba(26, 26, 46, 0.95)', 'rgba(22, 33, 62, 0.9)', 'rgba(15, 52, 96, 0.85)']}
+          start={{x: 0, y: 0}}
+          end={{x: 1, y: 1}}
+          style={styles.headerGradient}
+        >
+          {/* Shimmer overlay effect */}
+          <Animated.View 
+            style={[
+              styles.shimmerOverlay,
+              {
+                opacity: shimmerAnim.interpolate({
+                  inputRange: [0, 0.5, 1],
+                  outputRange: [0, 0.3, 0]
+                }),
+                transform: [{
+                  translateX: shimmerAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [-400, 400]
+                  })
+                }]
+              }
+            ]}
+          />
+          
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <LinearGradient
+              colors={['rgba(255, 0, 255, 0.2)', 'rgba(255, 0, 255, 0.1)']}
+              style={styles.backButtonGradient}
+            >
+              <Ionicons name="chevron-back" size={24} color="#ff00ff" />
+            </LinearGradient>
+          </TouchableOpacity>
+          
+          <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+            <LinearGradient
+              colors={['#ff00ff', '#ff6b9d', '#c44569']}
+              style={styles.titleContainer}
+            >
+              <Animated.View 
+                style={[
+                  styles.titleGlow,
+                  {
+                    opacity: headerGlowAnim,
+                    transform: [{
+                      scale: headerGlowAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [1, 1.1]
+                      })
+                    }]
+                  }
+                ]}
+              />
+              <Text style={styles.headerTitle}>Comments</Text>
+            </LinearGradient>
+          </Animated.View>
+          
+          <View style={{ width: 24 }} />
+        </LinearGradient>
+      </Animated.View>
 
       {loading ? (
         <ActivityIndicator size="large" color="#ff00ff" style={styles.loading} />
       ) : (
-        <FlatList
-          data={comments.filter(c => !c.parent_comment_id)} // Only show top-level comments
-          keyExtractor={(item) => item.id.toString()}
-          renderItem={renderComment}
-          style={styles.commentsList}
-          ListEmptyComponent={
-            <Text style={styles.emptyText}>No comments yet. Be the first to comment!</Text>
-          }
-          ref={flatListRef} // Attach ref to FlatList
-        />
+        <Animated.View style={{ flex: 1, opacity: fadeAnim, transform: [{ scale: scaleAnim }] }}>
+          <FlatList
+            data={comments.filter(c => !c.parent_comment_id)} // Only show top-level comments
+            keyExtractor={(item) => item.id.toString()}
+            renderItem={renderComment}
+            style={styles.commentsList}
+            ListEmptyComponent={
+              <Text style={styles.emptyText}>No comments yet. Be the first to comment!</Text>
+            }
+            ref={flatListRef} // Attach ref to FlatList
+          />
+        </Animated.View>
       )}
 
       <LinearGradient
@@ -630,42 +763,74 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
           </View>
         )}
         
-        <View style={styles.anonymousOption}>
-          <Text style={styles.anonymousText}>Post anonymously</Text>
-          <Switch
-            value={isAnonymous}
-            onValueChange={setIsAnonymous}
-            trackColor={{ false: '#333', true: '#ff00ff' }}
-            thumbColor={isAnonymous ? '#00ffff' : '#f4f3f4'}
-          />
-        </View>
-        
-        <View style={styles.inputRow}>
+      
+      <Animated.View 
+        style={[
+          styles.inputRow,
+          { 
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }, { scale: pulseAnim }]
+          }
+        ]}
+      >
+        <LinearGradient
+          colors={['rgba(255, 0, 255, 0.1)', 'rgba(255, 107, 157, 0.05)']}
+          style={styles.textInputContainer}
+        >
           <TextInput
-            style={styles.input}
-            placeholder="Add a comment..."
-            placeholderTextColor="#666"
+            style={styles.textInput}
+            placeholder={replyingTo ? `Reply to ${replyingTo.is_anonymous ? 'Anonymous' : replyingTo.profiles?.username}...` : "Add a comment..."}
+            placeholderTextColor="#888"
             value={commentText}
             onChangeText={setCommentText}
             multiline
             maxLength={500}
-            color="#fff"
           />
-          <TouchableOpacity
-            style={[styles.sendButton, !commentText.trim() && styles.disabledButton]}
-            onPress={replyingTo ? handleReply : handleAddComment}
-            disabled={!commentText.trim() || submitting}
+        </LinearGradient>
+        
+        <TouchableOpacity
+          style={[styles.sendButton, { opacity: commentText.trim() ? 1 : 0.5 }]}
+          onPress={handleSubmitComment}
+          disabled={!commentText.trim() || submitting}
+        >
+          <LinearGradient
+            colors={commentText.trim() ? ['#ff00ff', '#ff6b9d'] : ['#666', '#444']}
+            style={styles.sendButtonGradient}
           >
             {submitting ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
-              <Ionicons name="send" size={24} color="#fff" />
+              <Ionicons name="send" size={20} color="#fff" />
             )}
-          </TouchableOpacity>
-        </View>
-      </LinearGradient>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+          </LinearGradient>
+        </TouchableOpacity>
+      </Animated.View>
+
+      <Animated.View 
+        style={[
+          styles.anonymousToggle,
+          { 
+            opacity: fadeAnim,
+            transform: [{ scale: pulseAnim }]
+          }
+        ]}
+      >
+        <LinearGradient
+          colors={['rgba(255, 0, 255, 0.1)', 'rgba(0, 255, 255, 0.05)']}
+          style={styles.toggleContainer}
+        >
+          <Text style={styles.anonymousLabel}>Post anonymously</Text>
+          <Switch
+            value={isAnonymous}
+            onValueChange={setIsAnonymous}
+            trackColor={{ false: '#767577', true: '#ff00ff' }}
+            thumbColor={isAnonymous ? '#fff' : '#f4f3f4'}
+          />
+        </LinearGradient>
+      </Animated.View>
+    </LinearGradient>
+    </KeyboardAvoidingView>
+  </SafeAreaView>
   );
 };
 
@@ -840,7 +1005,71 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     marginRight: 10,
-  }
+  },
+  headerGradient: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 15,
+    margin: 8,
+  },
+  shimmerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    width: 100,
+    transform: [{ skewX: '-20deg' }],
+  },
+  backButtonGradient: {
+    padding: 8,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  titleContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  titleGlow: {
+    position: 'absolute',
+    top: -10,
+    left: -10,
+    right: -10,
+    bottom: -10,
+    backgroundColor: 'rgba(255, 0, 255, 0.3)',
+    borderRadius: 25,
+  },
+  textInputContainer: {
+    flex: 1,
+    borderRadius: 20,
+    marginRight: 10,
+    overflow: 'hidden',
+  },
+  sendButtonGradient: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  toggleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 15,
+    marginTop: 10,
+  },
 });
 
 export default CommentScreen;

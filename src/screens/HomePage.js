@@ -1,4 +1,4 @@
-import { Text, View, StyleSheet, Alert, TouchableOpacity, SafeAreaView, ActivityIndicator } from 'react-native';
+import { Text, View, StyleSheet, Alert, TouchableOpacity, SafeAreaView, ActivityIndicator, Animated, Dimensions } from 'react-native';
 import React, { useState, useEffect, useRef } from 'react';
 import { TextInput } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,6 +6,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Camera } from 'expo-camera';
 import { Audio } from 'expo-av';
 import { supabase } from '../lib/supabase';
+import { LinearGradient } from 'expo-linear-gradient';
+
+const { width, height } = Dimensions.get('window');
 
 function HomePage({navigation}) {
   const [name, setName] = useState('');
@@ -19,10 +22,21 @@ function HomePage({navigation}) {
   const pollIntervalRef = useRef(null);
   const timeoutRef = useRef(null);
 
+  // Animation refs for ultra-premium effects
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+  const scaleAnim = useRef(new Animated.Value(0.8)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const glowAnim = useRef(new Animated.Value(0)).current;
+  const shimmerAnim = useRef(new Animated.Value(0)).current;
+  const buttonPulseAnim = useRef(new Animated.Value(1)).current;
+  const statusAnim = useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
     getCurrentUser();
     getWaitingUsersCount();
     requestPermissions();
+    initializeAnimations();
     
     // Clean up any existing waiting entries for this user on mount
     return () => {
@@ -35,6 +49,84 @@ function HomePage({navigation}) {
       }
     };
   }, []);
+
+  const initializeAnimations = () => {
+    // Main entrance animations
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 1000,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // Continuous pulse animation
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.05,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+
+    // Continuous glow animation
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowAnim, {
+          toValue: 1,
+          duration: 3000,
+          useNativeDriver: false,
+        }),
+        Animated.timing(glowAnim, {
+          toValue: 0,
+          duration: 3000,
+          useNativeDriver: false,
+        }),
+      ])
+    ).start();
+
+    // Continuous shimmer animation
+    Animated.loop(
+      Animated.timing(shimmerAnim, {
+        toValue: 1,
+        duration: 2500,
+        useNativeDriver: true,
+      })
+    ).start();
+
+    // Button pulse animation
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(buttonPulseAnim, {
+          toValue: 1.02,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(buttonPulseAnim, {
+          toValue: 1,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  };
 
   const requestPermissions = async () => {
     try {
@@ -467,130 +559,362 @@ function HomePage({navigation}) {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={headerStyle}>
-        <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={28} color="#fff" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Random Video Call</Text>
-        <View style={styles.headerRight}>
-          {waitingUsers > 0 && (
-            <View style={styles.waitingIndicator}>
-              <Text style={styles.waitingCount}>{waitingUsers}</Text>
-            </View>
-          )}
-        </View>
-      </View>
-      
-      <View style={styles.container}>
-        <View style={styles.userInfo}>
-          <Text style={styles.infoText}>Username: {name || 'Loading...'}</Text>
-          <Text style={styles.infoText}>Call ID: {callId || 'Will be generated'}</Text>
-          {waitingUsers > 0 && (
-            <Text style={styles.waitingText}>
-              {waitingUsers} user{waitingUsers === 1 ? '' : 's'} waiting
-            </Text>
-          )}
-        </View>
-
-        <TextInput 
-          style={styles.input}
-          placeholder="Your username (auto-filled)" 
-          value={name}
-          editable={false}
-          mode="outlined"
-          outlineColor="rgba(255, 255, 255, 0.5)"
-          activeOutlineColor="#ffffff"
-          elevation={2}
-          theme={{ colors: { text: '#ffffff', primary: '#ffffff', placeholder: 'rgba(255, 255, 255, 0.6)' } }}
-          textColor="#ffffff"
-          contentStyle={styles.inputText}
-        />
-
-        <TextInput 
-          style={styles.input}
-          placeholder="Call ID (auto-generated)" 
-          value={callId}
-          editable={false}
-          mode="outlined"
-          outlineColor="rgba(255, 255, 255, 0.5)"
-          activeOutlineColor="#ffffff"
-          elevation={2}
-          theme={{ colors: { text: '#ffffff', primary: '#ffffff', placeholder: 'rgba(255, 255, 255, 0.6)' } }}
-          textColor="#ffffff"
-          contentStyle={styles.inputText}
-        />
-
-        {matchingStatus && (
-          <View style={styles.statusContainer}>
-            <Text style={styles.statusText}>{matchingStatus}</Text>
-            {isMatching && !isWaiting && (
-              <ActivityIndicator 
-                size="small" 
-                color="#00aaff" 
-                style={styles.statusSpinner} 
-              />
+      {/* Enhanced Header with animations */}
+      <Animated.View
+        style={[
+          headerStyle,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }]
+          }
+        ]}
+      >
+        <LinearGradient
+          colors={['#1a1a2e', '#16213e', '#0f3460']}
+          start={{x: 0, y: 0}}
+          end={{x: 1, y: 1}}
+          style={styles.headerGradient}
+        >
+          {/* Header glow effect */}
+          <Animated.View
+            style={[
+              styles.headerGlow,
+              {
+                opacity: glowAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.2, 0.6]
+                })
+              }
+            ]}
+          />
+          
+          <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+            <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
+              <Ionicons name="chevron-back" size={28} color="#ff00ff" />
+            </TouchableOpacity>
+          </Animated.View>
+          
+          <Text style={styles.headerTitle}>Random Video Call</Text>
+          
+          <View style={styles.headerRight}>
+            {waitingUsers > 0 && (
+              <Animated.View 
+                style={[
+                  styles.waitingIndicator,
+                  { transform: [{ scale: pulseAnim }] }
+                ]}
+              >
+                <LinearGradient
+                  colors={['#ff00ff', '#00ffff']}
+                  style={styles.waitingBadge}
+                >
+                  <Text style={styles.waitingCount}>{waitingUsers}</Text>
+                </LinearGradient>
+              </Animated.View>
             )}
           </View>
+          
+          {/* Header shimmer effect */}
+          <Animated.View
+            style={[
+              styles.headerShimmer,
+              {
+                opacity: shimmerAnim.interpolate({
+                  inputRange: [0, 0.5, 1],
+                  outputRange: [0, 0.3, 0]
+                }),
+                transform: [{
+                  translateX: shimmerAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [-width, width]
+                  })
+                }]
+              }
+            ]}
+          >
+            <LinearGradient
+              colors={['transparent', 'rgba(255, 0, 255, 0.4)', 'rgba(0, 255, 255, 0.4)', 'transparent']}
+              start={{x: 0, y: 0}}
+              end={{x: 1, y: 0}}
+              style={styles.shimmerGradient}
+            />
+          </Animated.View>
+        </LinearGradient>
+      </Animated.View>
+      
+      <Animated.View 
+        style={[
+          styles.container,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }]
+          }
+        ]}
+      >
+        {/* Enhanced User Info Section */}
+        <Animated.View 
+          style={[
+            styles.userInfo,
+            { transform: [{ scale: scaleAnim }] }
+          ]}
+        >
+          <LinearGradient
+            colors={['rgba(26, 26, 46, 0.8)', 'rgba(22, 33, 62, 0.6)']}
+            style={styles.userInfoContainer}
+          >
+            <Animated.View
+              style={[
+                styles.userInfoGlow,
+                {
+                  opacity: glowAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.1, 0.4]
+                  })
+                }
+              ]}
+            />
+            <Text style={styles.infoText}>Username: {name || 'Loading...'}</Text>
+            <Text style={styles.infoText}>Call ID: {callId || 'Will be generated'}</Text>
+            {waitingUsers > 0 && (
+              <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+                <Text style={styles.waitingText}>
+                  {waitingUsers} user{waitingUsers === 1 ? '' : 's'} waiting
+                </Text>
+              </Animated.View>
+            )}
+          </LinearGradient>
+        </Animated.View>
+
+        {/* Enhanced Input Fields */}
+        <Animated.View
+          style={[
+            styles.inputContainer,
+            {
+              opacity: fadeAnim,
+              transform: [{ scale: scaleAnim }]
+            }
+          ]}
+        >
+          <LinearGradient
+            colors={['rgba(255, 0, 255, 0.1)', 'rgba(0, 255, 255, 0.05)']}
+            style={styles.inputGradient}
+          >
+            <TextInput 
+              style={styles.input}
+              placeholder="Your username (auto-filled)" 
+              value={name}
+              editable={false}
+              mode="outlined"
+              outlineColor="rgba(255, 0, 255, 0.3)"
+              activeOutlineColor="#ff00ff"
+              elevation={2}
+              theme={{ colors: { text: '#ffffff', primary: '#ff00ff', placeholder: 'rgba(255, 255, 255, 0.6)' } }}
+              textColor="#ffffff"
+              contentStyle={styles.inputText}
+            />
+
+            <TextInput 
+              style={styles.input}
+              placeholder="Call ID (auto-generated)" 
+              value={callId}
+              editable={false}
+              mode="outlined"
+              outlineColor="rgba(255, 0, 255, 0.3)"
+              activeOutlineColor="#ff00ff"
+              elevation={2}
+              theme={{ colors: { text: '#ffffff', primary: '#ff00ff', placeholder: 'rgba(255, 255, 255, 0.6)' } }}
+              textColor="#ffffff"
+              contentStyle={styles.inputText}
+            />
+          </LinearGradient>
+        </Animated.View>
+
+        {/* Enhanced Status Display */}
+        {matchingStatus && (
+          <Animated.View 
+            style={[
+              styles.statusContainer,
+              {
+                opacity: fadeAnim,
+                transform: [{ scale: scaleAnim }]
+              }
+            ]}
+          >
+            <LinearGradient
+              colors={['rgba(0, 170, 255, 0.2)', 'rgba(255, 0, 255, 0.1)']}
+              style={styles.statusGradient}
+            >
+              <Animated.View
+                style={[
+                  styles.statusGlow,
+                  {
+                    opacity: glowAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.2, 0.8]
+                    })
+                  }
+                ]}
+              />
+              <Text style={styles.statusText}>{matchingStatus}</Text>
+              {isMatching && !isWaiting && (
+                <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+                  <ActivityIndicator 
+                    size="small" 
+                    color="#00aaff" 
+                    style={styles.statusSpinner} 
+                  />
+                </Animated.View>
+              )}
+            </LinearGradient>
+          </Animated.View>
         )}
 
-        <TouchableOpacity
+        {/* Enhanced Main Button */}
+        <Animated.View
           style={[
-            styles.joinButton, 
-            (isMatching && !isWaiting) && styles.joinButtonDisabled,
-            (!currentUser?.gender || !permissionsGranted) && styles.joinButtonDisabled
+            {
+              transform: [{ scale: buttonPulseAnim }]
+            }
           ]}
-          onPress={isWaiting ? cancelWaiting : findRandomMatch}
-          disabled={(isMatching && !isWaiting) || !name || !currentUser?.gender || !permissionsGranted}
         >
-          {isMatching && !isWaiting ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="small" color="#ffffff" style={styles.spinner} />
-              <Text style={styles.joinButtonText}>SEARCHING...</Text>
-            </View>
-          ) : isWaiting ? (
-            <Text style={styles.joinButtonText}>CANCEL WAITING</Text>
-          ) : (
-            <Text style={styles.joinButtonText}>FIND RANDOM MATCH</Text>
-          )}
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.joinButton, 
+              (isMatching && !isWaiting) && styles.joinButtonDisabled,
+              (!currentUser?.gender || !permissionsGranted) && styles.joinButtonDisabled
+            ]}
+            onPress={isWaiting ? cancelWaiting : findRandomMatch}
+            disabled={(isMatching && !isWaiting) || !name || !currentUser?.gender || !permissionsGranted}
+          >
+            <LinearGradient
+              colors={
+                (isMatching && !isWaiting) || (!currentUser?.gender || !permissionsGranted)
+                  ? ['#666666', '#444444']
+                  : isWaiting
+                  ? ['#ff4444', '#cc0000']
+                  : ['#ff00ff', '#00aaff', '#00ffff']
+              }
+              start={{x: 0, y: 0}}
+              end={{x: 1, y: 1}}
+              style={styles.buttonGradient}
+            >
+              <Animated.View
+                style={[
+                  styles.buttonGlow,
+                  {
+                    opacity: glowAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.3, 0.8]
+                    })
+                  }
+                ]}
+              />
+              {isMatching && !isWaiting ? (
+                <View style={styles.loadingContainer}>
+                  <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+                    <ActivityIndicator size="small" color="#ffffff" style={styles.spinner} />
+                  </Animated.View>
+                  <Text style={styles.joinButtonText}>SEARCHING...</Text>
+                </View>
+              ) : isWaiting ? (
+                <Text style={styles.joinButtonText}>CANCEL WAITING</Text>
+              ) : (
+                <Text style={styles.joinButtonText}>FIND RANDOM MATCH</Text>
+              )}
+            </LinearGradient>
+          </TouchableOpacity>
+        </Animated.View>
 
-        <View style={styles.matchingInfo}>
-          <Text style={styles.infoText}>
-            Priority matching: {getPriorityGender()}
-          </Text>
-          {!currentUser?.gender && (
-            <View style={styles.genderWarning}>
-              <Ionicons name="warning-outline" size={20} color="#ff9800" />
-              <Text style={styles.genderWarningText}>
-                Please complete your profile with gender information to enable matching.
-              </Text>
-            </View>
-          )}
-
-          {!permissionsGranted && (
-            <View style={styles.permissionWarning}>
-              <Ionicons name="camera-outline" size={20} color="#ff4444" />
-              <Text style={styles.permissionWarningText}>
-                Camera and microphone permissions required for video calls.
-              </Text>
-              <TouchableOpacity 
-                style={styles.permissionButton}
-                onPress={requestPermissions}
+        {/* Enhanced Info Section */}
+        <Animated.View 
+          style={[
+            styles.matchingInfo,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }]
+            }
+          ]}
+        >
+          <LinearGradient
+            colors={['rgba(26, 26, 46, 0.6)', 'rgba(22, 33, 62, 0.4)']}
+            style={styles.infoGradient}
+          >
+            <Text style={styles.infoText}>
+              Priority matching: {getPriorityGender()}
+            </Text>
+            {!currentUser?.gender && (
+              <Animated.View 
+                style={[
+                  styles.genderWarning,
+                  { transform: [{ scale: pulseAnim }] }
+                ]}
               >
-                <Text style={styles.permissionButtonText}>Grant Permissions</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
+                <LinearGradient
+                  colors={['rgba(255, 152, 0, 0.2)', 'rgba(255, 193, 7, 0.1)']}
+                  style={styles.warningGradient}
+                >
+                  <Ionicons name="warning-outline" size={20} color="#ff9800" />
+                  <Text style={styles.genderWarningText}>
+                    Please complete your profile with gender information to enable matching.
+                  </Text>
+                </LinearGradient>
+              </Animated.View>
+            )}
 
-        <View style={styles.helpText}>
-          <Text style={styles.helpTitle}>How it works:</Text>
-          <Text style={styles.helpItem}>• Priority given to opposite gender matches</Text>
-          <Text style={styles.helpItem}>• Falls back to same gender if no opposite available</Text>
-          <Text style={styles.helpItem}>• 3-minute call limit for all matches</Text>
-          <Text style={styles.helpItem}>• Automatic cleanup after 5 minutes of waiting</Text>
-        </View>
-      </View>
+            {!permissionsGranted && (
+              <Animated.View 
+                style={[
+                  styles.permissionWarning,
+                  { transform: [{ scale: pulseAnim }] }
+                ]}
+              >
+                <LinearGradient
+                  colors={['rgba(255, 68, 68, 0.2)', 'rgba(244, 67, 54, 0.1)']}
+                  style={styles.warningGradient}
+                >
+                  <Ionicons name="camera-outline" size={20} color="#ff4444" />
+                  <Text style={styles.permissionWarningText}>
+                    Camera and microphone permissions required for video calls.
+                  </Text>
+                  <TouchableOpacity 
+                    style={styles.permissionButton}
+                    onPress={requestPermissions}
+                  >
+                    <LinearGradient
+                      colors={['#ff4444', '#cc0000']}
+                      style={styles.permissionButtonGradient}
+                    >
+                      <Text style={styles.permissionButtonText}>Grant Permissions</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </LinearGradient>
+              </Animated.View>
+            )}
+          </LinearGradient>
+        </Animated.View>
+
+        {/* Enhanced Help Section */}
+        <Animated.View 
+          style={[
+            styles.helpText,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }]
+            }
+          ]}
+        >
+          <LinearGradient
+            colors={['rgba(26, 26, 46, 0.4)', 'rgba(22, 33, 62, 0.2)']}
+            style={styles.helpGradient}
+          >
+            <Text style={styles.helpTitle}>How it works:</Text>
+            <Text style={styles.helpItem}>• Priority given to opposite gender matches</Text>
+            <Text style={styles.helpItem}>• Falls back to same gender if no opposite available</Text>
+            <Text style={styles.helpItem}>• 3-minute call limit for all matches</Text>
+            <Text style={styles.helpItem}>• Automatic cleanup after 5 minutes of waiting</Text>
+          </LinearGradient>
+        </Animated.View>
+      </Animated.View>
     </SafeAreaView>
   );
 }

@@ -391,7 +391,7 @@ const ConfessionButtonScreen = () => {
             <View style={styles.actionButtonsRow}>
               <Animated.View style={[styles.buttonWrapper, { transform: [{ scale: buttonScaleAnim1 }] }]}>
                 <TouchableOpacity 
-                  style={[styles.premiumButton, styles.personButton]} 
+                  style={[styles.premiumButton, { backgroundColor: '#FF1744' }]} 
                   onPress={handlePersonConfession}
                   activeOpacity={0.8}
                 >
@@ -407,7 +407,7 @@ const ConfessionButtonScreen = () => {
 
               <Animated.View style={[styles.buttonWrapper, { transform: [{ scale: buttonScaleAnim2 }] }]}>
                 <TouchableOpacity 
-                  style={[styles.premiumButton, styles.placeButton]} 
+                  style={[styles.premiumButton, { backgroundColor: '#00E676' }]} 
                   onPress={handlePlaceConfession}
                   activeOpacity={0.8}
                 >
@@ -529,26 +529,11 @@ const styles = StyleSheet.create({
   },
   personButton: {
     backgroundColor: '#FF1744',
-    // Fallback for emulators
-    ...(Platform.OS === 'android' && {
-      backgroundColor: '#FF1744',
-      borderColor: '#FF1744',
-    }),
+    borderColor: '#FF1744',
   },
   placeButton: {
     backgroundColor: '#00E676',
-    // Fallback for emulators
-    ...(Platform.OS === 'android' && {
-      backgroundColor: '#00E676',
-      borderColor: '#00E676',
-    }),
-  },
-  gradientButton: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-    position: 'relative',
+    borderColor: '#00E676',
   },
   buttonIconContainer: {
     position: 'relative',
