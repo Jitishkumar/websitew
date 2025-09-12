@@ -12,7 +12,8 @@ import {
   RefreshControl,
   Alert,
   Animated,
-  Dimensions
+  Dimensions,
+  Platform
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -390,57 +391,33 @@ const ConfessionButtonScreen = () => {
             <View style={styles.actionButtonsRow}>
               <Animated.View style={[styles.buttonWrapper, { transform: [{ scale: buttonScaleAnim1 }] }]}>
                 <TouchableOpacity 
-                  style={styles.premiumButton} 
+                  style={[styles.premiumButton, styles.personButton]} 
                   onPress={handlePersonConfession}
                   activeOpacity={0.8}
                 >
-                  <LinearGradient
-                    colors={['#FF6B81', '#FF4757', '#C44569']}
-                    start={{x: 0, y: 0}}
-                    end={{x: 1, y: 1}}
-                    style={styles.gradientButton}
-                  >
-                    <View style={styles.buttonIconContainer}>
-                      <Animated.View style={[styles.iconWrapper, { transform: [{ scale: pulseAnim }] }]}>
-                        <MaterialIcons name="person" size={36} color="#fff" />
-                      </Animated.View>
-                      <View style={styles.sparkleContainer}>
-                        <Ionicons name="sparkles" size={16} color="rgba(255,255,255,0.8)" style={styles.sparkle1} />
-                        <Ionicons name="sparkles" size={12} color="rgba(255,255,255,0.6)" style={styles.sparkle2} />
-                      </View>
+                  <View style={styles.buttonIconContainer}>
+                    <View style={styles.iconWrapper}>
+                      <Ionicons name="person" size={36} color="#fff" />
                     </View>
-                    <Text style={styles.premiumButtonText}>Person</Text>
-                    <Text style={styles.buttonSubtext}>Share about someone</Text>
-                  </LinearGradient>
-                  <View style={styles.buttonGlow} />
+                  </View>
+                  <Text style={styles.premiumButtonText}>Person</Text>
+                  <Text style={styles.buttonSubtext}>Share about someone</Text>
                 </TouchableOpacity>
               </Animated.View>
 
               <Animated.View style={[styles.buttonWrapper, { transform: [{ scale: buttonScaleAnim2 }] }]}>
                 <TouchableOpacity 
-                  style={styles.premiumButton} 
+                  style={[styles.premiumButton, styles.placeButton]} 
                   onPress={handlePlaceConfession}
                   activeOpacity={0.8}
                 >
-                  <LinearGradient
-                    colors={['#4CAF50', '#8BC44A', '#2E7D32']}
-                    start={{x: 0, y: 0}}
-                    end={{x: 1, y: 1}}
-                    style={styles.gradientButton}
-                  >
-                    <View style={styles.buttonIconContainer}>
-                      <Animated.View style={[styles.iconWrapper, { transform: [{ scale: pulseAnim }] }]}>
-                        <MaterialIcons name="business" size={36} color="#fff" />
-                      </Animated.View>
-                      <View style={styles.sparkleContainer}>
-                        <Ionicons name="sparkles" size={16} color="rgba(255,255,255,0.8)" style={styles.sparkle1} />
-                        <Ionicons name="sparkles" size={12} color="rgba(255,255,255,0.6)" style={styles.sparkle2} />
-                      </View>
+                  <View style={styles.buttonIconContainer}>
+                    <View style={styles.iconWrapper}>
+                      <Ionicons name="business" size={36} color="#fff" />
                     </View>
-                    <Text style={styles.premiumButtonText}>Place</Text>
-                    <Text style={styles.buttonSubtext}>Share about a location</Text>
-                  </LinearGradient>
-                  <View style={styles.buttonGlow} />
+                  </View>
+                  <Text style={styles.premiumButtonText}>Place</Text>
+                  <Text style={styles.buttonSubtext}>Share about a location</Text>
                 </TouchableOpacity>
               </Animated.View>
             </View>
@@ -539,11 +516,32 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     shadowColor: '#ff00ff',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.6,
-    shadowRadius: 15,
-    elevation: 15,
+    shadowOpacity: 0.8,
+    shadowRadius: 20,
+    elevation: 20,
     overflow: 'hidden',
     position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.4)',
+  },
+  personButton: {
+    backgroundColor: '#FF1744',
+    // Fallback for emulators
+    ...(Platform.OS === 'android' && {
+      backgroundColor: '#FF1744',
+      borderColor: '#FF1744',
+    }),
+  },
+  placeButton: {
+    backgroundColor: '#00E676',
+    // Fallback for emulators
+    ...(Platform.OS === 'android' && {
+      backgroundColor: '#00E676',
+      borderColor: '#00E676',
+    }),
   },
   gradientButton: {
     flex: 1,

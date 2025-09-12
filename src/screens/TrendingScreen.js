@@ -1,22 +1,25 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Image,
   FlatList,
+  TouchableOpacity,
+  SafeAreaView,
+  TextInput,
   ActivityIndicator,
-  Dimensions,
   RefreshControl,
-  TextInput
+  Alert,
+  Image,
+  Dimensions,
+  Animated,
+  ScrollView,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { supabase } from '../lib/supabase';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { supabase } from '../config/supabase';
 import { Video } from 'expo-av';
 
 const { width } = Dimensions.get('window');
@@ -26,48 +29,69 @@ const TrendingScreen = () => {
   const insets = useSafeAreaInsets();
 
   // State management
-  const [activeTab, setActiveTab] = useState('all');
-  const [trendingPosts, setTrendingPosts] = useState([]);
-  const [filteredPosts, setFilteredPosts] = useState([]);
-  const [trendingTopics, setTrendingTopics] = useState([]);
-  const [filteredTopics, setFilteredTopics] = useState([]);
+  const [activeTab, setActiveTab] = useState('posts'); // 'posts' or 'hashtags'
+  const [posts, setPosts] = useState([]);
+  const [hashtags, setHashtags] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
-  const videoRefs = useRef({});
+  const [currentUser, setCurrentUser] = useState(null);
 
-  // Tab configuration
-  const tabs = [
-    { id: 'all', label: 'All', icon: 'apps' },
-    { id: 'videos', label: 'Videos', icon: 'play-circle' },
-    { id: 'topics', label: 'hashtags', icon: 'trending-up' }
-  ];
+  // Animation refs
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+  const tabIndicatorAnim = useRef(new Animated.Value(0)).current;
+  const searchFocusAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    fetchTrendingContent();
-  }, [activeTab]);
+    fetchCurrentUser();
+    fetchTrendingPosts();
+    fetchTrendingHashtags();
+    startInitialAnimations();
+  }, []);
 
-  const fetchTrendingContent = async () => {
-    try {
-      setLoading(true);
+  const startInitialAnimations = () => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 8,
+        useNativeDriver: true,
+      })
+    ]).start();
+  };
 
-      if (activeTab === 'topics') {
-        await fetchTrendingTopics();
-      } else {
-        await fetchTrendingPosts();
-      }
-    } catch (error) {
-      console.error('Error fetching trending content:', error);
-    } finally {
-      setLoading(false);
-    }
+  const animateTabSwitch = (tabIndex) => {
+    Animated.spring(tabIndicatorAnim, {
+      toValue: tabIndex,
+      tension: 100,
+      friction: 8,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const animateSearchFocus = (focused) => {
+    Animated.timing(searchFocusAnim, {
+      toValue: focused ? 1 : 0,
+      duration: 200,
+      useNativeDriver: false,
+    }).start();
   };
 
   const fetchTrendingPosts = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      setLoading(true);
 
       // Fetch trending posts using the new RPC function
       const { data: posts, error: postsError } = await supabase.rpc('get_trending_posts', {
@@ -81,7 +105,7 @@ const TrendingScreen = () => {
       }
 
       if (!posts || posts.length === 0) {
-        setTrendingPosts([]);
+        setPosts([]);
         return;
       }
 
@@ -99,7 +123,7 @@ const TrendingScreen = () => {
       const { data: userLikes, error: userLikesError } = await supabase
         .from('post_likes')
         .select('post_id')
-        .eq('user_id', user.id)
+        .eq('user_id', currentUser.id)
         .in('post_id', postIds);
 
       if (userLikesError) throw userLikesError;
@@ -119,33 +143,17 @@ const TrendingScreen = () => {
         };
       });
 
-      // Filter by active tab (videos or all)
-      const finalPosts = activeTab === 'videos'
-        ? processedPosts.filter(p => p.type === 'video')
-        : processedPosts;
-
-      setTrendingPosts(finalPosts);
-      setFilteredPosts(finalPosts);
+      setPosts(processedPosts);
     } catch (error) {
       console.error('Error fetching trending posts:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Helper function to extract hashtags from text
-  const extractHashtags = (text) => {
-    if (!text) return [];
-    // More permissive regex to catch hashtags like #can, #power, etc.
-    const hashtagRegex = /#[a-zA-Z0-9_\u00c0-\u024f\u1e00-\u1eff]+/g;
-    const matches = text.match(hashtagRegex);
-    console.log('Extracting hashtags from:', text);
-    console.log('Found hashtags:', matches);
-    return matches ? matches.map(tag => tag.toLowerCase()) : [];
-  };
-
-  const fetchTrendingTopics = async () => {
+  const fetchTrendingHashtags = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      setLoading(true);
 
       // Get private account user IDs
       const { data: privateUsers, error: privateError } = await supabase
@@ -181,7 +189,7 @@ const TrendingScreen = () => {
       if (postsError) throw postsError;
 
       if (!posts) {
-        setTrendingTopics([]);
+        setHashtags([]);
         return;
       }
 
@@ -249,7 +257,7 @@ const TrendingScreen = () => {
 
       // Calculate trending score (engagement + recency + post count)
       const now = Date.now();
-      const topics = Array.from(hashtagsMap.values())
+      const trendingHashtags = Array.from(hashtagsMap.values())
         .map(hashtag => {
           // Calculate trending score based on multiple factors
           const engagementWeight = hashtag.engagement_score * 2;
@@ -266,16 +274,131 @@ const TrendingScreen = () => {
         .sort((a, b) => b.trending_rank - a.trending_rank)
         .slice(0, 20); // Show top 20 hashtags
 
-      console.log('Final hashtags for trending:', topics);
-      setTrendingTopics(topics);
-      setFilteredTopics(topics);
+      console.log('Final hashtags for trending:', trendingHashtags);
+      setHashtags(trendingHashtags);
     } catch (error) {
       console.error('Error fetching trending hashtags:', error);
-      setTrendingTopics([]);
+      setHashtags([]);
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Privacy check function similar to SearchScreen
+  const fetchCurrentUser = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      setCurrentUser(user);
+    } catch (error) {
+      console.error('Error fetching current user:', error);
+    }
+  };
+
+  const handleTabPress = (tab) => {
+    setActiveTab(tab);
+    animateTabSwitch(tab === 'posts' ? 0 : 1);
+  };
+
+  // Helper function to extract hashtags from text
+  const extractHashtags = (text) => {
+    const hashtagRegex = /#[\w]+/g;
+    return text.match(hashtagRegex) || [];
+  };
+
+  // Filter data based on search query
+  const filteredPosts = posts.filter(post => {
+    if (!searchQuery) return true;
+    const lowercaseQuery = searchQuery.toLowerCase();
+    const captionMatch = post.caption?.toLowerCase().includes(lowercaseQuery);
+    const usernameMatch = post.username?.toLowerCase().includes(lowercaseQuery);
+    const hashtagMatch = extractHashtags(post.caption || '').some(hashtag => 
+      hashtag.toLowerCase().includes(lowercaseQuery)
+    );
+    return captionMatch || usernameMatch || hashtagMatch;
+  });
+
+  const filteredHashtags = hashtags.filter(hashtag => {
+    if (!searchQuery) return true;
+    const lowercaseQuery = searchQuery.toLowerCase();
+    return hashtag.hashtag.toLowerCase().includes(lowercaseQuery) ||
+      hashtag.recent_posts.some(post => 
+        post.caption.toLowerCase().includes(lowercaseQuery) ||
+        post.username.toLowerCase().includes(lowercaseQuery)
+      );
+  });
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    setSearchQuery('');
+    await fetchTrendingPosts();
+    await fetchTrendingHashtags();
+    setRefreshing(false);
+  };
+
+  const handleUsernamePress = (userId, username) => {
+    // Since we only show public accounts in trending, we can navigate directly
+    // But still use privacy check for consistency
+    handlePrivacyNavigation(userId);
+  };
+
+  const handlePostPress = async (post, index) => {
+    // Since we only show posts from public accounts in trending,
+    // we can navigate directly to view the post without additional privacy checks
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        navigation.navigate('Login');
+        return;
+      }
+
+      // Don't check privacy for own posts
+      if (user.id === post.user_id) {
+        if (post.type === 'video') {
+          const videoData = posts.filter(p => p.type === 'video');
+          const videoIndex = videoData.findIndex(p => p.id === post.id);
+          navigation.navigate('Shorts', {
+            posts: videoData,
+            initialIndex: videoIndex
+          });
+        } else {
+          navigation.navigate('PostViewer', {
+            post,
+            posts: posts.filter(p => p.type !== 'video'),
+            initialIndex: posts.findIndex(p => p.id === post.id)
+          });
+        }
+        return;
+      }
+
+      // Since all posts in trending are from public accounts, navigate directly
+      if (post.type === 'video') {
+        const videoData = posts.filter(p => p.type === 'video');
+        const videoIndex = videoData.findIndex(p => p.id === post.id);
+        navigation.navigate('Shorts', {
+          posts: videoData,
+          initialIndex: videoIndex
+        });
+      } else {
+        navigation.navigate('PostViewer', {
+          post,
+          posts: posts.filter(p => p.type !== 'video'),
+          initialIndex: posts.findIndex(p => p.id === post.id)
+        });
+      }
+    } catch (error) {
+      console.error('Error viewing post:', error);
+      // Fallback to profile navigation
+      handlePrivacyNavigation(post.user_id);
+    }
+  };
+
+  const handleTopicPress = (topic) => {
+    // Navigate to search screen with hashtag query
+    navigation.navigate('Search', {
+      initialQuery: topic.hashtag,
+      searchType: 'hashtag'
+    });
+  };
+
   const handlePrivacyNavigation = async (userId) => {
     try {
       // Get the current user's ID
@@ -352,145 +475,6 @@ const TrendingScreen = () => {
     }
   };
 
-  // Search functionality
-  const handleSearch = (query) => {
-    setSearchQuery(query);
-    setIsSearching(query.length > 0);
-    
-    if (query.length === 0) {
-      // Reset to original data when search is cleared
-      setFilteredPosts(trendingPosts);
-      setFilteredTopics(trendingTopics);
-      return;
-    }
-
-    const lowercaseQuery = query.toLowerCase();
-
-    if (activeTab === 'topics') {
-      // Filter hashtags
-      const filtered = trendingTopics.filter(topic => 
-        topic.hashtag.toLowerCase().includes(lowercaseQuery) ||
-        topic.recent_posts.some(post => 
-          post.caption.toLowerCase().includes(lowercaseQuery) ||
-          post.username.toLowerCase().includes(lowercaseQuery)
-        )
-      );
-      setFilteredTopics(filtered);
-    } else {
-      // Filter posts by caption, username, or hashtags
-      const filtered = trendingPosts.filter(post => {
-        const captionMatch = post.caption?.toLowerCase().includes(lowercaseQuery);
-        const usernameMatch = post.username?.toLowerCase().includes(lowercaseQuery);
-        const hashtagMatch = extractHashtags(post.caption || '').some(hashtag => 
-          hashtag.toLowerCase().includes(lowercaseQuery)
-        );
-        return captionMatch || usernameMatch || hashtagMatch;
-      });
-      setFilteredPosts(filtered);
-    }
-  };
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    setSearchQuery('');
-    setIsSearching(false);
-    await fetchTrendingContent();
-    setRefreshing(false);
-  };
-
-  const handleUsernamePress = (userId, username) => {
-    // Since we only show public accounts in trending, we can navigate directly
-    // But still use privacy check for consistency
-    handlePrivacyNavigation(userId);
-  };
-
-  const handlePostPress = async (post, index) => {
-    // Since we only show posts from public accounts in trending,
-    // we can navigate directly to view the post without additional privacy checks
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        navigation.navigate('Login');
-        return;
-      }
-
-      // Don't check privacy for own posts
-      if (user.id === post.user_id) {
-        if (post.type === 'video') {
-          const videoData = trendingPosts.filter(p => p.type === 'video');
-          const videoIndex = videoData.findIndex(p => p.id === post.id);
-          navigation.navigate('Shorts', {
-            posts: videoData,
-            initialIndex: videoIndex
-          });
-        } else {
-          navigation.navigate('PostViewer', {
-            post,
-            posts: trendingPosts.filter(p => p.type !== 'video'),
-            initialIndex: trendingPosts.findIndex(p => p.id === post.id)
-          });
-        }
-        return;
-      }
-
-      // Since all posts in trending are from public accounts, navigate directly
-      if (post.type === 'video') {
-        const videoData = trendingPosts.filter(p => p.type === 'video');
-        const videoIndex = videoData.findIndex(p => p.id === post.id);
-        navigation.navigate('Shorts', {
-          posts: videoData,
-          initialIndex: videoIndex
-        });
-      } else {
-        navigation.navigate('PostViewer', {
-          post,
-          posts: trendingPosts.filter(p => p.type !== 'video'),
-          initialIndex: trendingPosts.findIndex(p => p.id === post.id)
-        });
-      }
-    } catch (error) {
-      console.error('Error viewing post:', error);
-      // Fallback to profile navigation
-      handlePrivacyNavigation(post.user_id);
-    }
-  };
-
-  const handleTopicPress = (topic) => {
-    // Navigate to search screen with hashtag query
-    navigation.navigate('Search', {
-      initialQuery: topic.hashtag,
-      searchType: 'hashtag'
-    });
-  };
-
-  const renderTabButtons = () => (
-    <View style={styles.tabContainer}>
-      {tabs.map((tab) => (
-        <TouchableOpacity
-          key={tab.id}
-          style={[
-            styles.tabButton,
-            activeTab === tab.id && styles.activeTabButton
-          ]}
-          onPress={() => setActiveTab(tab.id)}
-        >
-          <Ionicons
-            name={tab.icon}
-            size={20}
-            color={activeTab === tab.id ? '#ffffff' : '#888888'}
-            style={styles.tabIcon}
-          />
-          <Text style={[
-            styles.tabText,
-            activeTab === tab.id && styles.activeTabText
-          ]}>
-            {tab.label}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
-
   const renderPostItem = ({ item, index }) => (
     <TouchableOpacity
       style={styles.postCard}
@@ -557,7 +541,7 @@ const TrendingScreen = () => {
     </TouchableOpacity>
   );
 
-  const renderTopicItem = ({ item, index }) => {
+  const renderHashtagItem = ({ item, index }) => {
     // Determine gradient colors based on trending rank - premium dark theme
     const getGradientColors = (rank) => {
       if (rank >= 50) return ['rgba(59, 130, 246, 0.8)', 'rgba(147, 51, 234, 0.8)']; // High trending - blue to purple
@@ -619,140 +603,211 @@ const TrendingScreen = () => {
     );
   };
 
-  const renderContent = () => {
-    if (loading) {
-      return (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#3b82f6" />
-          <Text style={styles.loadingText}>Loading trending content...</Text>
-        </View>
-      );
-    }
-
-    if (activeTab === 'topics') {
-      return (
-        <FlatList
-          data={filteredTopics}
-          renderItem={renderTopicItem}
-          keyExtractor={(item) => item.id}
-          numColumns={1}
-          contentContainerStyle={styles.topicsList}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={['#3b82f6']}
-              tintColor="#3b82f6"
-            />
-          }
-          ListEmptyComponent={() => (
-            <View style={styles.emptyContainer}>
-              <Ionicons name={isSearching ? 'search' : 'trending-up'} size={60} color="#666666" />
-              <Text style={styles.emptyText}>
-                {isSearching 
-                  ? `No hashtags found for "${searchQuery}"` 
-                  : 'No trending hashtags found'
-                }
-              </Text>
-              <Text style={styles.emptySubText}>
-                {isSearching 
-                  ? 'Try different keywords or clear the search'
-                  : 'Hashtags from posts in the last 7 days will appear here'
-                }
-              </Text>
-            </View>
-          )}
-        />
-      );
-    }
-
-    return (
-      <FlatList
-        data={filteredPosts}
-        renderItem={renderPostItem}
-        keyExtractor={(item) => item.id}
-        numColumns={activeTab === 'videos' ? 2 : 1}
-        key={activeTab} // Force re-render when switching tabs
-        contentContainerStyle={styles.postsList}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={['#3b82f6']}
-            tintColor="#3b82f6"
-          />
-        }
-        ListEmptyComponent={() => (
-          <View style={styles.emptyContainer}>
-            <Ionicons
-              name={isSearching ? 'search' : (activeTab === 'videos' ? 'videocam' : 'document-text')}
-              size={60}
-              color="#666666"
-            />
-            <Text style={styles.emptyText}>
-              {isSearching 
-                ? `No results found for "${searchQuery}"` 
-                : `No trending ${activeTab === 'videos' ? 'videos' : 'posts'} found`
-              }
-            </Text>
-            {isSearching && (
-              <Text style={styles.emptySubText}>
-                Try different keywords or clear the search
-              </Text>
-            )}
-          </View>
-        )}
-      />
-    );
-  };
-
   return (
-    <View style={styles.container}>
-      {/* Header */}
+    <SafeAreaView style={styles.container}>
       <LinearGradient
-        colors={['rgba(15, 15, 15, 0.95)', 'rgba(25, 25, 25, 0.9)']}
-        style={[styles.header, { paddingTop: insets.top > 0 ? insets.top : 50 }]}
+        colors={['#0a0a2a', '#1a1a4a', '#2a1a4a']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.header}
       >
-        <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#3b82f6" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Trending</Text>
-          <View style={styles.betaTag}>
-            <Text style={styles.betaText}>BETA</Text>
-          </View>
-        </View>
-
-        {/* Search Bar */}
-        <View style={styles.searchContainer}>
-          <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder={activeTab === 'topics' ? 'Search hashtags...' : 'Search posts, captions...'}
-            placeholderTextColor="#666"
-            value={searchQuery}
-            onChangeText={handleSearch}
-            returnKeyType="search"
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity 
-              onPress={() => handleSearch('')}
-              style={styles.clearButton}
+        <Animated.View 
+          style={[
+            styles.headerContent,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }, { scale: scaleAnim }]
+            }
+          ]}
+        >
+          <View style={styles.titleContainer}>
+            <LinearGradient
+              colors={['#ff00ff', '#ff6b9d', '#c44569']}
+              start={{x: 0, y: 0}}
+              end={{x: 1, y: 0}}
+              style={styles.titleGradient}
             >
-              <Ionicons name="close-circle" size={20} color="#666" />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Tab Buttons */}
-        {renderTabButtons()}
+              <MaterialIcons name="trending-up" size={28} color="#fff" />
+              <Text style={styles.headerTitle}>Trending</Text>
+            </LinearGradient>
+          </View>
+          
+          <Animated.View 
+            style={[
+              styles.searchContainer,
+              {
+                borderColor: searchFocusAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: ['rgba(255, 0, 255, 0.3)', 'rgba(255, 0, 255, 0.8)']
+                }),
+                shadowOpacity: searchFocusAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.2, 0.6]
+                })
+              }
+            ]}
+          >
+            <LinearGradient
+              colors={['rgba(255, 0, 255, 0.1)', 'rgba(255, 0, 255, 0.05)']}
+              style={styles.searchGradient}
+            >
+              <MaterialIcons name="search" size={22} color="#ff00ff" style={styles.searchIcon} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search trending content..."
+                placeholderTextColor="#888"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                onFocus={() => animateSearchFocus(true)}
+                onBlur={() => animateSearchFocus(false)}
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity 
+                  onPress={() => setSearchQuery('')}
+                  style={styles.clearButton}
+                >
+                  <Ionicons name="close-circle" size={20} color="#ff00ff" />
+                </TouchableOpacity>
+              )}
+            </LinearGradient>
+          </Animated.View>
+          
+          <View style={styles.tabContainer}>
+            <View style={styles.tabBackground}>
+              <Animated.View 
+                style={[
+                  styles.tabIndicator,
+                  {
+                    transform: [{
+                      translateX: tabIndicatorAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0, width * 0.4]
+                      })
+                    }]
+                  }
+                ]}
+              />
+              
+              <TouchableOpacity
+                style={styles.tab}
+                onPress={() => handleTabPress('posts')}
+                activeOpacity={0.7}
+              >
+                <View style={styles.tabContent}>
+                  <MaterialIcons 
+                    name="article" 
+                    size={20} 
+                    color={activeTab === 'posts' ? '#fff' : '#888'} 
+                  />
+                  <Text style={[styles.tabText, activeTab === 'posts' && styles.activeTabText]}>
+                    Posts
+                  </Text>
+                </View>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.tab}
+                onPress={() => handleTabPress('hashtags')}
+                activeOpacity={0.7}
+              >
+                <View style={styles.tabContent}>
+                  <MaterialIcons 
+                    name="tag" 
+                    size={20} 
+                    color={activeTab === 'hashtags' ? '#fff' : '#888'} 
+                  />
+                  <Text style={[styles.tabText, activeTab === 'hashtags' && styles.activeTabText]}>
+                    Hashtags
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Animated.View>
       </LinearGradient>
 
-      {/* Content */}
-      <View style={styles.content}>
-        {renderContent()}
-      </View>
-    </View>
+      <Animated.View 
+        style={[
+          styles.contentContainer,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }]
+          }
+        ]}
+      >
+        {activeTab === 'posts' ? (
+          <FlatList
+            data={filteredPosts}
+            keyExtractor={(item) => item.id.toString()}
+            renderItem={renderPostItem}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor="#ff00ff"
+                colors={['#ff00ff', '#ff6b9d']}
+              />
+            }
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.listContainer}
+            ListEmptyComponent={() => (
+              loading ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color="#ff00ff" />
+                  <Text style={styles.loadingText}>Loading trending posts...</Text>
+                </View>
+              ) : (
+                <View style={styles.emptyContainer}>
+                  <LinearGradient
+                    colors={['rgba(255, 0, 255, 0.1)', 'rgba(255, 0, 255, 0.05)']}
+                    style={styles.emptyIconContainer}
+                  >
+                    <MaterialIcons name="trending-up" size={60} color="#ff00ff" />
+                  </LinearGradient>
+                  <Text style={styles.emptyText}>No trending posts found</Text>
+                  <Text style={styles.emptySubtext}>Be the first to create trending content!</Text>
+                </View>
+              )
+            )}
+          />
+        ) : (
+          <FlatList
+            data={filteredHashtags}
+            keyExtractor={(item) => item.hashtag}
+            renderItem={renderHashtagItem}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor="#ff00ff"
+                colors={['#ff00ff', '#ff6b9d']}
+              />
+            }
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.listContainer}
+            ListEmptyComponent={() => (
+              loading ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color="#ff00ff" />
+                  <Text style={styles.loadingText}>Loading trending hashtags...</Text>
+                </View>
+              ) : (
+                <View style={styles.emptyContainer}>
+                  <LinearGradient
+                    colors={['rgba(255, 0, 255, 0.1)', 'rgba(255, 0, 255, 0.05)']}
+                    style={styles.emptyIconContainer}
+                  >
+                    <MaterialIcons name="tag" size={60} color="#ff00ff" />
+                  </LinearGradient>
+                  <Text style={styles.emptyText}>No trending hashtags found</Text>
+                  <Text style={styles.emptySubtext}>Start using hashtags to see trends!</Text>
+                </View>
+              )
+            )}
+          />
+        )}
+      </Animated.View>
+    </SafeAreaView>
   );
 };
 
@@ -762,300 +817,345 @@ const styles = StyleSheet.create({
     backgroundColor: '#0a0a0a',
   },
   header: {
-    paddingBottom: 15,
-    paddingHorizontal: 15,
+    paddingBottom: 20,
+    paddingTop: 10,
   },
-  headerRow: {
+  headerContent: {
+    paddingHorizontal: 20,
+  },
+  titleContainer: {
+    marginBottom: 20,
+    alignItems: 'center',
+  },
+  titleGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 15,
-  },
-  backButton: {
-    marginRight: 15,
+    paddingVertical: 15,
+    paddingHorizontal: 25,
+    borderRadius: 30,
+    shadowColor: '#ff00ff',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    elevation: 12,
   },
   headerTitle: {
-    color: '#ffffff',
+    color: '#fff',
     fontSize: 24,
-    fontWeight: 'bold',
-    flex: 1,
-  },
-  betaTag: {
-    backgroundColor: 'rgba(59, 130, 246, 0.8)',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  betaText: {
-    color: '#ffffff',
-    fontSize: 10,
-    fontWeight: 'bold',
+    fontWeight: '800',
+    marginLeft: 12,
+    textShadowColor: 'rgba(0, 0, 0, 0.7)',
+    textShadowOffset: { width: 1, height: 2 },
+    textShadowRadius: 6,
   },
   searchContainer: {
+    marginBottom: 20,
+    borderRadius: 20,
+    borderWidth: 2,
+    shadowColor: '#ff00ff',
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  searchGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(30, 30, 30, 0.8)',
-    borderRadius: 25,
-    paddingHorizontal: 15,
+    paddingHorizontal: 16,
     paddingVertical: 12,
-    marginBottom: 15,
-    borderWidth: 1,
-    borderColor: 'rgba(59, 130, 246, 0.2)',
+    borderRadius: 18,
   },
   searchIcon: {
-    marginRight: 10,
+    marginRight: 12,
   },
   searchInput: {
     flex: 1,
-    color: '#ffffff',
+    color: '#fff',
     fontSize: 16,
-    paddingVertical: 0,
+    fontWeight: '500',
   },
   clearButton: {
     padding: 4,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 0, 255, 0.1)',
   },
   tabContainer: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(20, 20, 20, 0.8)',
-    borderRadius: 25,
-    padding: 4,
-    borderWidth: 1,
-    borderColor: 'rgba(59, 130, 246, 0.15)',
-  },
-  tabButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: 20,
-  },
-  activeTabButton: {
-    backgroundColor: 'rgba(59, 130, 246, 0.8)',
-  },
-  tabIcon: {
-    marginRight: 6,
-  },
-  tabText: {
-    color: '#888888',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  activeTabText: {
-    color: '#ffffff',
-    fontWeight: 'bold',
-  },
-  content: {
-    flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    color: '#888888',
-    marginTop: 15,
-    fontSize: 16,
-  },
-  postsList: {
-    padding: 10,
-  },
-  topicsList: {
-    padding: 15,
-  },
-  postCard: {
-    backgroundColor: 'rgba(25, 25, 25, 0.9)',
-    borderRadius: 15,
-    margin: 5,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(59, 130, 246, 0.1)',
-    flex: 1,
-  },
-  postContent: {
-    padding: 12,
-  },
-  videoContainer: {
-    position: 'relative',
-    borderRadius: 10,
-    overflow: 'hidden',
     marginBottom: 10,
   },
-  postVideo: {
+  tabBackground: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 25,
+    padding: 4,
+    flexDirection: 'row',
+    position: 'relative',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 0, 255, 0.2)',
+  },
+  tabIndicator: {
+    position: 'absolute',
+    top: 4,
+    left: 4,
+    bottom: 4,
+    width: width * 0.4,
+    backgroundColor: '#ff00ff',
+    borderRadius: 21,
+    shadowColor: '#ff00ff',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.6,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 21,
+    zIndex: 1,
+  },
+  tabContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  tabText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#888',
+    textAlign: 'center',
+  },
+  activeTabText: {
+    color: '#fff',
+    fontWeight: '700',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  contentContainer: {
+    flex: 1,
+  },
+  listContainer: {
+    paddingBottom: 20,
+  },
+  postCard: {
+    backgroundColor: '#1a1a4a',
+    borderRadius: 18,
+    marginHorizontal: 20,
+    marginBottom: 16,
+    shadowColor: '#ff00ff',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 0, 255, 0.2)',
+    overflow: 'hidden',
+  },
+  postContent: {
+    padding: 18,
+  },
+  videoContainer: {
     width: '100%',
-    height: 180,
-    backgroundColor: 'rgba(30, 30, 30, 0.8)',
+    height: 200,
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 12,
+    position: 'relative',
   },
   postImage: {
     width: '100%',
     height: 200,
-    borderRadius: 10,
-    backgroundColor: 'rgba(30, 30, 30, 0.8)',
-    marginBottom: 10,
+    borderRadius: 12,
+    marginBottom: 12,
   },
-  playIconOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-  },
-  postInfo: {
-    gap: 8,
-  },
-  userInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  userAvatar: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    marginRight: 8,
-  },
-  usernameContainer: {
-    flex: 1,
-  },
-  username: {
-    color: '#3b82f6',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  postCaption: {
-    color: '#e5e5e5',
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  postStats: {
-    flexDirection: 'row',
-    gap: 15,
-  },
-  statItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  statText: {
-    color: '#888888',
-    fontSize: 12,
-  },
-  topicCard: {
-    marginBottom: 15,
-    borderRadius: 15,
-    overflow: 'hidden',
-  },
-  topicGradient: {
-    padding: 20,
-  },
-  topicContent: {
-    alignItems: 'center',
-  },
-  topicTitle: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginTop: 10,
-    textAlign: 'center',
-  },
-  topicEngagement: {
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontSize: 14,
-    marginTop: 5,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 60,
-  },
-  emptyText: {
-    color: '#888888',
-    fontSize: 16,
-    marginTop: 15,
-  },
-  emptySubText: {
-    color: '#666666',
-    fontSize: 14,
-    marginTop: 8,
-    textAlign: 'center',
-    paddingHorizontal: 20,
-  },
-  // Search and hashtag-specific styles
-  topicHeader: {
+  postHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
   },
-  topicRank: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 18,
     marginRight: 12,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 0, 255, 0.4)',
   },
-  rankNumber: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  topicInfo: {
+  userInfo: {
     flex: 1,
   },
-  hashtagRow: {
+  username: {
+    color: '#ff00ff',
+    fontSize: 16,
+    fontWeight: '700',
+    textShadowColor: 'rgba(255, 0, 255, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  postTime: {
+    color: '#888',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  postCaption: {
+    color: '#fff',
+    fontSize: 15,
+    lineHeight: 22,
+    marginBottom: 12,
+    fontWeight: '400',
+  },
+  postStats: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 0, 255, 0.1)',
+    paddingTop: 12,
   },
-  hashtagText: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginLeft: 8,
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 12,
   },
-  topicStats: {
-    color: 'rgba(255, 255, 255, 0.8)',
+  statText: {
+    color: '#888',
+    marginLeft: 6,
     fontSize: 13,
+    fontWeight: '500',
+  },
+  hashtagCard: {
+    marginHorizontal: 20,
+    marginBottom: 16,
+    borderRadius: 18,
+    overflow: 'hidden',
+    shadowColor: '#ff00ff',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 12,
+  },
+  hashtagContent: {
+    padding: 20,
+  },
+  hashtagHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 15,
+  },
+  hashtagInfo: {
+    flex: 1,
+  },
+  hashtagName: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: '800',
+    textShadowColor: 'rgba(0, 0, 0, 0.7)',
+    textShadowOffset: { width: 1, height: 2 },
+    textShadowRadius: 6,
+  },
+  hashtagStats: {
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 14,
+    marginTop: 4,
+    fontWeight: '500',
   },
   trendingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  trendingText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+    marginLeft: 6,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  recentPosts: {
+    marginTop: 10,
+  },
+  recentPostsTitle: {
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 10,
+  },
+  recentPostItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
-  trendingScore: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: 'bold',
+  recentPostAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 12,
+    marginRight: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 0, 255, 0.3)',
   },
-  previewContainer: {
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+  recentPostInfo: {
+    flex: 1,
   },
-  previewLabel: {
-    color: 'rgba(255, 255, 255, 0.7)',
-    fontSize: 12,
-    marginBottom: 6,
+  recentPostUser: {
+    color: '#ff00ff',
+    fontSize: 13,
     fontWeight: '600',
   },
-  previewPost: {
-    marginBottom: 4,
-  },
-  previewUsername: {
-    color: 'rgba(255, 255, 255, 0.9)',
+  recentPostText: {
+    color: 'rgba(255, 255, 255, 0.8)',
     fontSize: 12,
-    fontWeight: 'bold',
-  },
-  previewCaption: {
-    color: 'rgba(255, 255, 255, 0.7)',
-    fontSize: 11,
     marginTop: 2,
+  },
+  loadingContainer: {
+    padding: 50,
+    alignItems: 'center',
+  },
+  loadingText: {
+    color: '#fff',
+    marginTop: 15,
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  emptyContainer: {
+    padding: 50,
+    alignItems: 'center',
+  },
+  emptyIconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  emptyText: {
+    color: '#ff00ff',
+    fontSize: 18,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  emptySubtext: {
+    color: '#888',
+    fontSize: 14,
+    textAlign: 'center',
+    fontWeight: '500',
   },
 });
 

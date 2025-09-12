@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useVideo } from '../context/VideoContext';
 import { useNotifications } from '../context/NotificationContext';
-import { StyleSheet, View, Text, TouchableOpacity, TextInput, Image, Modal, ActivityIndicator, FlatList, RefreshControl, Alert } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { StyleSheet, View, Text, TouchableOpacity, TextInput, Image, Modal, ActivityIndicator, FlatList, RefreshControl, Alert, Animated, ScrollView, Platform } from 'react-native';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useFonts, Poppins_700Bold } from '@expo-google-fonts/poppins';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -12,6 +12,7 @@ import { PostsService } from '../services/PostsService';
 import { Video } from 'expo-av';
 import PostItem from '../components/PostItem';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 
 const HomeScreen = () => {
   const navigation = useNavigation();
@@ -27,6 +28,14 @@ const HomeScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState(null);
 
+  // Animation refs for premium UI
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const headerAnim = useRef(new Animated.Value(1)).current;
+  const createPostAnim = useRef(new Animated.Value(1)).current;
+  const storiesAnim = useRef(new Animated.Value(1)).current;
+
   let [fontsLoaded] = useFonts({
     Poppins_700Bold,
   });
@@ -34,6 +43,7 @@ const HomeScreen = () => {
   useEffect(() => {
     loadStories();
     loadPosts();
+    startAnimations();
 
     // Add a test post for debugging
     addTestPost();
@@ -52,6 +62,44 @@ const HomeScreen = () => {
 
     return unsubscribe;
   }, [navigation]);
+
+  const startAnimations = () => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 8,
+        useNativeDriver: true,
+      }),
+      Animated.timing(headerAnim, {
+        toValue: 1,
+        duration: 1000,
+        useNativeDriver: true,
+      }),
+      Animated.timing(createPostAnim, {
+        toValue: 1,
+        duration: 800,
+        delay: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(storiesAnim, {
+        toValue: 1,
+        duration: 1000,
+        delay: 400,
+        useNativeDriver: true,
+      })
+    ]).start();
+  };
   
   // Function to add a test post for debugging
   const addTestPost = () => {
@@ -249,215 +297,223 @@ const HomeScreen = () => {
     return null;
   }
 
-  const renderHeader = () => (
+  const renderHeader = () => {
+    return (
     <>
-      <LinearGradient
-        colors={['#0f0f23', '#1a1a2e', '#16213e']}
-        start={{x: 0, y: 0}}
-        end={{x: 1, y: 1}}
-        style={styles.header}
-      >
+      <Animated.View style={{ opacity: headerAnim, transform: [{ translateY: slideAnim }] }}>
         <LinearGradient
-          colors={['#ffd700', '#ffed4e']}
-          style={styles.logoGradient}
+          colors={['#0a0a2a', '#1a1a4a', '#2a1a4a']}
+          start={{x: 0, y: 0}}
+          end={{x: 1, y: 1}}
+          style={styles.header}
         >
-          <Text style={styles.logo}>Flexx</Text>
-        </LinearGradient>
-        <View style={styles.headerIcons}>
-          <TouchableOpacity 
-            style={styles.iconButton}
-            onPress={() => navigation.navigate('Notifications')}
-          >
+          <View style={styles.logoContainer}>
             <LinearGradient
-              colors={['#ffd700', '#ffed4e']}
-              style={styles.iconBackground}
+              colors={['#ff00ff', '#ff6b9d', '#c44569']}
+              style={styles.logoGradient}
             >
-              <Ionicons name="notifications-outline" size={22} color="#000" />
-              {notificationUnreadCount > 0 && (
-                <View style={[styles.notificationBadge, {
-                  width: notificationUnreadCount > 99 ? 20 : notificationUnreadCount > 9 ? 18 : 16,
-                }]}>
-                  <Text style={[styles.notificationBadgeText, {
-                    fontSize: notificationUnreadCount > 99 ? 8 : 10,
-                  }]}>
-                    {notificationUnreadCount > 99 ? '99+' : notificationUnreadCount}
-                  </Text>
-                </View>
-              )}
+              <MaterialIcons name="flash-on" size={24} color="#fff" />
+              <Text style={styles.logo}>Flexx</Text>
             </LinearGradient>
-          </TouchableOpacity>
-        
-          <TouchableOpacity 
-            style={styles.iconButton}
-            onPress={() => navigation.navigate('Trending')}
-          >
-            <LinearGradient
-              colors={['#ffd700', '#ffed4e']}
-              style={styles.iconBackground}
-            >
-              <Ionicons name="trending-up" size={22} color="#000" />
-            </LinearGradient>
-          </TouchableOpacity>
+            <View style={styles.logoGlow} />
+          </View>
           
-          <TouchableOpacity 
-            style={styles.iconButton} 
-            onPress={() => navigation.navigate('Search')}
-          >
-            <LinearGradient
-              colors={['#ffd700', '#ffed4e']}
-              style={styles.iconBackground}
+          <View style={styles.headerIcons}>
+            <TouchableOpacity 
+              style={styles.iconButton}
+              onPress={() => navigation.navigate('Notifications')}
+              activeOpacity={0.7}
             >
-              <Ionicons name="search-outline" size={22} color="#000" />
-            </LinearGradient>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.iconButton}
-             onPress={() => {
-               // Reset navigation state and then navigate to HomePage
-               // This ensures we can always reach HomePage regardless of current navigation state
-               navigation.reset({
-                 index: 0,
-                 routes: [{ name: 'HomePage' }],
-               });
-             }}
-            >
-            <LinearGradient
-              colors={['#ffd700', '#ffed4e']}
-              style={styles.iconBackground}
-            >
-              <Ionicons name="videocam-outline" size={22} color="#000" />
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
-      </LinearGradient>
-
-      <LinearGradient
-        colors={['rgba(255, 215, 0, 0.1)', 'rgba(255, 215, 0, 0.05)', 'transparent']}
-        start={{x: 0, y: 0}}
-        end={{x: 1, y: 1}}
-        style={styles.createPost}
-      >
-        <View style={styles.postInputContainer}>
-          <LinearGradient
-            colors={['#ffd700', '#ffed4e']}
-            style={styles.avatarBorder}
-          >
-            <Image
-              style={styles.userAvatar}
-              source={{ uri: 'https://via.placeholder.com/40' }}
-            />
-          </LinearGradient>
-          <TouchableOpacity 
-            style={styles.postInputButton}
-            onPress={handleCreatePost}
-          >
-            <Text style={styles.postInputPlaceholder}>What's happening?</Text>
-          </TouchableOpacity>
-        </View>
-        <View style={styles.postOptions}>
-          <TouchableOpacity 
-            style={styles.postOption}
-            onPress={handleCreatePost}
-          >
-            <LinearGradient
-              colors={['#ffd700', '#ffed4e']}
-              style={styles.createPostButton}
-            >
-              <Ionicons name="create" size={18} color="#000" />
-              <Text style={[styles.createPostText, { color: '#000' }]}>Create Post</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
-      </LinearGradient>
-
-      <LinearGradient
-        colors={['rgba(255, 215, 0, 0.08)', 'rgba(255, 215, 0, 0.04)', 'transparent']}
-        start={{x: 0, y: 0}}
-        end={{x: 1, y: 1}}
-        style={styles.stories}
-      >
-        <FlatList
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          data={[{ id: 'add-story' }, ...stories]}
-          keyExtractor={(item) => item.id ? item.id.toString() : 'add-story'}
-          renderItem={({ item }) => {
-            if (item.id === 'add-story') {
-              return (
-                <TouchableOpacity style={styles.storyItem} onPress={handleAddStory} disabled={uploading}>
+              <LinearGradient
+                colors={['rgba(255, 0, 255, 0.2)', 'rgba(255, 0, 255, 0.1)']}
+                style={styles.iconBackground}
+              >
+                <Ionicons name="notifications-outline" size={22} color="#ff00ff" />
+                {notificationUnreadCount > 0 && (
                   <LinearGradient
-                    colors={['rgba(255, 215, 0, 0.15)', 'rgba(255, 215, 0, 0.1)']}
-                    style={styles.addStoryButton}
+                    colors={['#ff00ff', '#ff6b9d']}
+                    style={[styles.notificationBadge, {
+                      width: notificationUnreadCount > 99 ? 20 : notificationUnreadCount > 9 ? 18 : 16,
+                    }]}
                   >
-                    {uploading ? (
-                      <ActivityIndicator size="small" color="#ffd700" />
-                    ) : (
-                      <Ionicons name="add" size={24} color="#ffd700" />
-                    )}
+                    <Text style={[styles.notificationBadgeText, {
+                      fontSize: notificationUnreadCount > 99 ? 8 : 10,
+                    }]}>
+                      {notificationUnreadCount > 99 ? '99+' : notificationUnreadCount}
+                    </Text>
                   </LinearGradient>
-                  <Text style={styles.storyText}>Your story</Text>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+          
+            <TouchableOpacity 
+              style={styles.iconButton}
+              onPress={() => navigation.navigate('Trending')}
+              activeOpacity={0.7}
+            >
+              <LinearGradient
+                colors={['rgba(255, 107, 157, 0.2)', 'rgba(255, 107, 157, 0.1)']}
+                style={styles.iconBackground}
+              >
+                <MaterialIcons name="trending-up" size={22} color="#ff6b9d" />
+              </LinearGradient>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.iconButton} 
+              onPress={() => navigation.navigate('Search')}
+              activeOpacity={0.7}
+            >
+              <LinearGradient
+                colors={['rgba(196, 69, 105, 0.2)', 'rgba(196, 69, 105, 0.1)']}
+                style={styles.iconBackground}
+              >
+                <MaterialIcons name="search" size={22} color="#c44569" />
+              </LinearGradient>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.iconButton}
+              onPress={() => {
+                navigation.reset({
+                  index: 0,
+                  routes: [{ name: 'HomePage' }],
+                });
+              }}
+              activeOpacity={0.7}
+            >
+              <LinearGradient
+                colors={['rgba(255, 0, 255, 0.2)', 'rgba(255, 0, 255, 0.1)']}
+                style={styles.iconBackground}
+              >
+                <MaterialIcons name="videocam" size={22} color="#ff00ff" />
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </LinearGradient>
+      </Animated.View>
+
+      <Animated.View style={{ opacity: createPostAnim, transform: [{ scale: scaleAnim }] }}>
+        <LinearGradient
+          colors={['rgba(255, 0, 255, 0.1)', 'rgba(255, 0, 255, 0.05)', 'transparent']}
+          start={{x: 0, y: 0}}
+          end={{x: 1, y: 1}}
+          style={styles.createPost}
+        >
+          <View style={styles.postInputContainer}>
+            <View style={styles.avatarContainer}>
+              <LinearGradient
+                colors={['#ff00ff', '#ff6b9d', '#c44569']}
+                style={styles.avatarBorder}
+              >
+                <Image
+                  style={styles.userAvatar}
+                  source={{ uri: 'https://via.placeholder.com/40' }}
+                />
+              </LinearGradient>
+              <View style={styles.avatarGlow} />
+            </View>
+            
+            <TouchableOpacity 
+              style={styles.postInputButton}
+              onPress={handleCreatePost}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={['rgba(255, 0, 255, 0.1)', 'rgba(255, 0, 255, 0.05)']}
+                style={styles.postInputGradient}
+              >
+                <MaterialIcons name="edit" size={20} color="#ff00ff" />
+                <Text style={styles.postInputPlaceholder}>What's happening?</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+          
+          <View style={styles.postOptions}>
+            <TouchableOpacity 
+              style={styles.postOption}
+              onPress={handleCreatePost}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={['#ff00ff', '#ff6b9d', '#c44569']}
+                style={styles.createPostButton}
+              >
+                <MaterialIcons name="add" size={18} color="#fff" />
+                <Text style={styles.createPostText}>Create Post</Text>
+              </LinearGradient>
+              <View style={styles.createPostGlow} />
+            </TouchableOpacity>
+          </View>
+        </LinearGradient>
+      </Animated.View>
+
+      <Animated.View style={{ opacity: storiesAnim, transform: [{ translateY: slideAnim }] }}>
+        <LinearGradient
+          colors={['rgba(255, 0, 255, 0.08)', 'rgba(255, 0, 255, 0.04)', 'transparent']}
+          start={{x: 0, y: 0}}
+          end={{x: 1, y: 1}}
+          style={styles.stories}
+        >
+          <FlatList
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            data={[{ id: 'add-story' }, ...stories]}
+            keyExtractor={(item) => item.id ? item.id.toString() : 'add-story'}
+            renderItem={({ item }) => {
+              if (item.id === 'add-story') {
+                return (
+                  <TouchableOpacity style={styles.storyItem} onPress={handleAddStory} disabled={uploading}>
+                    <LinearGradient
+                      colors={['rgba(255, 0, 255, 0.15)', 'rgba(255, 0, 255, 0.1)']}
+                      style={styles.addStoryButton}
+                    >
+                      {uploading ? (
+                        <ActivityIndicator size="small" color="#ff00ff" />
+                      ) : (
+                        <MaterialIcons name="add" size={24} color="#ff00ff" />
+                      )}
+                    </LinearGradient>
+                    <Text style={styles.storyText}>Your story</Text>
+                  </TouchableOpacity>
+                );
+              }
+              return (
+                <TouchableOpacity 
+                  style={styles.storyItem} 
+                  onPress={() => handleStoryPress(item)}
+                >
+                  <LinearGradient
+                    colors={item.has_unviewed ? ['#ff00ff', '#ff6b9d', '#c44569'] : ['#666666', '#888888', '#666666']}
+                    start={{x: 0, y: 0}}
+                    end={{x: 1, y: 1}}
+                    style={styles.storyRing}
+                  >
+                    <Image
+                      style={styles.storyAvatar}
+                      source={{ uri: item.profiles.avatar_url || 'https://via.placeholder.com/60' }}
+                    />
+                  </LinearGradient>
+                  <Text style={styles.storyText}>{item.profiles.username}</Text>
                 </TouchableOpacity>
               );
-            }
-            return (
-              <TouchableOpacity 
-                style={styles.storyItem} 
-                onPress={() => handleStoryPress(item)}
-              >
-                <LinearGradient
-                  colors={item.has_unviewed ? ['#ffd700', '#ffed4e', '#ffd700'] : ['#666666', '#888888', '#666666']}
-                  start={{x: 0, y: 0}}
-                  end={{x: 1, y: 1}}
-                  style={styles.storyRing}
-                >
-                  <Image
-                    style={styles.storyAvatar}
-                    source={{ uri: item.profiles.avatar_url || 'https://via.placeholder.com/60' }}
-                  />
-                </LinearGradient>
-                <Text style={styles.storyText}>{item.profiles.username}</Text>
-              </TouchableOpacity>
-            );
-          }}
-        />
-      </LinearGradient>
+            }}
+          />
+        </LinearGradient>
+      </Animated.View>
     </>
-  );
+    );
+  };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#ff00ff" />
-          </View>
-        ) : (
-          <FlatList
-            data={posts}
-            keyExtractor={(item) => item?.id?.toString() || Math.random().toString()}
-            renderItem={({ item }) => {
-              // Skip rendering if item is null or invalid
-              if (!item || !item.id) {
-                console.warn('Skipping invalid post item in FlatList');
-                return null;
-              }
-              
-              return (
-                <PostItem
-                  post={item}
-                  onOptionsPress={(action) => {
-                    if (action.type === 'delete') {
-                      setPosts(posts.filter(post => post.id !== action.postId));
-                    }
-                  }}
-                />
-              );
-            }}
-            ListHeaderComponent={renderHeader}
-            ListEmptyComponent={() => (
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>No posts available</Text>
-              </View>
-            )}
+    <>
+      <StatusBar style="light" />
+      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+        <LinearGradient
+          colors={['#0a0a2a', '#1a1a4a', '#2a1a4a']}
+          style={styles.container}
+        >
+          <ScrollView
             showsVerticalScrollIndicator={false}
             refreshControl={
               <RefreshControl
@@ -470,130 +526,152 @@ const HomeScreen = () => {
                 tintColor="#ff00ff"
               />
             }
-            viewabilityConfigCallbackPairs={viewabilityConfigCallbackPairs.current}
-            contentContainerStyle={styles.flatListContent}
-          />
-        )}
-
-        {/* Post Input Modal */}
-        <Modal
-          visible={showPostInput}
-          transparent={true}
-          animationType="slide"
-        >
-          <View style={styles.modalContainer}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <TouchableOpacity 
-                  onPress={() => {
-                    setShowPostInput(false);
-                    setSelectedMedia(null);
-                    setPostText('');
-                  }}
-                >
-                  <Ionicons name="close" size={24} color="#fff" />
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.postButton, (!selectedMedia && !postText.trim()) && styles.disabledButton]}
-                  onPress={handleCreatePost}
-                  disabled={!selectedMedia && !postText.trim()}
-                >
-                  <Text style={styles.postButtonText}>Post</Text>
-                </TouchableOpacity>
+            contentContainerStyle={styles.scrollViewContent}
+          >
+            {renderHeader()}
+            
+            {loading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#ff00ff" />
               </View>
+            ) : posts.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>No posts available</Text>
+              </View>
+            ) : (
+              posts.map((item) => {
+                if (!item || !item.id) {
+                  return null;
+                }
+                
+                return (
+                  <PostItem
+                    key={item.id}
+                    post={item}
+                    onOptionsPress={(action) => {
+                      if (action.type === 'delete') {
+                        setPosts(posts.filter(post => post.id !== action.postId));
+                      }
+                    }}
+                  />
+                );
+              })
+            )}
+          </ScrollView>
 
-              {selectedMedia && (
-                <View style={styles.mediaPreview}>
-                  {selectedMedia.type === 'video' ? (
+          <Modal
+            visible={showPostInput}
+            transparent={true}
+            animationType="slide"
+          >
+            <View style={styles.modalContainer}>
+              <View style={styles.modalContent}>
+                <View style={styles.modalHeader}>
+                  <TouchableOpacity 
+                    onPress={() => {
+                      setShowPostInput(false);
+                      setSelectedMedia(null);
+                      setPostText('');
+                    }}
+                  >
+                    <Ionicons name="close" size={24} color="#fff" />
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[styles.postButton, (!selectedMedia && !postText.trim()) && styles.disabledButton]}
+                    onPress={handleCreatePost}
+                    disabled={!selectedMedia && !postText.trim()}
+                  >
+                    <Text style={styles.postButtonText}>Post</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {selectedMedia && (
+                  <View style={styles.mediaPreview}>
+                    {selectedMedia.type === 'video' ? (
+                      <Video
+                        source={{ uri: selectedMedia.uri }}
+                        style={styles.previewMedia}
+                        resizeMode="cover"
+                        shouldPlay={false}
+                        isLooping={false}
+                        useNativeControls={true}
+                      />
+                    ) : (
+                      <Image
+                        source={{ uri: selectedMedia.uri }}
+                        style={styles.previewMedia}
+                        resizeMode="cover"
+                      />
+                    )}
+                  </View>
+                )}
+
+                <TextInput
+                  style={[styles.postInput, selectedMedia && styles.postInputWithMedia]}
+                  placeholder="Write a caption..."
+                  placeholderTextColor="#888"
+                  multiline
+                  value={postText}
+                  onChangeText={setPostText}
+                  color="#ffffff"
+                  autoFocus={selectedMedia ? true : false}
+                />
+              </View>
+            </View>
+          </Modal>
+
+          <Modal
+            visible={viewerVisible}
+            transparent={false}
+            animationType="slide"
+          >
+            <View style={styles.viewerContainer}>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={() => {
+                  setViewerVisible(false);
+                  setSelectedStory(null);
+                }}
+              >
+                <Ionicons name="close" size={30} color="#fff" />
+              </TouchableOpacity>
+
+              {selectedStory && (
+                <View style={styles.storyContent}>
+                  {selectedStory.type === 'video' ? (
                     <Video
-                      source={{ uri: selectedMedia.uri }}
-                      style={styles.previewMedia}
-                      resizeMode="cover"
-                      play={false}
-                      shouldPlay={false}
-                      isLooping={false}
-                      useNativeControls={true}
-                      rate={1.0}
+                      source={{ uri: selectedStory.media_url }}
+                      style={styles.storyMedia}
+                      resizeMode="contain"
+                      shouldPlay={true}
+                      isLooping={true}
+                      useNativeControls={false}
                     />
                   ) : (
                     <Image
-                      source={{ uri: selectedMedia.uri }}
-                      style={styles.previewMedia}
-                      resizeMode="cover"
+                      source={{ uri: selectedStory.media_url }}
+                      style={styles.storyMedia}
+                      resizeMode="contain"
                     />
                   )}
                 </View>
               )}
-
-              <TextInput
-                style={[styles.postInput, selectedMedia && styles.postInputWithMedia]}
-                placeholder="Write a caption..."
-                placeholderTextColor="#888"
-                multiline
-                value={postText}
-                onChangeText={setPostText}
-                color="#ffffff"
-                autoFocus={selectedMedia ? true : false}
-              />
             </View>
-          </View>
-        </Modal>
-
-        {/* Story Viewer Modal */}
-        <Modal
-          visible={viewerVisible}
-          transparent={false}
-          animationType="slide"
-        >
-          <View style={styles.viewerContainer}>
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={() => {
-                setViewerVisible(false);
-                setSelectedStory(null);
-              }}
-            >
-              <Ionicons name="close" size={30} color="#fff" />
-            </TouchableOpacity>
-
-            {selectedStory && (
-              <View style={styles.storyContent}>
-                {selectedStory.type === 'video' ? (
-                  <Video
-                    source={{ uri: selectedStory.media_url }}
-                    style={styles.storyMedia}
-                    resizeMode="contain"
-                    play
-                    shouldPlay={true}
-                    isLooping={true}
-                    loop={true}
-                    useNativeControls={false}
-                    rate={1.0}
-                  />
-                ) : (
-                  <Image
-                    source={{ uri: selectedStory.media_url }}
-                    style={styles.storyMedia}
-                    resizeMode="contain"
-                  />
-                )}
-              </View>
-            )}
-          </View>
-        </Modal>
-      </View>
-    </SafeAreaView>
+          </Modal>
+        </LinearGradient>
+      </SafeAreaView>
+    </>
   );
 };
 
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#0f0f23',
+    backgroundColor: '#0a0a2a',
   },
   container: {
     flex: 1,
-    backgroundColor: '#0f0f23',
+    backgroundColor: '#0a0a2a',
   },
   loadingContainer: {
     flex: 1,
@@ -615,28 +693,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 12,
-    paddingTop: 12,
-    paddingLeft: 20,
-    paddingRight: 20,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 15,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 0, 255, 0.2)',
-  },
-  logoGradient: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    marginRight: 20,
-    shadowColor: '#ffd700',
+    borderBottomColor: 'rgba(255, 0, 255, 0.1)',
+    shadowColor: '#ff00ff',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 5,
+    elevation: 3,
+    minHeight: 60,
+  },
+  logoGlow: {
+    position: 'absolute',
+    top: -5,
+    left: -5,
+    right: -5,
+    bottom: -5,
+    borderRadius: 25,
+    backgroundColor: 'rgba(255, 0, 255, 0.1)',
+    zIndex: -1,
   },
   logo: {
-    fontSize: 28,
+    fontSize: 24,
     fontFamily: 'Poppins_700Bold',
-    color: '#000',
+    color: '#fff',
     letterSpacing: 1,
     fontWeight: 'bold',
   },
@@ -649,12 +731,12 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   iconBackground: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#ffd700',
+    shadowColor: '#ff00ff',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.4,
     shadowRadius: 6,
@@ -664,7 +746,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -3,
     right: -6,
-    backgroundColor: '#ffd700',
     borderRadius: 10,
     height: 16,
     justifyContent: 'center',
@@ -693,12 +774,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
+  avatarContainer: {
+    position: 'relative',
+  },
   avatarBorder: {
     width: 46,
     height: 46,
     borderRadius: 23,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#ff00ff',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  avatarGlow: {
+    position: 'absolute',
+    top: -3,
+    left: -3,
+    right: -3,
+    bottom: -3,
+    borderRadius: 26,
+    backgroundColor: 'rgba(255, 0, 255, 0.1)',
+    zIndex: -1,
   },
   userAvatar: {
     width: 42,
@@ -710,12 +809,18 @@ const styles = StyleSheet.create({
   postInputButton: {
     flex: 1,
     height: 46,
-    padding: 12,
-    backgroundColor: 'rgba(255, 215, 0, 0.08)',
     borderRadius: 23,
-    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  postInputGradient: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    gap: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 215, 0, 0.3)',
+    borderColor: 'rgba(255, 0, 255, 0.3)',
+    borderRadius: 23,
   },
   postInputPlaceholder: {
     color: 'rgba(255, 255, 255, 0.8)',
@@ -883,6 +988,9 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   flatListContent: {
+    paddingBottom: 100, // Add padding to prevent bottom navigation overlap
+  },
+  scrollViewContent: {
     paddingBottom: 100, // Add padding to prevent bottom navigation overlap
   },
 });

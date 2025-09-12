@@ -17,7 +17,7 @@ import {
   Animated,
   Vibration
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { Video } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
@@ -61,6 +61,17 @@ const PostItem = ({ post, onOptionsPress }) => {
   const touchTimer = useRef(null);
   const isTouchHolding = useRef(false);
 
+  // Animation refs for ultra-premium UI
+  const postFadeAnim = useRef(new Animated.Value(0)).current;
+  const postScaleAnim = useRef(new Animated.Value(0.95)).current;
+  const likeScaleAnim = useRef(new Animated.Value(1)).current;
+  const avatarGlowAnim = useRef(new Animated.Value(0)).current;
+  const heartParticleAnim = useRef(new Animated.Value(0)).current;
+  const shimmerAnim = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const rotateAnim = useRef(new Animated.Value(0)).current;
+  const [showHeartParticles, setShowHeartParticles] = useState(false);
+
   // Add this function to safely get the avatar URL
   const getAvatarUrl = () => {
     if (!post?.profiles?.avatar_url) return 'https://via.placeholder.com/150';
@@ -98,6 +109,66 @@ const PostItem = ({ post, onOptionsPress }) => {
   
   // Get video context
   const { activeVideoId, setActiveVideo, clearActiveVideo, isFullscreenMode, setFullscreen: setContextFullscreen } = useVideo();
+
+  // Start ultra-premium animations when component mounts
+  useEffect(() => {
+    const startAnimations = () => {
+      Animated.parallel([
+        // Entrance animations
+        Animated.timing(postFadeAnim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.spring(postScaleAnim, {
+          toValue: 1,
+          tension: 120,
+          friction: 7,
+          useNativeDriver: true,
+        }),
+        // Continuous glow effects
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(avatarGlowAnim, {
+              toValue: 1,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+            Animated.timing(avatarGlowAnim, {
+              toValue: 0.3,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+          ])
+        ),
+        // Shimmer effect
+        Animated.loop(
+          Animated.timing(shimmerAnim, {
+            toValue: 1,
+            duration: 3000,
+            useNativeDriver: true,
+          })
+        ),
+        // Subtle pulse
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(pulseAnim, {
+              toValue: 1.02,
+              duration: 2000,
+              useNativeDriver: true,
+            }),
+            Animated.timing(pulseAnim, {
+              toValue: 1,
+              duration: 2000,
+              useNativeDriver: true,
+            }),
+          ])
+        ),
+      ]).start();
+    };
+    
+    startAnimations();
+  }, []);
 
   // Helper function to safely pause video
   const safePauseVideo = async () => {
@@ -483,6 +554,42 @@ const PostItem = ({ post, onOptionsPress }) => {
     // Prevent double submits
     if (isLiking || !currentUser) return;
 
+    // Ultra-premium like animation with particles
+    setShowHeartParticles(true);
+    Vibration.vibrate(50); // Haptic feedback
+    
+    Animated.parallel([
+      Animated.sequence([
+        Animated.timing(likeScaleAnim, {
+          toValue: 1.4,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+        Animated.spring(likeScaleAnim, {
+          toValue: 1,
+          tension: 300,
+          friction: 4,
+          useNativeDriver: true,
+        }),
+      ]),
+      // Heart particle explosion
+      Animated.timing(heartParticleAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      // Rotation effect
+      Animated.timing(rotateAnim, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setShowHeartParticles(false);
+      heartParticleAnim.setValue(0);
+      rotateAnim.setValue(0);
+    });
+
     // Optimistic UI
     const previousLiked = isLiked;
     const previousCount = likesCount;
@@ -609,18 +716,87 @@ const PostItem = ({ post, onOptionsPress }) => {
   };
   
   return (
-    <LinearGradient
-      colors={['#1a1a2e', '#16213e', '#0f3460']}
-      style={styles.container}
+    <Animated.View 
+      style={{
+        opacity: postFadeAnim,
+        transform: [
+          { scale: Animated.multiply(postScaleAnim, pulseAnim) },
+          { perspective: 1000 }
+        ]
+      }}
     >
+      <LinearGradient
+        colors={['rgba(26, 26, 46, 0.95)', 'rgba(22, 33, 62, 0.9)', 'rgba(15, 52, 96, 0.85)']}
+        start={{x: 0, y: 0}}
+        end={{x: 1, y: 1}}
+        style={styles.container}
+      >
+        {/* Shimmer overlay effect */}
+        <Animated.View 
+          style={[
+            styles.shimmerOverlay,
+            {
+              opacity: shimmerAnim.interpolate({
+                inputRange: [0, 0.5, 1],
+                outputRange: [0, 0.3, 0]
+              }),
+              transform: [{
+                translateX: shimmerAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [-width, width]
+                })
+              }]
+            }
+          ]}
+        />
         {/* Post Header */}
-        <View style={styles.header}>
+        <LinearGradient
+          colors={['rgba(255, 0, 255, 0.1)', 'rgba(255, 0, 255, 0.05)', 'transparent']}
+          style={styles.header}
+        >
           <TouchableOpacity onPress={handleProfilePress} style={styles.profileContainer}>
             <View style={styles.avatarContainer}>
-              <Image 
-                source={{ uri: getAvatarUrl() }}
-                style={styles.avatar}
+              <Animated.View 
+                style={[
+                  styles.avatarGlow,
+                  {
+                    opacity: avatarGlowAnim,
+                    transform: [{
+                      scale: avatarGlowAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [1, 1.2]
+                      })
+                    }]
+                  }
+                ]}
               />
+              {/* Multiple glow layers for ultra-premium effect */}
+              <Animated.View 
+                style={[
+                  styles.avatarGlowSecondary,
+                  {
+                    opacity: avatarGlowAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, 0.6]
+                    }),
+                    transform: [{
+                      scale: avatarGlowAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [1, 1.4]
+                      })
+                    }]
+                  }
+                ]}
+              />
+              <LinearGradient
+                colors={['#ff00ff', '#ff6b9d', '#c44569']}
+                style={styles.avatarBorder}
+              >
+                <Image 
+                  source={{ uri: getAvatarUrl() }}
+                  style={styles.avatar}
+                />
+              </LinearGradient>
             </View>
             <View style={styles.userInfo}>
               <Text style={styles.username}>{post?.profiles?.username || 'Unknown'}</Text>
@@ -642,10 +818,15 @@ const PostItem = ({ post, onOptionsPress }) => {
                 );
               }}
             >
-              <Ionicons name="ellipsis-vertical" size={20} color="#fff" />
+              <LinearGradient
+                colors={['rgba(255, 0, 255, 0.2)', 'rgba(255, 0, 255, 0.1)']}
+                style={styles.optionsButtonGradient}
+              >
+                <MaterialIcons name="more-vert" size={20} color="#ff00ff" />
+              </LinearGradient>
             </TouchableOpacity>
           )}
-        </View>
+        </LinearGradient>
 
         {/* Post Caption */}
         {post.caption && (
@@ -811,23 +992,83 @@ const PostItem = ({ post, onOptionsPress }) => {
 
         {/* Post Actions */}
         <LinearGradient colors={['rgba(26, 26, 58, 0.8)', 'rgba(13, 13, 42, 0.9)']} style={styles.actions}>
-          <TouchableOpacity 
-            style={[styles.actionButton, isLiked && styles.likedButton]} 
-            onPress={handleLike}
-            disabled={isLiking}
-          >
-            <LinearGradient
-              colors={isLiked ? ['#ff6b6b', '#ff5252'] : ['rgba(255, 107, 107, 0.2)', 'rgba(255, 107, 107, 0.1)']}
-              style={styles.actionButtonGradient}
+          <Animated.View style={{ 
+            transform: [
+              { scale: likeScaleAnim },
+              { 
+                rotate: rotateAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: ['0deg', '360deg']
+                })
+              }
+            ] 
+          }}>
+            {/* Heart particles effect */}
+            {showHeartParticles && (
+              <View style={styles.particleContainer}>
+                {[...Array(8)].map((_, i) => (
+                  <Animated.View
+                    key={i}
+                    style={[
+                      styles.heartParticle,
+                      {
+                        transform: [
+                          {
+                            translateX: heartParticleAnim.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [0, (Math.cos(i * 45 * Math.PI / 180) * 50)]
+                            })
+                          },
+                          {
+                            translateY: heartParticleAnim.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [0, (Math.sin(i * 45 * Math.PI / 180) * 50)]
+                            })
+                          },
+                          {
+                            scale: heartParticleAnim.interpolate({
+                              inputRange: [0, 0.5, 1],
+                              outputRange: [0, 1, 0]
+                            })
+                          }
+                        ],
+                        opacity: heartParticleAnim.interpolate({
+                          inputRange: [0, 0.3, 1],
+                          outputRange: [0, 1, 0]
+                        })
+                      }
+                    ]}
+                  >
+                    <Ionicons name="heart" size={8} color="#ff00ff" />
+                  </Animated.View>
+                ))}
+              </View>
+            )}
+            <TouchableOpacity 
+              style={[styles.actionButton, isLiked && styles.likedButton]} 
+              onPress={handleLike}
+              disabled={isLiking}
             >
-              <Ionicons 
-                name={isLiked ? "heart" : "heart-outline"} 
-                size={20} 
-                color={isLiked ? "#fff" : "#ff6b6b"} 
-              />
-            </LinearGradient>
-            <Text style={styles.actionText}>{likesCount}</Text>
-          </TouchableOpacity>
+              <LinearGradient
+                colors={isLiked ? 
+                  ['#ff00ff', '#ff6b9d', '#ff1493'] : 
+                  ['rgba(255, 0, 255, 0.3)', 'rgba(255, 0, 255, 0.1)', 'rgba(255, 20, 147, 0.05)']
+                }
+                style={[
+                  styles.actionButtonGradient,
+                  isLiked && styles.likedButtonGradient
+                ]}
+              >
+                <Ionicons 
+                  name={isLiked ? "heart" : "heart-outline"} 
+                  size={20} 
+                  color={isLiked ? "#fff" : "#ff00ff"} 
+                  style={isLiked && styles.likedIcon}
+                />
+              </LinearGradient>
+              <Text style={[styles.actionText, isLiked && styles.likedActionText]}>{likesCount}</Text>
+            </TouchableOpacity>
+          </Animated.View>
 
           <TouchableOpacity style={styles.actionButton} onPress={handleComment}>
             <LinearGradient
@@ -861,6 +1102,25 @@ const PostItem = ({ post, onOptionsPress }) => {
           )}
         </LinearGradient>
 
+        {/* Post Stats */}
+        <View style={styles.stats}>
+          <TouchableOpacity onPress={handleShowLikes}>
+            <LinearGradient
+              colors={['rgba(255, 107, 107, 0.15)', 'rgba(255, 107, 107, 0.05)']}
+              style={styles.statGradient}
+            >
+              <Text style={styles.likesText}>{likesCount} likes</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleComment}>
+            <LinearGradient
+              colors={['rgba(102, 126, 234, 0.15)', 'rgba(102, 126, 234, 0.05)']}
+              style={styles.statGradient}
+            >
+              <Text style={styles.commentsText}>{commentsCount} comments</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
 
         {/* Likes Modal */}
         <Modal
@@ -904,531 +1164,256 @@ const PostItem = ({ post, onOptionsPress }) => {
           </View>
         </Modal>
 
-      {/* Edit Caption Modal */}
-      <Modal
-        visible={showEditModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowEditModal(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Edit Caption</Text>
-              <TouchableOpacity onPress={() => setShowEditModal(false)}>
-                <Ionicons name="close" size={24} color="#fff" />
-              </TouchableOpacity>
-            </View>
-            
-            <TextInput
-              style={styles.editInput}
-              value={editCaption}
-              onChangeText={setEditCaption}
-              multiline
-              placeholder="Write a caption..."
-              placeholderTextColor="#666"
-            />
-            
-            <TouchableOpacity 
-              style={styles.editButton}
-              onPress={handleEdit}
-            >
-              <Text style={styles.editButtonText}>Save Changes</Text>
-            </TouchableOpacity>
-            <View style={styles.stats}>
-              <TouchableOpacity onPress={handleShowLikes}>
-                <LinearGradient
-                  colors={['rgba(255, 107, 107, 0.15)', 'rgba(255, 107, 107, 0.05)']}
-                  style={styles.statGradient}
-                >
-                  <Text style={styles.likesText}>{likesCount} likes</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={handleComment}>
-                <LinearGradient
-                  colors={['rgba(102, 126, 234, 0.15)', 'rgba(102, 126, 234, 0.05)']}
-                  style={styles.statGradient}
-                >
-                  <Text style={styles.commentsText}>{commentsCount} comments</Text>
-                </LinearGradient>
+        {/* Edit Caption Modal */}
+        <Modal
+          visible={showEditModal}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowEditModal(false)}
+        >
+          <View style={styles.modalContainer}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Edit Caption</Text>
+                <TouchableOpacity onPress={() => setShowEditModal(false)}>
+                  <Ionicons name="close" size={24} color="#fff" />
+                </TouchableOpacity>
+              </View>
+              
+              <TextInput
+                style={styles.editInput}
+                value={editCaption}
+                onChangeText={setEditCaption}
+                multiline
+                placeholder="Write a caption..."
+                placeholderTextColor="#666"
+              />
+              
+              <TouchableOpacity 
+                style={styles.editButton}
+                onPress={handleEdit}
+              >
+                <Text style={styles.editButtonText}>Save Changes</Text>
               </TouchableOpacity>
             </View>
           </View>
-        </View>
-      </Modal>
-
-      {/* Fullscreen Video */}
-      {fullscreen && (
-        <Modal
-          visible={fullscreen}
-          transparent={false}
-          animationType="fade"
-          onRequestClose={handleFullscreenClose}
-        >
-          <LinearGradient
-            colors={['#1a1a3a', '#0d0d2a']}
-            style={styles.fullscreenContainer}
-          >
-            <Video
-            ref={videoRef}
-            source={{ uri: post.media_url }}
-            style={styles.fullscreenVideo}
-            resizeMode="contain"
-            play={playing && fullscreen} // Only play if in fullscreen mode
-            loop
-            onPlaybackStatusUpdate={onPlaybackStatusUpdate}
-            onLoad={(status) => {
-              setLoading(false);
-              // Ensure video starts playing on load if it's not already playing
-              if (!playing) {
-                setPlaying(true);
-                setActiveVideo(post.id);
-              }
-            }}
-            onError={() => {
-              setVideoError(true);
-              setLoading(false);
-            }}
-          />
-
-            {/* Fullscreen video controls */}
-            {fullscreen && showControls && (
-              <LinearGradient
-                colors={['rgba(0,0,0,0.9)', 'rgba(0,0,0,0.9)']}
-                style={styles.fullscreenOverlay}
-              >
-                {/* Video controls */}
-                {fullscreen && showControls && (
-                  <View>
-                    {/* Top controls */}
-                    <LinearGradient
-                      colors={['rgba(0,0,0,0.7)', 'transparent']}
-                      style={styles.fullscreenTopControls}
-                    >
-                      <TouchableOpacity onPress={handleFullscreenClose}>
-                        <Ionicons name="arrow-back" size={28} color="#fff" />
-                      </TouchableOpacity>
-                    </LinearGradient>
-                    
-                    {/* Bottom controls */}
-                    <LinearGradient
-                      colors={['transparent', 'rgba(0,0,0,0.7)']}
-                      style={styles.fullscreenBottomControls}
-                    >
-                      {/* Time display */}
-                      <View style={styles.fullscreenTimeContainer}>
-                        <Text style={styles.timeText}>{formatTime(currentTime)}</Text>
-                        <Text style={styles.timeText}>{formatTime(duration)}</Text>
-                      </View>
-                      
-                      {/* Seekbar with PanResponder */}
-                      <View style={styles.fullscreenSeekbarContainer}>
-                        <View style={styles.fullscreenProgressBackground} />
-                        <View style={[styles.fullscreenProgressBar, { width: `${progress * 100}%` }]} />
-                        <TouchableWithoutFeedback
-                          onPress={(evt) => {
-                            if (!seeking && duration > 0) {
-                              const seekbarWidth = width - 40;
-                              const touchX = evt.nativeEvent.locationX;
-                              const newProgress = Math.max(0, Math.min(1, touchX / seekbarWidth));
-                              handleSeek(newProgress);
-                            }
-                          }}
-                        >
-                          <View style={styles.fullscreenSeekbarTouchArea}>
-                            <View {...panResponder.panHandlers} style={styles.fullscreenSeekbarTouchable}>
-                              <View style={[styles.fullscreenSeekKnob, { left: `${progress * 100}%` }]} />
-                            </View>
-                          </View>
-                        </TouchableWithoutFeedback>
-                      </View>
-                      
-                      {/* Playback controls */}
-                      <View style={styles.fullscreenControlsRow}>
-                        <TouchableOpacity 
-                          style={styles.fullscreenControlButton} 
-                          onPress={() => {
-                            setSeeking(true);
-                            handleSeek(Math.max(0, progress - 0.1)).then(() => setSeeking(false));
-                          }}>
-                          <Ionicons name="play-back" size={24} color="#fff" />
-                        </TouchableOpacity>
-                        
-                        <TouchableOpacity style={styles.fullscreenPlayPauseButton} onPress={() => setPlaying(!playing)}>
-                          <LinearGradient
-                            colors={['#ff00ff', '#9900ff']}
-                            style={styles.fullscreenPlayButtonGradient}
-                          >
-                            <Ionicons name={playing ? 'pause' : 'play'} size={28} color="#fff" />
-                          </LinearGradient>
-                        </TouchableOpacity>
-                        
-                        <TouchableOpacity 
-                          style={styles.fullscreenControlButton} 
-                          onPress={() => {
-                            setSeeking(true);
-                            handleSeek(Math.min(1, progress + 0.1)).then(() => setSeeking(false));
-                          }}>
-                          <Ionicons name="play-forward" size={24} color="#fff" />
-                        </TouchableOpacity>
-                      </View>
-                    </LinearGradient>
-                  </View>
-                )}
-              </LinearGradient>
-            )}
-          </LinearGradient>
         </Modal>
-      )}
-    </LinearGradient>
+      </LinearGradient>
+    </Animated.View>
   );
 };
 
 const styles = StyleSheet.create({
-  fullscreenOverlay: {
+  container: {
+    backgroundColor: 'transparent',
+    marginBottom: 20,
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    paddingBottom: 12,
+  },
+  profileContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  avatarContainer: {
+    position: 'relative',
+    marginRight: 12,
+  },
+  avatarGlow: {
+    position: 'absolute',
+    top: -4,
+    left: -4,
+    right: -4,
+    bottom: -4,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255, 0, 255, 0.2)',
+    zIndex: -1,
+  },
+  avatarBorder: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    padding: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+  },
+  userInfo: {
+    flex: 1,
+  },
+  username: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 2,
+  },
+  timestamp: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.6)',
+  },
+  optionsButton: {
+    padding: 8,
+  },
+  optionsButtonGradient: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  captionContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
+  caption: {
+    fontSize: 15,
+    color: '#fff',
+    lineHeight: 20,
+  },
+  link: {
+    color: '#ff6b9d',
+    textDecorationLine: 'underline',
+  },
+  hashtag: {
+    color: '#ff00ff',
+    fontWeight: '600',
+  },
+  mediaContainer: {
+    marginBottom: 12,
+  },
+  videoContainer: {
+    position: 'relative',
+    aspectRatio: 16/9,
+    backgroundColor: '#000',
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginHorizontal: 16,
+  },
+  imageContainer: {
+    position: 'relative',
+    aspectRatio: 16/9,
+    backgroundColor: '#000',
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginHorizontal: 16,
+  },
+  media: {
+    width: '100%',
+    height: '100%',
+  },
+  loadingContainer: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    justifyContent: 'space-between',
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
-  editInput: {
-    backgroundColor: '#1a1a3a',
-    borderRadius: 10,
-    padding: 15,
+  loadingText: {
     color: '#fff',
-    fontSize: 16,
-    minHeight: 100,
-    textAlignVertical: 'top',
-    marginVertical: 15,
+    marginTop: 8,
+    fontSize: 14,
   },
-  editButton: {
+  videoOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  },
+  videoControls: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 16,
+  },
+  seekbarContainer: {
+    height: 20,
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  progressBackground: {
+    height: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 1.5,
+  },
+  progressBar: {
+    position: 'absolute',
+    height: 3,
     backgroundColor: '#ff00ff',
-    borderRadius: 25,
-    padding: 15,
-    alignItems: 'center',
-    marginTop: 10,
+    borderRadius: 1.5,
   },
-  editButtonText: {
+  seekbarTouchArea: {
+    position: 'absolute',
+    top: -10,
+    bottom: -10,
+    left: 0,
+    right: 0,
+  },
+  seekbarTouchable: {
+    flex: 1,
+    height: 20,
+  },
+  seekKnob: {
+    position: 'absolute',
+    top: 8,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#ff00ff',
+    marginLeft: -6,
+  },
+  errorContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+  },
+  errorText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+    marginTop: 8,
   },
-  modalContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(26, 26, 46, 0.9)',
-  },
-  modalContent: {
-    borderRadius: 20,
-    padding: 20,
-    width: '90%',
-    maxHeight: '80%',
-    shadowColor: '#667eea',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(102, 126, 234, 0.3)',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  link: {
-    color: '#667eea',
-    textDecorationLine: 'underline',
-  },
-  hashtag: {
-    color: '#9c88ff',
-    fontWeight: 'bold',
-  },
-  loadingIndicator: {
-    marginTop: 20,
-  },
-  likesList: {
-    flex: 1,
-  },
-  likeItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-  },
-  likeAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    marginRight: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#9c88ff',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  avatarContainer: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    padding: 2,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  avatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-  },
-  likeUsername: {
-    fontSize: 16,
-    color: '#fff',
+  errorSubText: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 14,
+    marginTop: 4,
   },
   actions: {
     flexDirection: 'row',
-    paddingHorizontal: 15,
-    paddingVertical: 10,
     alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderRadius: 12,
-    marginHorizontal: 10,
-    marginBottom: 10,
-  },
-  likedIconBackground: {
-    padding: 8,
-    borderRadius: 20,
-  },
-  likedText: {
-    color: '#ff00ff',
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    gap: 20,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  actionText: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  iconBackground: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  container: {
-    marginBottom: 20,
-    borderRadius: 15,
-    overflow: 'hidden',
-    shadowColor: '#667eea',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(102, 126, 234, 0.2)',
-  },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 10, justifyContent: 'space-between' },
-  headerLeft: { flexDirection: 'row', alignItems: 'center' },
-  headerInfo: { marginLeft: 10 },
-  username: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#fff',
-    textShadowColor: 'rgba(102, 126, 234, 0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
-  timestamp: { fontSize: 12, color: '#aaa' },
-  optionsButton: { padding: 5 },
-  avatarBorder: { width: 50, height: 50, borderRadius: 25, padding: 2 },
-  captionContainer: { padding: 10 },
-  caption: { color: '#ddd' },
-  mediaContainer: { width: '100%', aspectRatio: 1 },
-  media: { width: '100%', height: '100%' },
-  videoContainer: { width: '100%', height: '100%' },
-  loadingContainer: { ...StyleSheet.absoluteFill, justifyContent: 'center', alignItems: 'center' },
-  loadingText: { marginTop: 5, color: '#ff00ff' },
-  actions: { flexDirection: 'row', padding: 10, justifyContent: 'space-around' },
-  actionButton: { alignItems: 'center' },
-  actionText: { marginTop: 2, color: '#e0e0ff', fontSize: 12 },
-  likedIconBackground: { borderRadius: 20, padding: 5 },
-  likedText: { color: '#ff00ff' },
-  videoControls: { position: 'absolute', bottom: 0, width: '100%', padding: 10, paddingBottom: 30 },
-  timeContainer: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 },
-  timeText: { color: '#fff', fontSize: 12, fontWeight: '500' },
-  seekbarContainer: { height: 20, justifyContent: 'center', width: '100%', marginBottom: 20 },
-  progressBackground: { position: 'absolute', height: 4, width: '100%', backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: 2 },
-  progressBar: { position: 'absolute', height: 4, backgroundColor: '#ff00ff', borderRadius: 2, shadowColor: '#ff00ff', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 4 },
-  seekKnob: { position: 'absolute', width: 16, height: 16, borderRadius: 8, backgroundColor: '#ff00ff', marginLeft: -8, borderWidth: 2, borderColor: '#fff', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 2, zIndex: 2 },
-  seekbarTouchable: { position: 'absolute', width: '100%', height: 20, marginBottom: 16 },
-  seekbarTouchArea: { position: 'absolute', width: '100%', height: 20, backgroundColor: 'transparent', zIndex: 1 },
-  controlsRow: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', marginTop: 10 },
-  controlButton: { padding: 8 },
-  playPauseButton: { width: 40, height: 40, borderRadius: 20, overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
-  videoOverlay: { ...StyleSheet.absoluteFill, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.3)' },
-  playButton: { width: 60, height: 60, borderRadius: 30, overflow: 'hidden' },
-  playButtonGradient: { flex: 1, justifyContent: 'center', alignItems: 'center', borderRadius: 30 },
-  errorContainer: { ...StyleSheet.absoluteFill, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)' },
-  errorText: { color: '#fff', marginTop: 10 },
-  errorSubText: { color: '#ccc', fontSize: 12 },
-  
-  // Fullscreen styles
-  fullscreenContainer: { 
-    flex: 1, 
-    backgroundColor: '#0d0d2a',
-    justifyContent: 'center'
-  },
-  fullscreenVideo: { 
-    width: '100%',
-    height: '100%',
-    position: 'absolute'
-  },
-  fullscreenTopControls: { 
-    position: 'absolute', 
-    top: 0, 
-    left: 0,
-    right: 0,
-    height: 100, 
-    paddingTop: 40,
-    paddingHorizontal: 20
-  },
-  fullscreenBottomControls: { 
-    position: 'absolute', 
-    bottom: 0, 
-    left: 0,
-    right: 0,
-    paddingBottom: 30,
-    paddingHorizontal: 20,
-    paddingTop: 50
-  },
-  fullscreenTimeContainer: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    marginBottom: 10,
-    paddingHorizontal: 5
-  },
-  fullscreenSeekbarContainer: { 
-    height: 30, 
-    justifyContent: 'center', 
-    width: '100%',
-    marginBottom: 20
-  },
-  fullscreenProgressBackground: { 
-    position: 'absolute', 
-    height: 6, 
-    width: '100%', 
-    backgroundColor: 'rgba(255,255,255,0.3)', 
-    borderRadius: 3 
-  },
-  fullscreenProgressBar: {
-    position: 'absolute',
-    height: 6,
-    backgroundColor: '#ff00ff',
-    borderRadius: 3,
-    shadowColor: '#ff00ff',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.7,
-    shadowRadius: 5
-  },
-  fullscreenSeekKnob: { 
-    position: 'absolute', 
-    width: 20, 
-    height: 20, 
-    borderRadius: 10, 
-    backgroundColor: '#ff00ff', 
-    marginLeft: -10, 
-    borderWidth: 3, 
-    borderColor: '#fff', 
-    shadowColor: '#000', 
-    shadowOffset: { width: 0, height: 2 }, 
-    shadowOpacity: 0.5, 
-    shadowRadius: 4,
-    zIndex: 2
-  },
-  fullscreenSeekbarTouchable: {
-    position: 'absolute',
-    width: '100%',
-    height: 30,
-    marginBottom: 20
-  },
-  fullscreenSeekbarTouchArea: {
-    position: 'absolute',
-    width: '100%',
-    height: 30,
-    backgroundColor: 'transparent',
-    zIndex: 1
-  },
-  fullscreenControlsRow: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-around', 
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    marginTop: 20
-  },
-  fullscreenControlButton: { 
-    padding: 12,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    borderRadius: 30
-  },
-  fullscreenPlayPauseButton: { 
-    width: 60, 
-    height: 60, 
-    borderRadius: 30, 
-    overflow: 'hidden', 
-    justifyContent: 'center', 
-    alignItems: 'center',
-    marginHorizontal: 20
-  },
-  fullscreenPlayButtonGradient: { 
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    borderRadius: 30 
-  },
-  stats: {
-    flexDirection: 'row',
-    paddingHorizontal: 15,
-    paddingBottom: 15,
-    gap: 10,
-  },
-  statGradient: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 15,
-    marginRight: 10,
-    shadowColor: 'rgba(102, 126, 234, 0.2)',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.3,
-    shadowRadius: 2,
-    elevation: 2,
+    marginHorizontal: 16,
+    marginBottom: 8,
   },
   actionButton: {
     marginRight: 15,
@@ -1452,12 +1437,154 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 4,
   },
-  closeButton: { 
-    position: 'absolute', 
-    top: 0, 
-    right: 0, 
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+  },
+  modalContent: {
+    width: '90%',
+    maxHeight: '80%',
+    backgroundColor: '#1a1a2e',
+    borderRadius: 16,
+    padding: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  loadingIndicator: {
+    marginVertical: 20,
+  },
+  likesList: {
+    maxHeight: 300,
+  },
+  likeItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  likeAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+  },
+  likeUsername: {
+    fontSize: 16,
+    color: '#fff',
+    fontWeight: '500',
+  },
+  editInput: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
     padding: 15,
-    zIndex: 10 
+    color: '#fff',
+    fontSize: 16,
+    minHeight: 100,
+    textAlignVertical: 'top',
+    marginBottom: 20,
+  },
+  editButton: {
+    backgroundColor: '#ff00ff',
+    borderRadius: 12,
+    padding: 15,
+    alignItems: 'center',
+  },
+  editButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  stats: {
+    flexDirection: 'row',
+    paddingHorizontal: 15,
+    paddingBottom: 15,
+    gap: 10,
+  },
+  statGradient: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 15,
+    marginRight: 10,
+    shadowColor: 'rgba(102, 126, 234, 0.2)',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  likesText: {
+    color: '#ff6b6b',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  commentsText: {
+    color: '#667eea',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  // Ultra-premium effect styles
+  shimmerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    transform: [{ skewX: '-20deg' }],
+    width: 100,
+  },
+  avatarGlowSecondary: {
+    position: 'absolute',
+    top: -8,
+    left: -8,
+    right: -8,
+    bottom: -8,
+    borderRadius: 32,
+    backgroundColor: 'rgba(255, 0, 255, 0.1)',
+    zIndex: -2,
+  },
+  particleContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    pointerEvents: 'none',
+  },
+  heartParticle: {
+    position: 'absolute',
+  },
+  likedButtonGradient: {
+    shadowColor: '#ff00ff',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  likedIcon: {
+    textShadowColor: 'rgba(255, 255, 255, 0.5)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 5,
+  },
+  likedActionText: {
+    color: '#ff00ff',
+    fontWeight: 'bold',
+    textShadowColor: 'rgba(255, 0, 255, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
 });
 

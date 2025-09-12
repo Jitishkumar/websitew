@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, ActivityIndicator, Animated, Alert, FlatList, Modal } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import ProfileViewBlinker from '../components/ProfileViewBlinker';
@@ -102,6 +102,7 @@ const UserProfileScreen = () => {
     fetchFollowingCount();
     fetchPostsCount();
     fetchShortsCount();
+    startAnimations();
     
     // Set up realtime subscription for follows
     const followsSubscription = supabase
@@ -129,6 +130,63 @@ const UserProfileScreen = () => {
     }
   }, [userId, activeTab, canViewPrivateContent, hasPrivateAccount]);
 
+  const startAnimations = () => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 8,
+        useNativeDriver: true,
+      }),
+      Animated.timing(statsAnim, {
+        toValue: 1,
+        duration: 1000,
+        delay: 300,
+        useNativeDriver: true,
+      })
+    ]).start();
+  };
+
+  const animateProfileImage = () => {
+    Animated.sequence([
+      Animated.timing(profileImageAnim, {
+        toValue: 1.1,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+      Animated.timing(profileImageAnim, {
+        toValue: 1,
+        duration: 150,
+        useNativeDriver: true,
+      })
+    ]).start();
+  };
+
+  const animateFollowButton = (callback) => {
+    Animated.sequence([
+      Animated.timing(followButtonAnim, {
+        toValue: 0.95,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(followButtonAnim, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true,
+      })
+    ]).start(() => callback && callback());
+  };
+
   const loadViewerGender = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -153,6 +211,14 @@ const UserProfileScreen = () => {
 
   const [isBlocked, setIsBlocked] = useState(false);
   const [blockReason, setBlockReason] = useState('');
+
+  // Animation refs for premium UI
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+  const profileImageAnim = useRef(new Animated.Value(1)).current;
+  const followButtonAnim = useRef(new Animated.Value(1)).current;
+  const statsAnim = useRef(new Animated.Value(0)).current;
 
   const getProfilePrivacy = async (userId) => {
     try {
@@ -1364,15 +1430,58 @@ const UserProfileScreen = () => {
         gender={userProfile?.gender} 
         viewerGender={viewerGender} 
       />
-      {/* Add back button at the top */}
+      {/* Enhanced Header */}
       <LinearGradient
-        colors={['rgba(102, 126, 234, 0.3)', 'rgba(156, 136, 255, 0.2)', 'transparent']}
+        colors={['#0a0a2a', '#1a1a4a', '#2a1a4a']}
         style={[styles.header, { paddingTop: insets.top + 10 }]}
       >
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color="white" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Profile</Text>
+        <Animated.View 
+          style={[
+            styles.headerContent,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }]
+            }
+          ]}
+        >
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.7}
+          >
+            <LinearGradient
+              colors={['rgba(255, 0, 255, 0.2)', 'rgba(255, 0, 255, 0.1)']}
+              style={styles.backButtonGradient}
+            >
+              <Ionicons name="arrow-back" size={24} color="#ff00ff" />
+            </LinearGradient>
+          </TouchableOpacity>
+          
+          <View style={styles.headerTitleContainer}>
+            <LinearGradient
+              colors={['#ff00ff', '#ff6b9d', '#c44569']}
+              start={{x: 0, y: 0}}
+              end={{x: 1, y: 0}}
+              style={styles.headerTitleGradient}
+            >
+              <MaterialIcons name="person" size={20} color="#fff" />
+              <Text style={styles.headerTitle}>Profile</Text>
+            </LinearGradient>
+          </View>
+          
+          <TouchableOpacity
+            style={styles.menuButton}
+            onPress={() => {}}
+            activeOpacity={0.7}
+          >
+            <LinearGradient
+              colors={['rgba(255, 0, 255, 0.2)', 'rgba(255, 0, 255, 0.1)']}
+              style={styles.menuButtonGradient}
+            >
+              <MaterialIcons name="more-vert" size={24} color="#ff00ff" />
+            </LinearGradient>
+          </TouchableOpacity>
+        </Animated.View>
       </LinearGradient>
       
       {loading ? (
@@ -1553,15 +1662,58 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   header: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 0, 255, 0.1)',
+  },
+  headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    justifyContent: 'space-between',
+  },
+  backButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    overflow: 'hidden',
+  },
+  backButtonGradient: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 22,
+  },
+  headerTitleContainer: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  headerTitleGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 8,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
-    color: 'white',
-    marginLeft: 20,
+    color: '#fff',
+  },
+  menuButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    overflow: 'hidden',
+  },
+  menuButtonGradient: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 22,
   },
   loadingContainer: {
     flex: 1,
