@@ -1,4 +1,4 @@
-import { Text, View, StyleSheet, Alert, TouchableOpacity, SafeAreaView, ActivityIndicator, Animated, Dimensions } from 'react-native';
+import { Text, View, StyleSheet, Alert, TouchableOpacity, SafeAreaView, ActivityIndicator, Animated, Dimensions, StatusBar, Platform } from 'react-native';
 import React, { useState, useEffect, useRef } from 'react';
 import { TextInput } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,6 +7,7 @@ import { Camera } from 'expo-camera';
 import { Audio } from 'expo-av';
 import { supabase } from '../lib/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
+import Constants from 'expo-constants';
 
 const { width, height } = Dimensions.get('window');
 
@@ -558,7 +559,12 @@ function HomePage({navigation}) {
   const isWaiting = matchingStatus.includes('Waiting for someone');
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={styles.container}>
+      {/* Camera-safe black area */}
+      <View style={styles.cameraSafeArea}>
+        <StatusBar backgroundColor="black" barStyle="light-content" />
+      </View>
+
       {/* Enhanced Header with animations */}
       <Animated.View
         style={[
@@ -915,22 +921,19 @@ function HomePage({navigation}) {
           </LinearGradient>
         </Animated.View>
       </Animated.View>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#000',
-    paddingTop: 0,
-  },
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#000',
-    paddingHorizontal: 20,
+    backgroundColor: '#121212',
+  },
+  cameraSafeArea: {
+    backgroundColor: 'black',
+    height: 50,
+    paddingTop: Constants.statusBarHeight,
   },
   header: {
     flexDirection: 'row',

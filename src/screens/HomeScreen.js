@@ -307,16 +307,46 @@ const HomeScreen = () => {
           end={{x: 1, y: 1}}
           style={styles.header}
         >
-          <View style={styles.logoContainer}>
-            <LinearGradient
-              colors={['#ff00ff', '#ff6b9d', '#c44569']}
-              style={styles.logoGradient}
-            >
-              <MaterialIcons name="flash-on" size={24} color="#fff" />
-              <Text style={styles.logo}>Flexx</Text>
-            </LinearGradient>
-            <View style={styles.logoGlow} />
-          </View>
+          <TouchableOpacity 
+            style={styles.logoContainer}
+            activeOpacity={0.8}
+            onPress={() => {
+              // Add a nice bounce animation when pressed
+              Animated.sequence([
+                Animated.spring(scaleAnim, {
+                  toValue: 0.95,
+                  useNativeDriver: true,
+                }),
+                Animated.spring(scaleAnim, {
+                  toValue: 1,
+                  friction: 3,
+                  tension: 40,
+                  useNativeDriver: true,
+                })
+              ]).start();
+              // Refresh the feed
+              loadPosts();
+            }}
+          >
+            <Animated.View style={[
+              styles.logoGradientContainer,
+              { transform: [{ scale: scaleAnim }] }
+            ]}>
+              <LinearGradient
+                colors={['#ff00ff', '#ff6b9d', '#c44569']}
+                start={{x: 0, y: 0}}
+                end={{x: 1, y: 1}}
+                style={styles.logoGradient}
+              >
+                <View style={styles.logoContent}>
+                  <MaterialIcons name="flash-on" size={22} color="#fff" style={styles.logoIcon} />
+                  <Text style={styles.logo}>flexx</Text>
+                </View>
+              </LinearGradient>
+              <View style={styles.logoGlow} />
+              <View style={styles.logoShine} />
+            </Animated.View>
+          </TouchableOpacity>
           
           <View style={styles.headerIcons}>
             <TouchableOpacity 
@@ -705,22 +735,78 @@ const styles = StyleSheet.create({
     elevation: 3,
     minHeight: 60,
   },
-  logoGlow: {
-    position: 'absolute',
-    top: -5,
-    left: -5,
-    right: -5,
-    bottom: -5,
-    borderRadius: 25,
-    backgroundColor: 'rgba(255, 0, 255, 0.1)',
-    zIndex: -1,
+  logoContainer: {
+    position: 'relative',
+    borderRadius: 16,
+    overflow: 'visible',
+    marginLeft: 10,
+  },
+  logoGradientContainer: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#ff00ff',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.6,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  logoGradient: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  logoContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoIcon: {
+    marginRight: 6,
+    textShadowColor: 'rgba(255, 255, 255, 0.8)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 10,
   },
   logo: {
-    fontSize: 24,
+    fontSize: 22,
     fontFamily: 'Poppins_700Bold',
     color: '#fff',
     letterSpacing: 1,
+    textShadowColor: 'rgba(255, 255, 255, 0.3)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 10,
     fontWeight: 'bold',
+    transform: [{ translateY: 1 }],
+  },
+  logoGlow: {
+    position: 'absolute',
+    top: -10,
+    left: -10,
+    right: -10,
+    bottom: -10,
+    borderRadius: 26,
+    backgroundColor: 'rgba(255, 0, 255, 0.15)',
+    zIndex: -2,
+    shadowColor: '#ff00ff',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 15,
+    elevation: 15,
+  },
+  logoShine: {
+    position: 'absolute',
+    top: -30,
+    left: -30,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    transform: [{ rotate: '45deg' }],
+    zIndex: 1,
   },
   headerIcons: {
     flexDirection: 'row',

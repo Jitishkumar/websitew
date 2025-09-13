@@ -605,6 +605,21 @@ const TrendingScreen = () => {
 
   const renderTabButtons = () => (
     <View style={styles.tabContainer}>
+      {/* Premium glow effect */}
+      <Animated.View
+        style={[
+          styles.glowEffect,
+          {
+            opacity: glowAnim,
+          }
+        ]}
+      >
+        <LinearGradient
+          colors={['#ff00ff', '#ff6b9d', '#00ffff', '#ff00ff']}
+          style={styles.glowGradient}
+        />
+      </Animated.View>
+
       <LinearGradient
         colors={['rgba(30, 30, 30, 0.8)', 'rgba(40, 40, 40, 0.8)']}
         style={styles.tabBackground}
@@ -647,12 +662,18 @@ const TrendingScreen = () => {
                     color={activeTab === tab.id ? '#ffffff' : '#666666'}
                     style={styles.tabIcon}
                   />
-                  <Text style={[
+                  <Animated.Text style={[
                     styles.tabText,
-                    activeTab === tab.id && styles.activeTabText
+                    activeTab === tab.id && styles.activeTabText,
+                    {
+                      transform: [
+                        { translateY: activeTab === tab.id ? floatAnim : 0 },
+                        { scale: activeTab === tab.id ? pulseAnim : 1 }
+                      ]
+                    }
                   ]}>
                     {tab.label}
-                  </Text>
+                  </Animated.Text>
                   {activeTab === tab.id && (
                     <Animated.View 
                       style={[
@@ -1457,6 +1478,20 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -2,
     right: -2,
+  },
+  glowEffect: {
+    position: 'absolute',
+    top: -2,
+    left: -2,
+    right: -2,
+    height: 4,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+  },
+  glowGradient: {
+    flex: 1,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
   },
   content: {
     flex: 1,
