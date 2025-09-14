@@ -1558,13 +1558,15 @@ const MessageScreen = () => {
                     profiles: {
                       username: item.post_owner_username || (item.sender === 'me' ? 'You' : recipientName),
                       avatar_url: item.post_owner_avatar || recipientAvatar
-                    }
+                    },
+                    shouldAutoPlay: true
                   };
                   
-                  // Navigate to ShortsScreen with the mock post
-                  navigation.navigate('Shorts', {
-                    posts: [mockPost],
-                    initialIndex: 0
+                  // Navigate to ReelsScreen with the mock post and auto-play enabled
+                  navigation.navigate('Reels', {
+                    initialPost: mockPost,
+                    autoPlay: true,
+                    fromMessage: true
                   });
                 } else if (item.media_type === 'image') {
                   // Use existing media press handler for images
@@ -1581,7 +1583,6 @@ const MessageScreen = () => {
                     style={styles.messageVideo}
                     resizeMode="cover"
                     shouldPlay={false}
-                    positionMillis={1000}
                     useNativeControls={false}
                     isLooping={false}
                     onError={(error) => {
@@ -1590,8 +1591,16 @@ const MessageScreen = () => {
                     onLoadStart={() => {
                       console.log('Video loading started for:', item.media_url);
                     }}
-                    onLoad={(status) => {
+                    onLoad={async (status) => {
                       console.log('Video loaded successfully:', status);
+                      // Seek to 1 second after load for thumbnail
+                      try {
+                        if (status.isLoaded) {
+                          await status.setPositionAsync(1000);
+                        }
+                      } catch (error) {
+                        console.warn('Error seeking video for thumbnail:', error);
+                      }
                     }}
                   />
                   <View style={styles.videoOverlay}>
@@ -2100,6 +2109,22 @@ const MessageScreen = () => {
 };
 
 const styles = StyleSheet.create({
+  dateSeparatorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 16,
+  },
+  dateSeparatorLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  dateSeparatorText: {
+    color: '#fff',
+    marginHorizontal: 12,
+    fontSize: 13,
+    fontWeight: '600',
+  },
   container: {
     flex: 1,
   },
@@ -2219,14 +2244,25 @@ const styles = StyleSheet.create({
   messageVideo: {
     width: '100%',
     height: 200,
-    opacity: 0.7,
+    borderRadius: 12,
+  },
+  videoPlaceholder: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 12,
+    zIndex: 1,
+  },
+  placeholderGradient: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 12,
   },
   videoPlayButton: {
     position: 'absolute',
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: '100%',
-    height: '100%',
   },
   messageImage: {
     width: 200,

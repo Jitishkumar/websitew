@@ -496,11 +496,13 @@ const styles = StyleSheet.create({
     textShadowRadius: 8,
   },
   listContainer: {
-    paddingBottom: 20,
+    paddingTop: 15,
+    paddingBottom: 100,
   },
   buttonContainer: {
     padding: 20,
-    gap: 25,
+    paddingBottom: 10,
+    gap: 20,
   },
   actionButtonsRow: {
     flexDirection: 'row',
@@ -514,18 +516,11 @@ const styles = StyleSheet.create({
   premiumButton: {
     height: 140,
     borderRadius: 20,
-    shadowColor: '#ff00ff',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.8,
-    shadowRadius: 20,
-    elevation: 20,
     overflow: 'hidden',
     position: 'relative',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.4)',
   },
   personButton: {
     backgroundColor: '#FF1744',
@@ -541,11 +536,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   iconWrapper: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderRadius: 25,
     padding: 12,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   sparkleContainer: {
     position: 'absolute',
@@ -567,19 +560,13 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '800',
     textAlign: 'center',
-    textShadowColor: 'rgba(0, 0, 0, 0.7)',
-    textShadowOffset: { width: 1, height: 2 },
-    textShadowRadius: 6,
     marginBottom: 4,
   },
   buttonSubtext: {
-    color: 'rgba(255, 255, 255, 0.9)',
+    color: '#fff',
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: '600',
     textAlign: 'center',
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
   },
   buttonGlow: {
     position: 'absolute',
@@ -594,11 +581,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 15,
+    marginTop: 25,
     marginBottom: 15,
   },
   sectionTitleContainer: {
     flex: 1,
+    marginRight: 10,
   },
   sectionTitleGradient: {
     flexDirection: 'row',
@@ -606,21 +594,17 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 25,
-    shadowColor: '#ff00ff',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 8,
+    backgroundColor: '#ff00ff',
   },
+
   enhancedSectionTitle: {
     color: '#fff',
     fontSize: 18,
     fontWeight: '700',
     marginLeft: 8,
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
   },
+
+  // ...
   enhancedRefreshButton: {
     borderRadius: 20,
     overflow: 'hidden',
@@ -637,7 +621,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 0, 255, 0.3)',
   },
   confessionCard: {
-    backgroundColor: '#1a1a4a',
+    backgroundColor: 'rgba(30, 30, 70, 0.9)',
+    marginTop: 10,
     borderRadius: 16,
     padding: 18,
     marginHorizontal: 20,
@@ -659,6 +644,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 10,
+    paddingHorizontal: 15,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 0, 255, 0.2)',
   },
   avatar: {
     width: 44,

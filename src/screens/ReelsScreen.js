@@ -14,7 +14,7 @@ import {
   Image
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useFocusEffect, CommonActions } from '@react-navigation/native';
+import { useNavigation, useFocusEffect, CommonActions, useRoute } from '@react-navigation/native';
 import { Video } from 'expo-av';
 import { TapGestureHandler, State } from 'react-native-gesture-handler';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -27,6 +27,7 @@ const { width, height } = Dimensions.get('window');
 
 const ReelsScreen = () => {
   const navigation = useNavigation();
+  const route = useRoute();
   const insets = useSafeAreaInsets();
   const flatListRef = useRef(null);
   const videoRefs = useRef({});
@@ -81,6 +82,33 @@ const ReelsScreen = () => {
     getCurrentUser();
     loadReels(true);
   }, []);
+
+  // Handle navigation parameters from MessageScreen
+  useEffect(() => {
+    const { initialPost, fromMessage } = route.params || {};
+    if (initialPost && fromMessage) {
+      // Create unique ID for message video to avoid duplicate keys
+      const messagePost = {
+        ...initialPost,
+        id: `message_${initialPost.id}_${Date.now()}`, // Ensure unique key
+        isFromMessage: true
+      };
+      
+      // Insert the message video at the beginning of reels
+      setReels(prevReels => {
+        // Check if this message video already exists to prevent duplicates
+        const existingIndex = prevReels.findIndex(reel => 
+          reel.isFromMessage && reel.media_url === messagePost.media_url
+        );
+        
+        if (existingIndex === -1) {
+          return [messagePost, ...prevReels];
+        }
+        return prevReels;
+      });
+      setCurrentIndex(0);
+    }
+  }, [route.params]);
 
   // Get current user
   const getCurrentUser = async () => {
@@ -530,6 +558,12 @@ const loadReels = async (isInitialLoad = false) => {
   // Increment views count
   const incrementViews = async (postId) => {
     try {
+      // Skip view increment for message videos (they have custom IDs)
+      if (postId.startsWith('message_')) {
+        console.log('Skipping view increment for message video:', postId);
+        return;
+      }
+      
       const { error } = await supabase.rpc('increment_post_views', {
         post_id: postId
       });

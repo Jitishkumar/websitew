@@ -13,6 +13,7 @@ import { Video } from 'expo-av';
 import PostItem from '../components/PostItem';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import { Easing } from 'react-native';
 
 const HomeScreen = () => {
   const navigation = useNavigation();
@@ -35,6 +36,13 @@ const HomeScreen = () => {
   const headerAnim = useRef(new Animated.Value(1)).current;
   const createPostAnim = useRef(new Animated.Value(1)).current;
   const storiesAnim = useRef(new Animated.Value(1)).current;
+  
+  // Logo animation refs
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const floatAnim = useRef(new Animated.Value(0)).current;
+  const colorAnim = useRef(new Animated.Value(0)).current;
+  const particleAnim = useRef(new Animated.Value(0)).current;
+  const [particles, setParticles] = useState([]);
 
   let [fontsLoaded] = useFonts({
     Poppins_700Bold,
@@ -44,6 +52,7 @@ const HomeScreen = () => {
     loadStories();
     loadPosts();
     startAnimations();
+    startLogoAnimations();
 
     // Add a test post for debugging
     addTestPost();
@@ -62,6 +71,127 @@ const HomeScreen = () => {
 
     return unsubscribe;
   }, [navigation]);
+
+  const createParticles = () => {
+    const newParticles = [];
+    const colors = ['#ff00ff', '#ff6b9d', '#c44569', '#ffcc00', '#00ffcc'];
+    
+    for (let i = 0; i < 15; i++) {
+      const angle = (i / 15) * Math.PI * 2;
+      const distance = 30 + Math.random() * 20;
+      const size = 3 + Math.random() * 5;
+      const duration = 800 + Math.random() * 1000;
+      
+      const animX = new Animated.Value(0);
+      const animY = new Animated.Value(0);
+      const rotate = new Animated.Value(0);
+      const scale = new Animated.Value(1);
+      const opacity = new Animated.Value(1);
+      
+      Animated.parallel([
+        Animated.timing(animX, {
+          toValue: Math.cos(angle) * distance,
+          duration,
+          useNativeDriver: true,
+        }),
+        Animated.timing(animY, {
+          toValue: Math.sin(angle) * distance - 20,
+          duration,
+          useNativeDriver: true,
+        }),
+        Animated.timing(rotate, {
+          toValue: (Math.random() - 0.5) * 360,
+          duration,
+          useNativeDriver: true,
+        }),
+        Animated.timing(scale, {
+          toValue: 0,
+          duration: duration * 0.7,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 0,
+          duration: duration * 0.7,
+          useNativeDriver: true,
+        })
+      ]).start();
+      
+      newParticles.push({
+        x: 60 + Math.cos(angle) * 10,
+        y: 30 + Math.sin(angle) * 10,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        anim: {
+          x: animX,
+          y: animY,
+          rotate: rotate.interpolate({
+            inputRange: [0, 360],
+            outputRange: ['0deg', '360deg']
+          }),
+          scale,
+          opacity
+        }
+      });
+    }
+    
+    setParticles(newParticles);
+    
+    // Remove particles after animation
+    setTimeout(() => {
+      setParticles([]);
+    }, 1000);
+  };
+
+  const startLogoAnimations = () => {
+    // Pulsing animation
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.1,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 0.95,
+          duration: 1500,
+          useNativeDriver: true,
+        })
+      ])
+    ).start();
+
+    // Floating animation
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(floatAnim, {
+          toValue: 1,
+          duration: 3000,
+          useNativeDriver: true,
+          easing: Easing.inOut(Easing.ease)
+        }),
+        Animated.timing(floatAnim, {
+          toValue: 0,
+          duration: 3000,
+          useNativeDriver: true,
+          easing: Easing.inOut(Easing.ease)
+        })
+      ])
+    ).start();
+
+    // Color transition animation
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(colorAnim, {
+          toValue: 1,
+          duration: 5000,
+          useNativeDriver: false,
+        }),
+        Animated.timing(colorAnim, {
+          toValue: 0,
+          duration: 5000,
+          useNativeDriver: false,
+        })
+      ])
+    ).start();
+  };
 
   const startAnimations = () => {
     Animated.parallel([
@@ -307,46 +437,124 @@ const HomeScreen = () => {
           end={{x: 1, y: 1}}
           style={styles.header}
         >
-          <TouchableOpacity 
-            style={styles.logoContainer}
-            activeOpacity={0.8}
-            onPress={() => {
-              // Add a nice bounce animation when pressed
-              Animated.sequence([
-                Animated.spring(scaleAnim, {
-                  toValue: 0.95,
-                  useNativeDriver: true,
-                }),
-                Animated.spring(scaleAnim, {
-                  toValue: 1,
-                  friction: 3,
-                  tension: 40,
-                  useNativeDriver: true,
-                })
-              ]).start();
-              // Refresh the feed
-              loadPosts();
-            }}
-          >
-            <Animated.View style={[
-              styles.logoGradientContainer,
-              { transform: [{ scale: scaleAnim }] }
-            ]}>
-              <LinearGradient
-                colors={['#ff00ff', '#ff6b9d', '#c44569']}
-                start={{x: 0, y: 0}}
-                end={{x: 1, y: 1}}
-                style={styles.logoGradient}
-              >
-                <View style={styles.logoContent}>
-                  <MaterialIcons name="flash-on" size={22} color="#fff" style={styles.logoIcon} />
-                  <Text style={styles.logo}>flexx</Text>
-                </View>
-              </LinearGradient>
-              <View style={styles.logoGlow} />
-              <View style={styles.logoShine} />
-            </Animated.View>
-          </TouchableOpacity>
+          <View style={styles.logoWrapper}>
+            <TouchableOpacity 
+              activeOpacity={0.9}
+              onPress={() => {
+                // Bounce animation
+                Animated.sequence([
+                  Animated.spring(scaleAnim, {
+                    toValue: 0.9,
+                    useNativeDriver: true,
+                  }),
+                  Animated.spring(scaleAnim, {
+                    toValue: 1.1,
+                    friction: 3,
+                    tension: 40,
+                    useNativeDriver: true,
+                  }),
+                  Animated.spring(scaleAnim, {
+                    toValue: 1,
+                    friction: 7,
+                    tension: 40,
+                    useNativeDriver: true,
+                  })
+                ]).start();
+                
+                // Create particles
+                createParticles();
+                
+                // Refresh the feed
+                loadPosts();
+              }}
+            >
+              <Animated.View style={[
+                styles.logoGradientContainer,
+                { 
+                  transform: [
+                    { scale: Animated.multiply(scaleAnim, pulseAnim) },
+                    { translateY: floatAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0, -5]
+                      }) 
+                    }
+                  ]
+                }
+              ]}>
+                <Animated.View style={[
+                  styles.logoGradient,
+                  {
+                    backgroundColor: colorAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: ['#ff00ff', '#ff6b9d']
+                    })
+                  }
+                ]}>
+                  <View style={styles.logoContent}>
+                    <Animated.View style={{
+                      transform: [{
+                        rotate: colorAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: ['0deg', '360deg']
+                        })
+                      }]
+                    }}>
+                      <MaterialIcons name="flash-on" size={22} color="#fff" style={styles.logoIcon} />
+                    </Animated.View>
+                    <Text style={styles.logo}>flexx</Text>
+                  </View>
+                </Animated.View>
+                <Animated.View style={[
+                  styles.logoGlow,
+                  {
+                    opacity: pulseAnim.interpolate({
+                      inputRange: [0.9, 1, 1.1],
+                      outputRange: [0.6, 1, 0.6]
+                    }),
+                    transform: [{
+                      scale: pulseAnim.interpolate({
+                        inputRange: [0.9, 1.1],
+                        outputRange: [0.9, 1.1]
+                      })
+                    }]
+                  }
+                ]} />
+                <Animated.View style={[
+                  styles.logoShine,
+                  {
+                    transform: [{
+                      translateX: colorAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [-30, 100]
+                      })
+                    }]
+                  }
+                ]} />
+              </Animated.View>
+            </TouchableOpacity>
+            
+            {/* Particles */}
+            {particles.map((particle, index) => (
+              <Animated.View
+                key={index}
+                style={[
+                  styles.particle,
+                  {
+                    left: particle.x,
+                    top: particle.y,
+                    backgroundColor: particle.color,
+                    transform: [
+                      { translateX: particle.anim.x },
+                      { translateY: particle.anim.y },
+                      { rotate: particle.anim.rotate },
+                      { scale: particle.anim.scale }
+                    ],
+                    opacity: particle.anim.opacity
+                  }
+                ]}
+              />
+            ))}
+          </View>
           
           <View style={styles.headerIcons}>
             <TouchableOpacity 
@@ -735,11 +943,17 @@ const styles = StyleSheet.create({
     elevation: 3,
     minHeight: 60,
   },
+  logoWrapper: {
+    position: 'relative',
+    marginLeft: 10,
+    height: 60,
+    width: 120,
+    justifyContent: 'center',
+  },
   logoContainer: {
     position: 'relative',
     borderRadius: 16,
     overflow: 'visible',
-    marginLeft: 10,
   },
   logoGradientContainer: {
     borderRadius: 16,
@@ -804,9 +1018,16 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
     transform: [{ rotate: '45deg' }],
     zIndex: 1,
+  },
+  particle: {
+    position: 'absolute',
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    zIndex: 100,
   },
   headerIcons: {
     flexDirection: 'row',

@@ -504,13 +504,22 @@ const ShortsScreen = ({ route }) => {
                 [item.id]: 'loading'
               }));
             }}
-            onLoad={(status) => {
+            onLoad={async (status) => {
               console.log('Video loaded successfully in ShortsScreen:', status);
               setVideoLoadStates(prev => ({
                 ...prev,
                 [item.id]: 'loaded'
               }));
               setPreloadedVideos(prev => new Set([...prev, item.id]));
+              
+              // Auto-play immediately when video loads and is current
+              if (index === currentIndex && isPlaying && videoRefs.current[index]) {
+                try {
+                  await videoRefs.current[index].playAsync();
+                } catch (error) {
+                  console.warn('Error auto-playing video:', error);
+                }
+              }
               
               // Track view when video starts playing
               if (index === currentIndex && !viewedVideos.has(item.id)) {
