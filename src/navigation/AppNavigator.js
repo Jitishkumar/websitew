@@ -57,6 +57,12 @@ const PremiumTabBar = ({ state, descriptors, navigation }) => {
   const insets = useSafeAreaInsets();
   const { unreadCount: messageUnreadCount, fetchUnreadCount } = useMessages();
   
+  // Hide tab bar on ReelsScreen
+  const currentRoute = state.routes[state.index];
+  if (currentRoute.name === 'Reels') {
+    return null;
+  }
+  
   // Fetch unread count when component mounts
   useEffect(() => {
     fetchUnreadCount();

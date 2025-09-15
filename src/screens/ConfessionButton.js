@@ -391,33 +391,25 @@ const ConfessionButtonScreen = () => {
             <View style={styles.actionButtonsRow}>
               <Animated.View style={[styles.buttonWrapper, { transform: [{ scale: buttonScaleAnim1 }] }]}>
                 <TouchableOpacity 
-                  style={[styles.premiumButton, { backgroundColor: '#FF1744' }]} 
+                  style={[styles.simpleButton]} 
                   onPress={handlePersonConfession}
                   activeOpacity={0.8}
                 >
-                  <View style={styles.buttonIconContainer}>
-                    <View style={styles.iconWrapper}>
-                      <Ionicons name="person" size={36} color="#fff" />
-                    </View>
-                  </View>
-                  <Text style={styles.premiumButtonText}>Person</Text>
-                  <Text style={styles.buttonSubtext}>Share about someone</Text>
+                  <Ionicons name="person" size={36} color="#fff" />
+                  <Text style={styles.simpleButtonText}>Person</Text>
+                  <Text style={styles.simpleButtonSubtext}>Share about someone</Text>
                 </TouchableOpacity>
               </Animated.View>
 
               <Animated.View style={[styles.buttonWrapper, { transform: [{ scale: buttonScaleAnim2 }] }]}>
                 <TouchableOpacity 
-                  style={[styles.premiumButton, { backgroundColor: '#00E676' }]} 
+                  style={[styles.simpleButton]} 
                   onPress={handlePlaceConfession}
                   activeOpacity={0.8}
                 >
-                  <View style={styles.buttonIconContainer}>
-                    <View style={styles.iconWrapper}>
-                      <Ionicons name="business" size={36} color="#fff" />
-                    </View>
-                  </View>
-                  <Text style={styles.premiumButtonText}>Place</Text>
-                  <Text style={styles.buttonSubtext}>Share about a location</Text>
+                  <Ionicons name="business" size={36} color="#fff" />
+                  <Text style={styles.simpleButtonText}>Place</Text>
+                  <Text style={styles.simpleButtonSubtext}>Share about a location</Text>
                 </TouchableOpacity>
               </Animated.View>
             </View>
@@ -568,6 +560,28 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
   },
+  simpleButton: {
+    height: 140,
+    borderRadius: 20,
+    backgroundColor: '#666',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  simpleButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  simpleButtonSubtext: {
+    color: '#ccc',
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
   buttonGlow: {
     position: 'absolute',
     top: 0,
@@ -582,7 +596,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: 25,
-    marginBottom: 15,
+    marginBottom: 55,
   },
   sectionTitleContainer: {
     flex: 1,

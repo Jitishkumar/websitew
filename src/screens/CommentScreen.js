@@ -642,7 +642,11 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
           
           {isExpanded && hasReplies && (
             <View style={styles.repliesContainer}>
-              {replies.map(reply => renderComment({ item: reply }))}
+              {replies.map(reply => (
+                <View key={reply.id}>
+                  {renderComment({ item: reply })}
+                </View>
+              ))}
             </View>
           )}
           {item.is_tagged && (
@@ -790,7 +794,7 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
         
         <TouchableOpacity
           style={[styles.sendButton, { opacity: commentText.trim() ? 1 : 0.5 }]}
-          onPress={handleSubmitComment}
+          onPress={handleAddComment}
           disabled={!commentText.trim() || submitting}
         >
           <LinearGradient
