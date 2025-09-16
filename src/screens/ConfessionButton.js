@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -10,17 +10,12 @@ import {
   ScrollView,
   ActivityIndicator,
   RefreshControl,
-  Alert,
-  Animated,
-  Dimensions,
-  Platform
+  Alert
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../config/supabase';
-
-const { width, height } = Dimensions.get('window');
 
 const ConfessionButtonScreen = () => {
   const navigation = useNavigation();
@@ -28,74 +23,11 @@ const ConfessionButtonScreen = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
-  
-  // Animation refs
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
-  const scaleAnim = useRef(new Animated.Value(0.8)).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-  const buttonScaleAnim1 = useRef(new Animated.Value(1)).current;
-  const buttonScaleAnim2 = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     fetchCurrentUser();
     fetchRandomConfessions();
-    startAnimations();
-    startPulseAnimation();
   }, []);
-
-  const startAnimations = () => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        tension: 50,
-        friction: 7,
-        useNativeDriver: true,
-      })
-    ]).start();
-  };
-
-  const startPulseAnimation = () => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.05,
-          duration: 2000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 2000,
-          useNativeDriver: true,
-        })
-      ])
-    ).start();
-  };
-
-  const animateButtonPress = (animRef, callback) => {
-    Animated.sequence([
-      Animated.timing(animRef, {
-        toValue: 0.95,
-        duration: 100,
-        useNativeDriver: true,
-      }),
-      Animated.timing(animRef, {
-        toValue: 1,
-        duration: 100,
-        useNativeDriver: true,
-      })
-    ]).start(() => callback && callback());
-  };
 
   const fetchCurrentUser = async () => {
     try {
@@ -189,15 +121,11 @@ const ConfessionButtonScreen = () => {
   };
 
   const handlePersonConfession = () => {
-    animateButtonPress(buttonScaleAnim1, () => {
-      navigation.navigate('ConfessionPersonScreen');
-    });
+    navigation.navigate('ConfessionPersonScreen');
   };
 
   const handlePlaceConfession = () => {
-    animateButtonPress(buttonScaleAnim2, () => {
-      navigation.navigate('ConfessionScreen');
-    });
+    navigation.navigate('ConfessionScreen');
   };
 
   const handleLike = async (confessionId, confessionType) => {
@@ -378,65 +306,38 @@ const ConfessionButtonScreen = () => {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#ff00ff" />
         }
         ListHeaderComponent={() => (
-          <Animated.View 
-            style={[
-              styles.buttonContainer,
-              {
-                opacity: fadeAnim,
-                transform: [{ translateY: slideAnim }, { scale: scaleAnim }]
-              }
-            ]}
-          >
-            {/* Premium Action Buttons */}
-            <View style={styles.actionButtonsRow}>
-              <Animated.View style={[styles.buttonWrapper, { transform: [{ scale: buttonScaleAnim1 }] }]}>
-                <TouchableOpacity 
-                  style={[styles.simpleButton]} 
-                  onPress={handlePersonConfession}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="person" size={36} color="#fff" />
-                  <Text style={styles.simpleButtonText}>Person</Text>
-                  <Text style={styles.simpleButtonSubtext}>Share about someone</Text>
-                </TouchableOpacity>
-              </Animated.View>
+          <View style={styles.buttonContainer}>
+            <TouchableOpacity style={styles.button} onPress={handlePersonConfession}>
+              <LinearGradient
+                colors={['#FF6B81', '#FF4757']}
+                start={{x: 0, y: 0}}
+                end={{x: 1, y: 1}}
+                style={styles.gradientButton}
+              >
+                <Ionicons name="person" size={42} color="#fff" />
+                <Text style={styles.buttonText}>Person</Text>
+              </LinearGradient>
+            </TouchableOpacity>
 
-              <Animated.View style={[styles.buttonWrapper, { transform: [{ scale: buttonScaleAnim2 }] }]}>
-                <TouchableOpacity 
-                  style={[styles.simpleButton]} 
-                  onPress={handlePlaceConfession}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="business" size={36} color="#fff" />
-                  <Text style={styles.simpleButtonText}>Place</Text>
-                  <Text style={styles.simpleButtonSubtext}>Share about a location</Text>
-                </TouchableOpacity>
-              </Animated.View>
-            </View>
+            <TouchableOpacity style={styles.button} onPress={handlePlaceConfession}>
+              <LinearGradient
+                colors={['#4CAF50', '#8BC44A']}
+                start={{x: 0, y: 0}}
+                end={{x: 1, y: 1}}
+                style={styles.gradientButton}
+              >
+                <Ionicons name="business" size={42} color="#fff" />
+                <Text style={styles.buttonText}>Colleges/Offices/Places</Text>
+              </LinearGradient>
+            </TouchableOpacity>
             
-            {/* Enhanced Section Header */}
-            <View style={styles.enhancedSectionHeader}>
-              <View style={styles.sectionTitleContainer}>
-                <LinearGradient
-                  colors={['#ff00ff', '#ff6b9d', '#c44569']}
-                  start={{x: 0, y: 0}}
-                  end={{x: 1, y: 0}}
-                  style={styles.sectionTitleGradient}
-                >
-                  <MaterialIcons name="trending-up" size={24} color="#fff" />
-                  <Text style={styles.enhancedSectionTitle}>Trending Confessions</Text>
-                </LinearGradient>
-              </View>
-              <TouchableOpacity onPress={onRefresh} style={styles.enhancedRefreshButton}>
-                <LinearGradient
-                  colors={['rgba(255,0,255,0.2)', 'rgba(255,0,255,0.1)']}
-                  style={styles.refreshButtonGradient}
-                >
-                  <Ionicons name="refresh" size={20} color="#ff00ff" />
-                </LinearGradient>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Recent Confessions</Text>
+              <TouchableOpacity onPress={onRefresh} style={styles.refreshButton}>
+                <Ionicons name="refresh" size={20} color="#ff00ff" />
               </TouchableOpacity>
             </View>
-          </Animated.View>
+          </View>
         )}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContainer}
@@ -488,199 +389,94 @@ const styles = StyleSheet.create({
     textShadowRadius: 8,
   },
   listContainer: {
-    paddingTop: 15,
-    paddingBottom: 100,
+    paddingBottom: 20,
   },
   buttonContainer: {
     padding: 20,
-    paddingBottom: 10,
     gap: 20,
   },
-  actionButtonsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 15,
-  },
-  buttonWrapper: {
-    flex: 1,
-    position: 'relative',
-  },
-  premiumButton: {
-    height: 140,
-    borderRadius: 20,
-    overflow: 'hidden',
-    position: 'relative',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  personButton: {
-    backgroundColor: '#FF1744',
-    borderColor: '#FF1744',
-  },
-  placeButton: {
-    backgroundColor: '#00E676',
-    borderColor: '#00E676',
-  },
-  buttonIconContainer: {
-    position: 'relative',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  iconWrapper: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 25,
-    padding: 12,
-  },
-  sparkleContainer: {
-    position: 'absolute',
-    top: -5,
-    right: -5,
-  },
-  sparkle1: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-  },
-  sparkle2: {
-    position: 'absolute',
-    top: 8,
-    right: 12,
-  },
-  premiumButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '800',
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  buttonSubtext: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  simpleButton: {
-    height: 140,
-    borderRadius: 20,
-    backgroundColor: '#666',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  simpleButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '800',
-    textAlign: 'center',
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  simpleButtonSubtext: {
-    color: '#ccc',
-    fontSize: 12,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  buttonGlow: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 20,
-  },
-  enhancedSectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 25,
-    marginBottom: 55,
-  },
-  sectionTitleContainer: {
-    flex: 1,
-    marginRight: 10,
-  },
-  sectionTitleGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 25,
-    backgroundColor: '#ff00ff',
-  },
-
-  enhancedSectionTitle: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '700',
-    marginLeft: 8,
-  },
-
-  // ...
-  enhancedRefreshButton: {
-    borderRadius: 20,
-    overflow: 'hidden',
-    shadowColor: '#ff00ff',
+  button: {
+    width: '100%',
+    height: 100,
+    borderRadius: 15,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 6,
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 10,
+    overflow: 'hidden',
   },
-  refreshButtonGradient: {
-    padding: 12,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 0, 255, 0.3)',
+  gradientButton: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 15,
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginTop: 8,
+    textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 4,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  sectionTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    textShadowColor: 'rgba(255, 0, 255, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 6,
+  },
+  refreshButton: {
+    padding: 8,
+    backgroundColor: 'rgba(255, 0, 255, 0.1)',
+    borderRadius: 15,
   },
   confessionCard: {
-    backgroundColor: 'rgba(30, 30, 70, 0.9)',
-    marginTop: 10,
-    borderRadius: 16,
-    padding: 18,
+    backgroundColor: '#1a1a4a',
+    borderRadius: 12,
+    padding: 15,
     marginHorizontal: 20,
-    marginBottom: 15,
-    shadowColor: "#ff00ff",
+    marginBottom: 12,
+    shadowColor: "#9900ff",
     shadowOffset: {
       width: 0,
-      height: 6,
+      height: 4,
     },
-    shadowOpacity: 0.5,
-    shadowRadius: 12,
-    elevation: 12,
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 0, 255, 0.3)',
-    position: 'relative',
-    overflow: 'hidden',
+    borderColor: 'rgba(255, 0, 255, 0.2)',
   },
   confessionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 10,
-    paddingHorizontal: 15,
-    paddingBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 0, 255, 0.2)',
   },
   avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 18,
-    marginRight: 12,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 0, 255, 0.4)',
+    width: 40,
+    height: 40,
+    borderRadius: 15,
+    marginRight: 10,
   },
   userInfoContainer: {
     flex: 1,
   },
   username: {
     color: '#ff00ff',
-    fontWeight: '700',
-    fontSize: 15,
-    textShadowColor: 'rgba(255, 0, 255, 0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
+    fontWeight: 'bold',
+    fontSize: 14,
   },
   locationText: {
     color: '#999',
@@ -693,15 +489,10 @@ const styles = StyleSheet.create({
   typeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
     marginBottom: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
   },
   personBadge: {
     backgroundColor: '#FF6B81',
@@ -721,10 +512,9 @@ const styles = StyleSheet.create({
   },
   confessionContent: {
     color: '#fff',
-    fontSize: 15,
-    marginBottom: 12,
-    lineHeight: 22,
-    fontWeight: '400',
+    fontSize: 14,
+    marginBottom: 8,
+    lineHeight: 18,
   },
   mediaIndicator: {
     flexDirection: 'row',
@@ -740,28 +530,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 0, 255, 0.2)',
-    paddingTop: 12,
-    gap: 25,
-    marginTop: 4,
+    borderTopColor: 'rgba(255, 0, 255, 0.1)',
+    paddingTop: 8,
+    gap: 20,
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
   },
   actionText: {
     color: '#999',
-    marginLeft: 6,
-    fontSize: 13,
-    fontWeight: '500',
+    marginLeft: 4,
+    fontSize: 12,
   },
   likedText: {
     color: '#ff00ff',
-    fontWeight: '600',
   },
   loadingContainer: {
     padding: 40,

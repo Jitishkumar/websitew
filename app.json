@@ -23,6 +23,9 @@
         "NSMicrophoneUsageDescription": "Allow Flexx to access your microphone for video calls and posts.",
         "NSPhotoLibraryUsageDescription": "Allow Flexx to access your photo library to share photos and videos.",
         "NSPhotoLibraryAddUsageDescription": "Allow Flexx to save photos and videos to your photo library."
+      },
+      "entitlements": {
+        "aps-environment": "production"
       }
     },
     "android": {
@@ -52,6 +55,14 @@
     },
     "plugins": [
       "expo-build-properties",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#ff00ff",
+          "sounds": ["./assets/notification.wav"]
+        }
+      ],
       [
         "expo-av",
         {

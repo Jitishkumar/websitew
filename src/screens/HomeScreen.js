@@ -28,6 +28,7 @@ const HomeScreen = () => {
   const [showPostInput, setShowPostInput] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState(null);
+  const [showTermsModal, setShowTermsModal] = useState(false);
 
   // Animation refs for premium UI
   const fadeAnim = useRef(new Animated.Value(1)).current;
@@ -612,12 +613,7 @@ const HomeScreen = () => {
             
             <TouchableOpacity 
               style={styles.iconButton}
-              onPress={() => {
-                navigation.reset({
-                  index: 0,
-                  routes: [{ name: 'HomePage' }],
-                });
-              }}
+              onPress={() => setShowTermsModal(true)}
               activeOpacity={0.7}
             >
               <LinearGradient
@@ -894,6 +890,121 @@ const HomeScreen = () => {
                   )}
                 </View>
               )}
+            </View>
+          </Modal>
+
+          {/* Terms and Conditions Modal */}
+          <Modal
+            visible={showTermsModal}
+            transparent={true}
+            animationType="slide"
+          >
+            <View style={styles.termsModalContainer}>
+              <LinearGradient
+                colors={['#0a0a2a', '#1a1a4a', '#2a1a4a']}
+                style={styles.termsModalContent}
+              >
+                <View style={styles.termsHeader}>
+                  <MaterialIcons name="videocam" size={32} color="#ff00ff" />
+                  <Text style={styles.termsTitle}>Video Chat Guidelines</Text>
+                  <Text style={styles.termsSubtitle}>Please read and accept our terms</Text>
+                </View>
+
+                <ScrollView style={styles.termsScrollView} showsVerticalScrollIndicator={false}>
+                  <View style={styles.termsSection}>
+                    <View style={styles.termsSectionHeader}>
+                      <MaterialIcons name="cake" size={24} color="#ff6b9d" />
+                      <Text style={styles.termsSectionTitle}>Age Requirement</Text>
+                    </View>
+                    <Text style={styles.termsText}>
+                      • You must be 18 years or older to use video chat features
+                    </Text>
+                    <Text style={styles.termsText}>
+                      • By proceeding, you confirm that you meet this age requirement
+                    </Text>
+                  </View>
+
+                  <View style={styles.termsSection}>
+                    <View style={styles.termsSectionHeader}>
+                      <MaterialIcons name="shield" size={24} color="#00ffcc" />
+                      <Text style={styles.termsSectionTitle}>Content Guidelines</Text>
+                    </View>
+                    <Text style={styles.termsText}>
+                      • Do NOT share explicit, inappropriate, or offensive content
+                    </Text>
+                    <Text style={styles.termsText}>
+                      • Maintain respectful and appropriate conversations
+                    </Text>
+                    <Text style={styles.termsText}>
+                      • No harassment, bullying, or abusive behavior
+                    </Text>
+                    <Text style={styles.termsText}>
+                      • Report any inappropriate behavior immediately
+                    </Text>
+                  </View>
+
+                  <View style={styles.termsSection}>
+                    <View style={styles.termsSectionHeader}>
+                      <MaterialIcons name="favorite" size={24} color="#ffcc00" />
+                      <Text style={styles.termsSectionTitle}>Community Standards</Text>
+                    </View>
+                    <Text style={styles.termsText}>
+                      • Be kind and respectful to all users
+                    </Text>
+                    <Text style={styles.termsText}>
+                      • Keep conversations positive and friendly
+                    </Text>
+                    <Text style={styles.termsText}>
+                      • Respect others' privacy and boundaries
+                    </Text>
+                    <Text style={styles.termsText}>
+                      • Help maintain a safe environment for everyone
+                    </Text>
+                  </View>
+
+                  <View style={styles.warningBox}>
+                    <MaterialIcons name="warning" size={24} color="#ff4444" />
+                    <Text style={styles.warningText}>
+                      Violation of these guidelines may result in account suspension or permanent ban.
+                    </Text>
+                  </View>
+                </ScrollView>
+
+                <View style={styles.termsButtons}>
+                  <TouchableOpacity
+                    style={styles.declineButton}
+                    onPress={() => setShowTermsModal(false)}
+                    activeOpacity={0.8}
+                  >
+                    <LinearGradient
+                      colors={['#666666', '#444444']}
+                      style={styles.buttonGradient}
+                    >
+                      <Text style={styles.declineButtonText}>Decline</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.acceptButton}
+                    onPress={() => {
+                      setShowTermsModal(false);
+                      navigation.reset({
+                        index: 0,
+                        routes: [{ name: 'HomePage' }],
+                      });
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <LinearGradient
+                      colors={['#ff00ff', '#ff6b9d', '#c44569']}
+                      style={styles.buttonGradient}
+                    >
+                      <MaterialIcons name="check" size={20} color="#fff" />
+                      <Text style={styles.acceptButtonText}>I Accept & I'm 18+</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </View>
+              </LinearGradient>
             </View>
           </Modal>
         </LinearGradient>
@@ -1191,6 +1302,125 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.5,
     shadowRadius: 6,
     elevation: 8,
+  },
+  // Terms Modal Styles
+  termsModalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  termsModalContent: {
+    width: '100%',
+    maxHeight: '90%',
+    borderRadius: 20,
+    padding: 24,
+    shadowColor: '#ff00ff',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 15,
+  },
+  termsHeader: {
+    alignItems: 'center',
+    marginBottom: 24,
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 0, 255, 0.3)',
+  },
+  termsTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginTop: 12,
+    textAlign: 'center',
+  },
+  termsSubtitle: {
+    fontSize: 16,
+    color: '#ccc',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  termsScrollView: {
+    maxHeight: 400,
+    marginBottom: 24,
+  },
+  termsSection: {
+    marginBottom: 24,
+    padding: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#ff00ff',
+  },
+  termsSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  termsSectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginLeft: 12,
+  },
+  termsText: {
+    fontSize: 15,
+    color: '#ddd',
+    lineHeight: 22,
+    marginBottom: 8,
+  },
+  warningBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 68, 68, 0.1)',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 68, 68, 0.3)',
+    marginTop: 8,
+  },
+  warningText: {
+    fontSize: 14,
+    color: '#ff4444',
+    fontWeight: '600',
+    marginLeft: 12,
+    flex: 1,
+    lineHeight: 20,
+  },
+  termsButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 16,
+  },
+  declineButton: {
+    flex: 1,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  acceptButton: {
+    flex: 2,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  buttonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    gap: 8,
+  },
+  declineButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  acceptButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   storyAvatar: {
     width: 68,

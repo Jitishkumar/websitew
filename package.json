@@ -30,11 +30,13 @@
     "expo-build-properties": "~0.14.8",
     "expo-camera": "^16.1.11",
     "expo-dev-client": "~5.2.4",
+    "expo-device": "^8.0.7",
     "expo-file-system": "^18.1.11",
     "expo-haptics": "^14.1.4",
     "expo-image-picker": "~16.1.4",
     "expo-linear-gradient": "~14.1.5",
     "expo-location": "^18.1.5",
+    "expo-notifications": "^0.32.11",
     "expo-status-bar": "~2.2.3",
     "expo-video": "~2.2.2",
     "facefilter": "^3.4.3",
@@ -49,6 +51,7 @@
     "react-native-keep-awake": "4.0.0",
     "react-native-paper": "^5.14.5",
     "react-native-razorpay": "^2.3.0",
+    "react-native-reanimated": "~3.17.4",
     "react-native-safe-area-context": "^5.5.2",
     "react-native-screens": "^4.13.1",
     "react-native-sound": "^0.12.0",
@@ -56,8 +59,7 @@
     "react-native-webview": "^13.15.0",
     "typescript": "~5.8.3",
     "zego-express-engine-reactnative": "^3.20.2",
-    "zego-zim-react-native": "^2.21.1",
-    "react-native-reanimated": "~3.17.4"
+    "zego-zim-react-native": "^2.21.1"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",

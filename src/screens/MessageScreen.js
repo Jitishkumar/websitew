@@ -27,6 +27,7 @@ import { useMessages } from '../context/MessageContext';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { cloudinaryConfig } from '../config/cloudinary';
+import { NotificationService } from '../services/NotificationService';
 
 const MessageScreen = () => {
   const insets = useSafeAreaInsets();
@@ -1101,6 +1102,20 @@ const MessageScreen = () => {
           msg.id === tempId ? { ...msg, id: data.id } : msg
         );
         await AsyncStorage.setItem(`conversation_${conversationId}`, JSON.stringify(finalMessages));
+        
+        // Send push notification to recipient
+        try {
+          const { data: senderProfile } = await supabase
+            .from('profiles')
+            .select('username')
+            .eq('id', userId)
+            .single();
+          
+          const senderName = senderProfile?.username || 'Someone';
+          await NotificationService.sendMessageNotification(recipientId, senderName, inputText);
+        } catch (notificationError) {
+          console.log('Error sending notification:', notificationError);
+        }
       }
     } catch (error) {
       console.error('Error sending message:', error);
