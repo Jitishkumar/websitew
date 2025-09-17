@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import OfflineChatModal from './OfflineChatModal';
 import ProfileVisitsModal from './ProfileVisitsModal';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { donate } from '../lib/donate';
@@ -13,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 const Sidebar = ({ isVisible, onClose }) => {
   const navigation = useNavigation();
+  const [showOfflineChatModal, setShowOfflineChatModal] = useState(false);
   const [showVisitsModal, setShowVisitsModal] = useState(false);
   const [showConfessionInfoModal, setShowConfessionInfoModal] = useState(false);
   const [isFemaleProfle, setIsFemaleProfle] = useState(false);
@@ -83,12 +85,13 @@ const Sidebar = ({ isVisible, onClose }) => {
   };
 
   return (
-    <Modal
-      visible={isVisible}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={onClose}
-    >
+    <>
+      <Modal
+        visible={isVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={onClose}
+      >
       <View style={styles.container}>
         <LinearGradient
           colors={['#1a1a2e', '#16213e', '#0f3460']}
@@ -206,6 +209,21 @@ const Sidebar = ({ isVisible, onClose }) => {
              </LinearGradient>
            </TouchableOpacity>
 
+           {/* Offline Chat */}
+           <TouchableOpacity 
+             style={styles.menuItem}
+             onPress={() => setShowOfflineChatModal(true)}
+           >
+             <LinearGradient
+               colors={['rgba(0, 122, 255, 0.1)', 'rgba(0, 122, 255, 0.05)']}
+               style={styles.menuItemGradient}
+             >
+               <Ionicons name="wifi-outline" size={24} color="#007AFF" />
+               <Text style={styles.menuText}>Offline Chat</Text>
+               <Ionicons name="chevron-forward" size={16} color="rgba(0, 122, 255, 0.6)" />
+             </LinearGradient>
+           </TouchableOpacity>
+
            {/* Logout */}
            <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
             <LinearGradient
@@ -219,6 +237,8 @@ const Sidebar = ({ isVisible, onClose }) => {
           </TouchableOpacity>
         </LinearGradient>
       </View>
+    </Modal>
+      
       <ProfileVisitsModal
         visible={showVisitsModal}
         onClose={() => setShowVisitsModal(false)}
@@ -292,7 +312,12 @@ const Sidebar = ({ isVisible, onClose }) => {
           </LinearGradient>
         </View>
       </Modal>
-    </Modal>
+
+      <OfflineChatModal
+        visible={showOfflineChatModal}
+        onClose={() => setShowOfflineChatModal(false)}
+      />
+    </>
   );
 };
 
