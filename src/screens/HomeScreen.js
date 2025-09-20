@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useVideo } from '../context/VideoContext';
 import { useNotifications } from '../context/NotificationContext';
+import { useDarkMode } from '../context/DarkModeContext';
 import { StyleSheet, View, Text, TouchableOpacity, TextInput, Image, Modal, ActivityIndicator, FlatList, RefreshControl, Alert, Animated, ScrollView, Platform } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useFonts, Poppins_700Bold } from '@expo-google-fonts/poppins';
@@ -10,15 +11,16 @@ import * as ImagePicker from 'expo-image-picker';
 import { StoriesService } from '../services/StoriesService';
 import { PostsService } from '../services/PostsService';
 import { Video } from 'expo-av';
-import { supabase } from '../lib/supabase';
 import PostItem from '../components/PostItem';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Easing } from 'react-native';
+import { supabase } from '../lib/supabase';
 
 const HomeScreen = () => {
   const navigation = useNavigation();
   const { unreadCount: notificationUnreadCount } = useNotifications();
+  const { isDarkMode, isLoading: darkModeLoading } = useDarkMode();
   const [stories, setStories] = useState([]);
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -499,7 +501,8 @@ const HomeScreen = () => {
     return null;
   }
 
-  const renderHeader = () => {
+  // Dark Mode Header (Gen Z Style)
+  const renderDarkHeader = () => {
     return (
     <>
       <Animated.View style={{ opacity: headerAnim, transform: [{ translateY: slideAnim }] }}>
@@ -507,7 +510,7 @@ const HomeScreen = () => {
           colors={['rgba(10, 10, 42, 0.95)', 'rgba(15, 15, 35, 0.98)', 'rgba(8, 8, 28, 0.99)']}
           start={{x: 0, y: 0}}
           end={{x: 1, y: 1}}
-          style={styles.header}
+          style={isDarkMode ? styles.header : styles.headerLight}
         >
           <View style={styles.logoWrapper}>
             <TouchableOpacity 

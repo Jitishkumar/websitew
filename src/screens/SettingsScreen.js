@@ -5,11 +5,12 @@ import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../lib/supabase';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useDarkMode } from '../context/DarkModeContext';
 
 const SettingsScreen = () => {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const [darkMode, setDarkMode] = useState(true);
+  const { isDarkMode, updateDarkMode } = useDarkMode();
   const [notifications, setNotifications] = useState(true);
   const [privateAccount, setPrivateAccount] = useState(false);
   const [autoplay, setAutoplay] = useState(true);
@@ -38,7 +39,6 @@ const SettingsScreen = () => {
       }
 
       if (data) {
-        setDarkMode(data.dark_mode ?? true);
         setNotifications(data.notifications ?? true);
         setPrivateAccount(data.private_account ?? false);
         setAutoplay(data.autoplay ?? true);
@@ -114,10 +114,6 @@ const SettingsScreen = () => {
     }
   };
 
-  const handleDarkModeToggle = (value) => {
-    setDarkMode(value);
-    updateSetting('dark_mode', value);
-  };
 
   const handleNotificationsToggle = (value) => {
     setNotifications(value);
@@ -209,8 +205,8 @@ const SettingsScreen = () => {
             'moon',
             'Dark Mode',
             'Enable dark theme for the app',
-            darkMode,
-            handleDarkModeToggle
+            isDarkMode,
+            (value) => updateDarkMode(value)
           )}
         </View>
 
