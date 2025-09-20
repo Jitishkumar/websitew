@@ -30,6 +30,8 @@ const HomeScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState(null);
   const [showTermsModal, setShowTermsModal] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [userHasStory, setUserHasStory] = useState(false);
 
   // Animation refs for premium UI
   const fadeAnim = useRef(new Animated.Value(1)).current;
@@ -51,6 +53,7 @@ const HomeScreen = () => {
   });
 
   useEffect(() => {
+    loadCurrentUser();
     loadStories();
     loadPosts();
     startAnimations();
@@ -323,6 +326,24 @@ const HomeScreen = () => {
     { viewabilityConfig: viewabilityConfig.current, onViewableItemsChanged }
   ]);
 
+  const loadCurrentUser = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        // Get user profile
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+        
+        setCurrentUser(profile);
+      }
+    } catch (error) {
+      console.error('Error loading current user:', error);
+    }
+  };
+
   const loadPosts = async () => {
     try {
       const data = await PostsService.getAllPosts();
@@ -385,6 +406,10 @@ const HomeScreen = () => {
         has_unviewed: group.has_unviewed
       }));
 
+      // Check if current user has a story
+      const userStory = formattedStories.find(story => story.user_id === currentUserId);
+      setUserHasStory(!!userStory);
+
       // Sort stories: Current user's stories first, then others by newest
       const sortedStories = formattedStories.sort((a, b) => {
         // If current user's stories, put them first
@@ -403,6 +428,33 @@ const HomeScreen = () => {
       console.error('Error loading stories:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleYourStoryPress = () => {
+    if (userHasStory) {
+      // User has a story - show options
+      Alert.alert(
+        'Your Story',
+        'What would you like to do?',
+        [
+          { text: 'View Story', onPress: handleViewYourStory },
+          { text: 'Add Story', onPress: handleAddStory },
+          { text: 'Cancel', style: 'cancel' }
+        ]
+      );
+    } else {
+      // No story - directly add
+      handleAddStory();
+    }
+  };
+
+  const handleViewYourStory = () => {
+    if (currentUser) {
+      navigation.navigate('Stories', {
+        userId: currentUser.id,
+        initialStoryIndex: 0
+      });
     }
   };
 
@@ -452,7 +504,7 @@ const HomeScreen = () => {
     <>
       <Animated.View style={{ opacity: headerAnim, transform: [{ translateY: slideAnim }] }}>
         <LinearGradient
-          colors={['#0a0a2a', '#1a1a4a', '#2a1a4a']}
+          colors={['rgba(10, 10, 42, 0.95)', 'rgba(15, 15, 35, 0.98)', 'rgba(8, 8, 28, 0.99)']}
           start={{x: 0, y: 0}}
           end={{x: 1, y: 1}}
           style={styles.header}
@@ -582,11 +634,8 @@ const HomeScreen = () => {
               onPress={() => navigation.navigate('Notifications')}
               activeOpacity={0.7}
             >
-              <LinearGradient
-                colors={['rgba(255, 0, 255, 0.2)', 'rgba(255, 0, 255, 0.1)']}
-                style={styles.iconBackground}
-              >
-                <Ionicons name="notifications-outline" size={22} color="#ff00ff" />
+              <View style={styles.iconBackground}>
+                <Ionicons name="notifications-outline" size={20} color="rgba(255, 255, 255, 0.8)" />
                 {notificationUnreadCount > 0 && (
                   <LinearGradient
                     colors={['#ff00ff', '#ff6b9d']}
@@ -601,7 +650,7 @@ const HomeScreen = () => {
                     </Text>
                   </LinearGradient>
                 )}
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
           
             <TouchableOpacity 
@@ -609,12 +658,9 @@ const HomeScreen = () => {
               onPress={() => navigation.navigate('Trending')}
               activeOpacity={0.7}
             >
-              <LinearGradient
-                colors={['rgba(255, 107, 157, 0.2)', 'rgba(255, 107, 157, 0.1)']}
-                style={styles.iconBackground}
-              >
-                <MaterialIcons name="trending-up" size={22} color="#ff6b9d" />
-              </LinearGradient>
+              <View style={styles.iconBackground}>
+                <MaterialIcons name="trending-up" size={20} color="rgba(255, 255, 255, 0.8)" />
+              </View>
             </TouchableOpacity>
             
             <TouchableOpacity 
@@ -622,12 +668,9 @@ const HomeScreen = () => {
               onPress={() => navigation.navigate('Search')}
               activeOpacity={0.7}
             >
-              <LinearGradient
-                colors={['rgba(196, 69, 105, 0.2)', 'rgba(196, 69, 105, 0.1)']}
-                style={styles.iconBackground}
-              >
-                <MaterialIcons name="search" size={22} color="#c44569" />
-              </LinearGradient>
+              <View style={styles.iconBackground}>
+                <MaterialIcons name="search" size={20} color="rgba(255, 255, 255, 0.8)" />
+              </View>
             </TouchableOpacity>
             
             <TouchableOpacity 
@@ -635,12 +678,9 @@ const HomeScreen = () => {
               onPress={() => setShowTermsModal(true)}
               activeOpacity={0.7}
             >
-              <LinearGradient
-                colors={['rgba(255, 0, 255, 0.2)', 'rgba(255, 0, 255, 0.1)']}
-                style={styles.iconBackground}
-              >
-                <MaterialIcons name="videocam" size={22} color="#ff00ff" />
-              </LinearGradient>
+              <View style={styles.iconBackground}>
+                <MaterialIcons name="videocam" size={20} color="rgba(255, 255, 255, 0.8)" />
+              </View>
             </TouchableOpacity>
           </View>
         </LinearGradient>
@@ -711,22 +751,46 @@ const HomeScreen = () => {
           <FlatList
             horizontal
             showsHorizontalScrollIndicator={false}
-            data={[{ id: 'add-story' }, ...stories]}
-            keyExtractor={(item) => item.id ? item.id.toString() : 'add-story'}
+            data={[{ id: 'your-story' }, ...stories.filter(story => story.user_id !== currentUser?.id)]}
+            keyExtractor={(item) => item.id ? item.id.toString() : 'your-story'}
             renderItem={({ item }) => {
-              if (item.id === 'add-story') {
+              if (item.id === 'your-story') {
                 return (
-                  <TouchableOpacity style={styles.storyItem} onPress={handleAddStory} disabled={uploading}>
-                    <LinearGradient
-                      colors={['rgba(255, 0, 255, 0.15)', 'rgba(255, 0, 255, 0.1)']}
-                      style={styles.addStoryButton}
-                    >
-                      {uploading ? (
-                        <ActivityIndicator size="small" color="#ff00ff" />
-                      ) : (
-                        <MaterialIcons name="add" size={24} color="#ff00ff" />
-                      )}
-                    </LinearGradient>
+                  <TouchableOpacity style={styles.storyItem} onPress={handleYourStoryPress} disabled={uploading}>
+                    {userHasStory ? (
+                      // User has story - show avatar with plus icon
+                      <View style={styles.userStoryContainer}>
+                        <LinearGradient
+                          colors={['#ff00ff', '#ff6b9d', '#c44569']}
+                          style={styles.storyRing}
+                        >
+                          <Image
+                            style={styles.storyAvatar}
+                            source={{ uri: currentUser?.avatar_url || 'https://via.placeholder.com/60' }}
+                          />
+                        </LinearGradient>
+                        <View style={styles.plusIconContainer}>
+                          <LinearGradient
+                            colors={['#ff00ff', '#ff6b9d']}
+                            style={styles.plusIcon}
+                          >
+                            <MaterialIcons name="add" size={12} color="#fff" />
+                          </LinearGradient>
+                        </View>
+                      </View>
+                    ) : (
+                      // No story - show add button
+                      <LinearGradient
+                        colors={['rgba(255, 0, 255, 0.15)', 'rgba(255, 0, 255, 0.1)']}
+                        style={styles.addStoryButton}
+                      >
+                        {uploading ? (
+                          <ActivityIndicator size="small" color="#ff00ff" />
+                        ) : (
+                          <MaterialIcons name="add" size={24} color="#ff00ff" />
+                        )}
+                      </LinearGradient>
+                    )}
                     <Text style={styles.storyText}>Your story</Text>
                   </TouchableOpacity>
                 );
@@ -1046,31 +1110,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 40,
-  },
-  emptyText: {
-    color: '#666',
-    fontSize: 16,
-    marginTop: 10,
-    textAlign: 'center',
-  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 0, 255, 0.1)',
-    shadowColor: '#ff00ff',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 0.5,
+    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    backdropFilter: 'blur(10px)',
     minHeight: 60,
   },
   logoWrapper: {
@@ -1165,19 +1214,23 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   iconButton: {
-    padding: 4,
+    padding: 8,
+    borderRadius: 12,
   },
   iconBackground: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#ff00ff',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    shadowColor: 'rgba(0, 0, 0, 0.3)',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
-    elevation: 6,
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   notificationBadge: {
     position: 'absolute',
@@ -1455,6 +1508,29 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     maxWidth: 70,
     fontWeight: '500',
+  },
+  userStoryContainer: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  plusIconContainer: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: '#0a0a2a',
+  },
+  plusIcon: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   viewerContainer: {
     flex: 1,
