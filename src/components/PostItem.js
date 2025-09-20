@@ -725,35 +725,9 @@ const PostItem = ({ post, onOptionsPress }) => {
         ]
       }}
     >
-      <LinearGradient
-        colors={['rgba(26, 26, 46, 0.95)', 'rgba(22, 33, 62, 0.9)', 'rgba(15, 52, 96, 0.85)']}
-        start={{x: 0, y: 0}}
-        end={{x: 1, y: 1}}
-        style={styles.container}
-      >
-        {/* Shimmer overlay effect */}
-        <Animated.View 
-          style={[
-            styles.shimmerOverlay,
-            {
-              opacity: shimmerAnim.interpolate({
-                inputRange: [0, 0.5, 1],
-                outputRange: [0, 0.3, 0]
-              }),
-              transform: [{
-                translateX: shimmerAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [-width, width]
-                })
-              }]
-            }
-          ]}
-        />
+      <View style={styles.container}>
         {/* Post Header */}
-        <LinearGradient
-          colors={['rgba(255, 0, 255, 0.1)', 'rgba(255, 0, 255, 0.05)', 'transparent']}
-          style={styles.header}
-        >
+        <View style={styles.header}>
           <TouchableOpacity onPress={handleProfilePress} style={styles.profileContainer}>
             <View style={styles.avatarContainer}>
               <Animated.View 
@@ -818,15 +792,12 @@ const PostItem = ({ post, onOptionsPress }) => {
                 );
               }}
             >
-              <LinearGradient
-                colors={['rgba(255, 0, 255, 0.2)', 'rgba(255, 0, 255, 0.1)']}
-                style={styles.optionsButtonGradient}
-              >
-                <MaterialIcons name="more-vert" size={20} color="#ff00ff" />
-              </LinearGradient>
+              <View style={styles.optionsButtonGradient}>
+                <MaterialIcons name="more-vert" size={20} color="rgba(255, 255, 255, 0.7)" />
+              </View>
             </TouchableOpacity>
           )}
-        </LinearGradient>
+        </View>
 
         {/* Post Caption */}
         {post.caption && (
@@ -991,7 +962,7 @@ const PostItem = ({ post, onOptionsPress }) => {
         )}
 
         {/* Post Actions */}
-        <LinearGradient colors={['rgba(26, 26, 58, 0.8)', 'rgba(13, 13, 42, 0.9)']} style={styles.actions}>
+        <View style={styles.actions}>
           <Animated.View style={{ 
             transform: [
               { scale: likeScaleAnim },
@@ -1049,11 +1020,7 @@ const PostItem = ({ post, onOptionsPress }) => {
               onPress={handleLike}
               disabled={isLiking}
             >
-              <LinearGradient
-                colors={isLiked ? 
-                  ['#ff00ff', '#ff6b9d', '#ff1493'] : 
-                  ['rgba(255, 0, 255, 0.3)', 'rgba(255, 0, 255, 0.1)', 'rgba(255, 20, 147, 0.05)']
-                }
+              <View
                 style={[
                   styles.actionButtonGradient,
                   isLiked && styles.likedButtonGradient
@@ -1062,63 +1029,48 @@ const PostItem = ({ post, onOptionsPress }) => {
                 <Ionicons 
                   name={isLiked ? "heart" : "heart-outline"} 
                   size={20} 
-                  color={isLiked ? "#fff" : "#ff00ff"} 
+                  color={isLiked ? "#ff6b9d" : "rgba(255, 255, 255, 0.7)"} 
                   style={isLiked && styles.likedIcon}
                 />
-              </LinearGradient>
+              </View>
               <Text style={[styles.actionText, isLiked && styles.likedActionText]}>{likesCount}</Text>
             </TouchableOpacity>
           </Animated.View>
 
           <TouchableOpacity style={styles.actionButton} onPress={handleComment}>
-            <LinearGradient
-              colors={['rgba(102, 126, 234, 0.2)', 'rgba(102, 126, 234, 0.1)']}
-              style={styles.actionButtonGradient}
-            >
-              <Ionicons name="chatbubble-outline" size={20} color="#667eea" />
-            </LinearGradient>
+            <View style={styles.actionButtonGradient}>
+              <Ionicons name="chatbubble-outline" size={20} color="rgba(255, 255, 255, 0.7)" />
+            </View>
             <Text style={styles.actionText}>{commentsCount}</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.actionButton} onPress={handleShare}>
-            <LinearGradient
-              colors={['rgba(156, 136, 255, 0.2)', 'rgba(156, 136, 255, 0.1)']}
-              style={styles.actionButtonGradient}
-            >
-              <Ionicons name="share-outline" size={20} color="#9c88ff" />
-            </LinearGradient>
+          <TouchableOpacity style={styles.actionButton}>
+            <View style={styles.actionButtonGradient}>
+              <Ionicons name="share-outline" size={20} color="rgba(255, 255, 255, 0.7)" />
+            </View>
           </TouchableOpacity>
 
           {post.type === 'video' && (
             <View style={styles.actionButton}>
-              <LinearGradient
-                colors={['rgba(102, 126, 234, 0.2)', 'rgba(102, 126, 234, 0.1)']}
-                style={styles.actionButtonGradient}
-              >
-                <Ionicons name="eye-outline" size={20} color="#667eea" />
-              </LinearGradient>
+              <View style={styles.actionButtonGradient}>
+                <Ionicons name="eye-outline" size={20} color="rgba(255, 255, 255, 0.7)" />
+              </View>
               <Text style={styles.actionText}>{post.views || 0}</Text>
             </View>
           )}
-        </LinearGradient>
+        </View>
 
         {/* Post Stats */}
         <View style={styles.stats}>
           <TouchableOpacity onPress={handleShowLikes}>
-            <LinearGradient
-              colors={['rgba(255, 107, 107, 0.15)', 'rgba(255, 107, 107, 0.05)']}
-              style={styles.statGradient}
-            >
+            <View style={styles.statGradient}>
               <Text style={styles.likesText}>{likesCount} likes</Text>
-            </LinearGradient>
+            </View>
           </TouchableOpacity>
           <TouchableOpacity onPress={handleComment}>
-            <LinearGradient
-              colors={['rgba(102, 126, 234, 0.15)', 'rgba(102, 126, 234, 0.05)']}
-              style={styles.statGradient}
-            >
+            <View style={styles.statGradient}>
               <Text style={styles.commentsText}>{commentsCount} comments</Text>
-            </LinearGradient>
+            </View>
           </TouchableOpacity>
         </View>
 
@@ -1198,22 +1150,25 @@ const PostItem = ({ post, onOptionsPress }) => {
             </View>
           </View>
         </Modal>
-      </LinearGradient>
+      </View>
     </Animated.View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: 'transparent',
-    marginBottom: 20,
-    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    marginBottom: 16,
+    marginHorizontal: 12,
+    borderRadius: 20,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    borderWidth: 0.5,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    shadowColor: 'rgba(0, 0, 0, 0.3)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
   },
   header: {
     flexDirection: 'row',
@@ -1425,11 +1380,14 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: 'rgba(102, 126, 234, 0.4)',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    shadowColor: 'rgba(0, 0, 0, 0.2)',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
   },
   actionText: {
     color: 'rgba(255, 255, 255, 0.8)',

@@ -573,7 +573,7 @@ const HomeScreen = () => {
                     }}>
                       <MaterialIcons name="flash-on" size={22} color="#fff" style={styles.logoIcon} />
                     </Animated.View>
-                    <Text style={styles.logo}>flexx</Text>
+                    <Text style={styles.logo}>Flexx</Text>
                   </View>
                 </Animated.View>
                 <Animated.View style={[
@@ -688,22 +688,19 @@ const HomeScreen = () => {
 
       <Animated.View style={{ opacity: createPostAnim, transform: [{ scale: scaleAnim }] }}>
         <LinearGradient
-          colors={['rgba(255, 0, 255, 0.1)', 'rgba(255, 0, 255, 0.05)', 'transparent']}
+          colors={['rgba(255, 255, 255, 0.03)', 'rgba(255, 255, 255, 0.01)', 'transparent']}
           start={{x: 0, y: 0}}
           end={{x: 1, y: 1}}
           style={styles.createPost}
         >
           <View style={styles.postInputContainer}>
             <View style={styles.avatarContainer}>
-              <LinearGradient
-                colors={['#ff00ff', '#ff6b9d', '#c44569']}
-                style={styles.avatarBorder}
-              >
+              <View style={styles.avatarBorder}>
                 <Image
                   style={styles.userAvatar}
                   source={{ uri: 'https://via.placeholder.com/40' }}
                 />
-              </LinearGradient>
+              </View>
               <View style={styles.avatarGlow} />
             </View>
             
@@ -712,13 +709,10 @@ const HomeScreen = () => {
               onPress={handleCreatePost}
               activeOpacity={0.8}
             >
-              <LinearGradient
-                colors={['rgba(255, 0, 255, 0.1)', 'rgba(255, 0, 255, 0.05)']}
-                style={styles.postInputGradient}
-              >
-                <MaterialIcons name="edit" size={20} color="#ff00ff" />
+              <View style={styles.postInputGradient}>
+                <MaterialIcons name="edit" size={20} color="rgba(255, 255, 255, 0.6)" />
                 <Text style={styles.postInputPlaceholder}>What's happening?</Text>
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
           </View>
           
@@ -728,13 +722,10 @@ const HomeScreen = () => {
               onPress={handleCreatePost}
               activeOpacity={0.8}
             >
-              <LinearGradient
-                colors={['#ff00ff', '#ff6b9d', '#c44569']}
-                style={styles.createPostButton}
-              >
-                <MaterialIcons name="add" size={18} color="#fff" />
+              <View style={styles.createPostButton}>
+                <MaterialIcons name="add" size={18} color="rgba(255, 255, 255, 0.9)" />
                 <Text style={styles.createPostText}>Create Post</Text>
-              </LinearGradient>
+              </View>
               <View style={styles.createPostGlow} />
             </TouchableOpacity>
           </View>
@@ -743,7 +734,7 @@ const HomeScreen = () => {
 
       <Animated.View style={{ opacity: storiesAnim, transform: [{ translateY: slideAnim }] }}>
         <LinearGradient
-          colors={['rgba(255, 0, 255, 0.08)', 'rgba(255, 0, 255, 0.04)', 'transparent']}
+          colors={['rgba(255, 255, 255, 0.02)', 'rgba(255, 255, 255, 0.01)', 'transparent']}
           start={{x: 0, y: 0}}
           end={{x: 1, y: 1}}
           style={styles.stories}
@@ -761,7 +752,7 @@ const HomeScreen = () => {
                       // User has story - show avatar with plus icon
                       <View style={styles.userStoryContainer}>
                         <LinearGradient
-                          colors={['#ff00ff', '#ff6b9d', '#c44569']}
+                          colors={['rgba(255, 255, 255, 0.3)', 'rgba(255, 255, 255, 0.2)', 'rgba(255, 255, 255, 0.1)']}
                           style={styles.storyRing}
                         >
                           <Image
@@ -770,26 +761,20 @@ const HomeScreen = () => {
                           />
                         </LinearGradient>
                         <View style={styles.plusIconContainer}>
-                          <LinearGradient
-                            colors={['#ff00ff', '#ff6b9d']}
-                            style={styles.plusIcon}
-                          >
-                            <MaterialIcons name="add" size={12} color="#fff" />
-                          </LinearGradient>
+                          <View style={styles.plusIcon}>
+                            <MaterialIcons name="add" size={12} color="rgba(255, 255, 255, 0.9)" />
+                          </View>
                         </View>
                       </View>
                     ) : (
                       // No story - show add button
-                      <LinearGradient
-                        colors={['rgba(255, 0, 255, 0.15)', 'rgba(255, 0, 255, 0.1)']}
-                        style={styles.addStoryButton}
-                      >
+                      <View style={styles.addStoryButton}>
                         {uploading ? (
-                          <ActivityIndicator size="small" color="#ff00ff" />
+                          <ActivityIndicator size="small" color="rgba(255, 255, 255, 0.8)" />
                         ) : (
-                          <MaterialIcons name="add" size={24} color="#ff00ff" />
+                          <MaterialIcons name="add" size={24} color="rgba(255, 255, 255, 0.8)" />
                         )}
-                      </LinearGradient>
+                      </View>
                     )}
                     <Text style={styles.storyText}>Your story</Text>
                   </TouchableOpacity>
@@ -801,7 +786,9 @@ const HomeScreen = () => {
                   onPress={() => handleStoryPress(item)}
                 >
                   <LinearGradient
-                    colors={item.has_unviewed ? ['#ff00ff', '#ff6b9d', '#c44569'] : ['#666666', '#888888', '#666666']}
+                    colors={item.has_unviewed ? 
+                      ['rgba(255, 255, 255, 0.4)', 'rgba(255, 255, 255, 0.3)', 'rgba(255, 255, 255, 0.2)'] : 
+                      ['rgba(255, 255, 255, 0.15)', 'rgba(255, 255, 255, 0.1)', 'rgba(255, 255, 255, 0.05)']}
                     start={{x: 0, y: 0}}
                     end={{x: 1, y: 1}}
                     style={styles.storyRing}
@@ -827,7 +814,7 @@ const HomeScreen = () => {
       <StatusBar style="light" />
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <LinearGradient
-          colors={['#0a0a2a', '#1a1a4a', '#2a1a4a']}
+          colors={['#0a0a1a', '#0f0f25', '#0a0a1a']}
           style={styles.container}
         >
           <ScrollView
@@ -1099,11 +1086,11 @@ const HomeScreen = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#0a0a2a',
+    backgroundColor: '#0a0a1a',
   },
   container: {
     flex: 1,
-    backgroundColor: '#0a0a2a',
+    backgroundColor: '#0a0a1a',
   },
   loadingContainer: {
     flex: 1,
@@ -1249,15 +1236,16 @@ const styles = StyleSheet.create({
   },
   createPost: {
     margin: 15,
-    borderRadius: 16,
-    padding: 15,
-    shadowColor: 'rgba(255, 215, 0, 0.3)',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 215, 0, 0.2)',
+    borderRadius: 20,
+    padding: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    shadowColor: 'rgba(0, 0, 0, 0.3)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
   },
   postInputContainer: {
     flexDirection: 'row',
@@ -1273,11 +1261,15 @@ const styles = StyleSheet.create({
     borderRadius: 23,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#ff00ff',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    shadowColor: 'rgba(0, 0, 0, 0.2)',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 2,
+    padding: 3,
   },
   avatarGlow: {
     position: 'absolute',
@@ -1307,10 +1299,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
+    paddingVertical: 12,
     gap: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 0, 255, 0.3)',
-    borderRadius: 23,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 25,
   },
   postInputPlaceholder: {
     color: 'rgba(255, 255, 255, 0.8)',
@@ -1328,10 +1322,13 @@ const styles = StyleSheet.create({
   createPostButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 22,
     gap: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   createPostText: {
     color: '#fff',
@@ -1339,10 +1336,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   stories: {
-    padding: 14,
-    marginBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 0, 255, 0.2)',
+    padding: 16,
+    marginBottom: 8,
+    borderBottomWidth: 0.5,
+    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
   },
   storyItem: {
     alignItems: 'center',
@@ -1354,13 +1351,14 @@ const styles = StyleSheet.create({
     borderRadius: 34,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#ffd700',
-    shadowColor: '#ffd700',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    shadowColor: 'rgba(0, 0, 0, 0.2)',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 5,
+    elevation: 3,
   },
   storyRing: {
     width: 74,
@@ -1369,11 +1367,11 @@ const styles = StyleSheet.create({
     padding: 3,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#ff00ff',
+    shadowColor: 'rgba(0, 0, 0, 0.2)',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.5,
-    shadowRadius: 6,
-    elevation: 8,
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
   },
   // Terms Modal Styles
   termsModalContainer: {
@@ -1531,6 +1529,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
   },
   viewerContainer: {
     flex: 1,
