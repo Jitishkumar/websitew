@@ -1,0 +1,874 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Alert, Linking, Platform, PermissionsAndroid } from 'react-native';
+import NetInfo from '@react-native-community/netinfo';
+import WifiManager from 'react-native-wifi-reborn';
+import TcpSocket from 'react-native-tcp-socket';
+
+class OfflineP2PService {
+  constructor() {
+    this.isHosting = false;
+    this.isConnected = false;
+    this.connectedPeer = null;
+    this.messages = [];
+    this.onMessageReceived = null;
+    this.onConnectionChanged = null;
+    this.onDeviceDiscovered = null;
+    this.simulationInterval = null;
+    this.messagePolling = null;
+    this.userName = '';
+    this.hostUserName = '';
+    this.clientUserName = '';
+    
+    // Real P2P networking
+    this.tcpServer = null;
+    this.tcpClient = null;
+    this.discoveredDevices = [];
+    this.isScanning = false;
+    this.serverPort = 8888;
+    
+    console.log('Offline P2P Service initialized');
+  }
+
+  async initialize() {
+    this.isConnected = false;
+    this.connectedPeer = null;
+    this.messages = [];
+    this.onMessageReceived = null;
+    this.onConnectionChanged = null;
+    this.onDeviceDiscovered = null;
+    this.simulationInterval = null;
+    this.messagePolling = null;
+    this.userName = '';
+    this.hostUserName = '';
+    this.clientUserName = '';
+    
+    console.log('Offline P2P Service initialized');
+    return true;
+  }
+
+  // Start hosting - create hotspot
+  async startHosting(userName) {
+    this.userName = userName;
+    this.isHosting = true;
+    this.messages = [];
+    
+    Alert.alert(
+      '📡 Start Hosting',
+      `You are now hosting as: ${userName}\n\nInternet status doesn't matter - you can chat offline!\n\nShare this room with your friend and start messaging!`,
+      [
+        { text: 'Start Chatting', onPress: () => this.startHostingMode(userName) }
+      ]
+    );
+    
+    return true;
+  }
+
+  // Join existing hotspot
+  async joinHotspot(userName) {
+    this.userName = userName;
+    
+    Alert.alert(
+      '📶 Join Chat',
+      `You are joining as: ${userName}\n\nInternet status doesn't matter - you can chat offline!\n\nConnecting to your friend's chat room...`,
+      [
+        { text: 'Start Chatting', onPress: () => this.startClientMode(userName) }
+      ]
+    );
+    
+    return true;
+  }
+
+  openHotspotSettings = () => {
+    if (Platform.OS === 'android') {
+      Linking.openSettings();
+    } else {
+      Linking.openURL('App-Prefs:root=MOBILE_DATA_SETTINGS_ID');
+    }
+  };
+
+  openWiFiSettings = () => {
+    if (Platform.OS === 'android') {
+      Linking.sendIntent('android.settings.WIFI_SETTINGS');
+    } else {
+      Linking.openURL('App-Prefs:root=WIFI');
+    }
+  };
+
+  startHostingMode(userName) {
+    console.log('🏠 Starting host mode for user:', userName);
+    this.isConnected = true;
+    this.userName = userName; // Set the main userName
+    this.hostUserName = userName;
+    
+    // Store host info in AsyncStorage for other devices to find
+    AsyncStorage.setItem('p2p_host_info', JSON.stringify({
+      hostName: userName,
+      timestamp: Date.now()
+    }));
+    
+    // Store host info for sharing
+    this.connectedPeer = { name: 'Waiting for connection...', isHost: true, hostName: userName };
+    
+    console.log('🔄 Starting message polling from host mode...');
+    // Start message polling for real P2P
+    this.startMessagePolling();
+    
+    // Don't auto-connect - wait for real client
+    if (this.onConnectionChanged) {
+      this.onConnectionChanged(true, this.connectedPeer);
+    }
+    
+    Alert.alert('🔥 Hosting as ' + userName, 'Waiting for someone to join your chat room...');
+  }
+
+  async startClientMode(userName) {
+    console.log('📱 Starting client mode for user:', userName);
+    this.isConnected = true;
+    this.userName = userName; // Set the main userName
+    this.clientUserName = userName;
+    
+    // Get host info from AsyncStorage
+    try {
+      const hostInfo = await AsyncStorage.getItem('p2p_host_info');
+      const hostData = hostInfo ? JSON.parse(hostInfo) : null;
+      const hostName = hostData ? hostData.hostName : 'Host';
+      
+      console.log('📡 Found host info:', hostData);
+      
+      // Store client connection info
+      await AsyncStorage.setItem('p2p_client_info', JSON.stringify({
+        clientName: userName,
+        hostName: hostName,
+        timestamp: Date.now()
+      }));
+      
+      this.connectedPeer = { name: hostName, isHost: false, clientName: userName };
+      
+      // Notify host about client connection
+      await AsyncStorage.setItem('p2p_connection_event', JSON.stringify({
+        type: 'client_connected',
+        clientName: userName,
+        hostName: hostName,
+        timestamp: Date.now()
+      }));
+      
+      console.log('🔄 Starting message polling from client mode...');
+      // Start message polling for real P2P
+      this.startMessagePolling();
+      
+      if (this.onConnectionChanged) {
+        this.onConnectionChanged(true, this.connectedPeer);
+      }
+      
+      Alert.alert('🎉 Connected to ' + hostName, `You (${userName}) joined the chat room!`);
+    } catch (error) {
+      console.error('❌ Failed to connect to host:', error);
+      Alert.alert('❌ Connection Failed', 'Could not connect to host');
+    }
+  }
+
+  // Removed automatic message simulation - only real messages now
+
+  async sendMessage(messageText) {
+    if (!this.isConnected) {
+      throw new Error('Not connected to any peer');
+    }
+
+    const message = {
+      id: Date.now().toString(),
+      text: messageText,
+      sender: this.userName,
+      timestamp: new Date().toISOString(),
+      type: 'chat'
+    };
+
+    console.log('📤 Sending message:', message.text, 'from:', message.sender);
+    
+    // Add to local messages immediately
+    this.messages.push(message);
+    
+    // Send via TCP to connected peer
+    if (this.tcpClient) {
+      try {
+        this.tcpClient.write(JSON.stringify(message));
+        console.log('✅ Message sent via TCP');
+      } catch (error) {
+        console.error('❌ Failed to send TCP message:', error);
+      }
+    }
+    
+    // Notify UI
+    if (this.onMessageReceived) {
+      this.onMessageReceived([...this.messages]);
+    }
+    
+    return message;
+  }
+
+  async broadcastMessage(message) {
+    try {
+      console.log('📡 Broadcasting message:', message.text, 'from:', message.sender);
+      
+      // Store in AsyncStorage for cross-device sharing (simple P2P simulation)
+      const messageKey = `p2p_message_${message.id}`;
+      await AsyncStorage.setItem(messageKey, JSON.stringify(message));
+      console.log('💾 Stored individual message with key:', messageKey);
+      
+      // Also store in a shared message list
+      const sharedMessages = await this.getSharedMessages();
+      console.log('📦 Current shared messages before adding:', sharedMessages.length);
+      
+      sharedMessages.push(message);
+      await AsyncStorage.setItem('p2p_shared_messages', JSON.stringify(sharedMessages));
+      console.log('📦 Updated shared messages count:', sharedMessages.length);
+      console.log('📦 Full shared messages:', JSON.stringify(sharedMessages, null, 2));
+      
+      console.log('✅ Message broadcasted successfully:', message.text);
+    } catch (error) {
+      console.error('❌ Failed to broadcast message:', error);
+    }
+  }
+
+  async getSharedMessages() {
+    try {
+      const stored = await AsyncStorage.getItem('p2p_shared_messages');
+      return stored ? JSON.parse(stored) : [];
+    } catch (error) {
+      console.error('Failed to get shared messages:', error);
+      return [];
+    }
+  }
+
+  async startMessagePolling() {
+    console.log('🔄 Starting message polling...');
+    
+    // Poll for new messages and connection events
+    this.messagePolling = setInterval(async () => {
+      try {
+        // Check for connection events (host checking for client connections)
+        if (this.hostUserName) {
+          await this.checkForClientConnections();
+        }
+        
+        console.log('📡 Polling for messages...');
+        const sharedMessages = await this.getSharedMessages();
+        console.log('📦 Shared messages found:', sharedMessages.length);
+        console.log('📦 Shared messages:', JSON.stringify(sharedMessages, null, 2));
+        
+        const lastMessageId = this.messages.length > 0 ? this.messages[this.messages.length - 1].id : '0';
+        console.log('🔢 Last local message ID:', lastMessageId);
+        console.log('📱 Local messages count:', this.messages.length);
+        console.log('👤 My username:', this.userName);
+        
+        // Find new messages
+        const newMessages = sharedMessages.filter(msg => {
+          const isNotOwn = msg.sender !== this.userName;
+          const notAlreadyLocal = !this.messages.find(localMsg => localMsg.id === msg.id);
+          const isNewer = msg.id > lastMessageId;
+          
+          console.log(`🔍 Checking message "${msg.text}" from ${msg.sender}:`);
+          console.log(`   - Not own message (${msg.sender} !== ${this.userName}): ${isNotOwn}`);
+          console.log(`   - Not already local: ${notAlreadyLocal}`);
+          console.log(`   - Is newer (${msg.id} > ${lastMessageId}): ${isNewer}`);
+          
+          return isNotOwn && notAlreadyLocal && isNewer;
+        });
+        
+        console.log('✨ New messages to add:', newMessages.length);
+        
+        // Add new messages
+        newMessages.forEach(msg => {
+          const receivedMessage = {
+            ...msg,
+            isOwn: false
+          };
+          console.log('📨 Adding received message:', receivedMessage.text);
+          this.messages.push(receivedMessage);
+          if (this.onMessageReceived) {
+            console.log('🔔 Calling onMessageReceived callback');
+            this.onMessageReceived(receivedMessage);
+          } else {
+            console.log('❌ No onMessageReceived callback set!');
+          }
+        });
+        
+      } catch (error) {
+        console.error('❌ Message polling error:', error);
+      }
+    }, 2000); // Poll every 2 seconds
+  }
+
+  async checkForClientConnections() {
+    try {
+      const connectionEvent = await AsyncStorage.getItem('p2p_connection_event');
+      if (connectionEvent) {
+        const eventData = JSON.parse(connectionEvent);
+        console.log('🔔 Connection event found:', eventData);
+        
+        if (eventData.type === 'client_connected' && eventData.hostName === this.userName) {
+          // Update connected peer info
+          this.connectedPeer = { 
+            name: eventData.clientName, 
+            isHost: true, 
+            hostName: this.userName,
+            clientName: eventData.clientName
+          };
+          
+          console.log('👥 Client connected to host:', eventData.clientName);
+          
+          if (this.onConnectionChanged) {
+            this.onConnectionChanged(true, this.connectedPeer);
+          }
+          
+          Alert.alert('🎉 Friend Connected!', `${eventData.clientName} joined your chat room!`);
+          
+          // Clear the event so it doesn't trigger again
+          await AsyncStorage.removeItem('p2p_connection_event');
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error checking client connections:', error);
+    }
+  }
+
+  simulateIncomingMessage(text, senderName) {
+    if (this.onMessageReceived) {
+      const message = {
+        id: Date.now().toString() + '_received',
+        text: text,
+        sender: senderName,
+        timestamp: new Date().toISOString(),
+        type: 'text',
+        isOwn: false
+      };
+      
+      this.messages.push(message);
+      this.onMessageReceived(message);
+    }
+  }
+
+  async disconnect() {
+    console.log('🔌 Disconnecting from P2P...');
+    
+    this.isHosting = false;
+    this.isConnected = false;
+    this.connectedPeer = null;
+    this.messages = [];
+    this.userName = '';
+    this.hostUserName = '';
+    this.clientUserName = '';
+    
+    // Close TCP connections
+    if (this.tcpServer) {
+      this.tcpServer.close();
+      this.tcpServer = null;
+      console.log('🔌 TCP server closed');
+    }
+    
+    if (this.tcpClient) {
+      this.tcpClient.destroy();
+      this.tcpClient = null;
+      console.log('🔌 TCP client closed');
+    }
+    
+    // Clear intervals
+    if (this.simulationInterval) {
+      clearInterval(this.simulationInterval);
+      this.simulationInterval = null;
+    }
+    
+    if (this.messagePolling) {
+      clearInterval(this.messagePolling);
+      this.messagePolling = null;
+    }
+    
+    // Clear AsyncStorage
+    try {
+      await AsyncStorage.removeItem('p2p_host_info');
+      await AsyncStorage.removeItem('p2p_client_info');
+      await AsyncStorage.removeItem('p2p_shared_messages');
+      console.log('🧹 Cleared P2P storage');
+    } catch (error) {
+      console.error('Failed to clear P2P storage:', error);
+    }
+    
+    // Notify UI
+    if (this.onConnectionChanged) {
+      this.onConnectionChanged(false, null);
+    }
+    
+    console.log('✅ Disconnected from P2P');
+  }
+
+  isConnectedToPeer() {
+    return this.isConnected;
+  }
+
+  getConnectedPeerName() {
+    return this.connectedPeer ? this.connectedPeer.name : null;
+  }
+
+  setOnMessageReceived(callback) {
+    this.onMessageReceived = callback;
+  }
+
+  setOnConnectionChanged(callback) {
+    this.onConnectionChanged = callback;
+  }
+
+  // Real device discovery methods
+  async scanForNearbyDevices(userName) {
+    console.log('🔍 Starting real device scan...');
+    this.userName = userName;
+    this.isScanning = true;
+    this.discoveredDevices = [];
+    
+    try {
+      // Request location permission first
+      await this.requestLocationPermission();
+      
+      // Get current network info
+      const netInfo = await NetInfo.fetch();
+      console.log('📡 Network info:', netInfo);
+      
+      // Add mock device for testing if in emulator
+      if (netInfo.details?.ipAddress?.startsWith('10.0.2.')) {
+        console.log('🤖 Emulator detected - adding mock devices for testing');
+        this.discoveredDevices.push({
+          id: 'mock_device_1',
+          name: 'Test Phone',
+          ip: '192.168.43.1',
+          distance: 'Very close',
+          signal: 'strong',
+          type: 'hotspot',
+          ssid: 'BitChat-TestPhone'
+        });
+      }
+      
+      if (netInfo.type === 'wifi' && netInfo.isConnected) {
+        // Scan for devices on same WiFi network
+        await this.scanLocalNetwork();
+      }
+      
+      // Also scan for available WiFi networks (hotspots)
+      await this.scanWiFiNetworks();
+      
+    } catch (error) {
+      console.error('❌ Device scan error:', error);
+    } finally {
+      this.isScanning = false;
+    }
+    
+    return this.discoveredDevices;
+  }
+  
+  async scanLocalNetwork() {
+    console.log('🏠 Scanning local network for devices...');
+    
+    try {
+      // Get current IP and scan local network range
+      const netInfo = await NetInfo.fetch();
+      if (netInfo.details && netInfo.details.ipAddress) {
+        const baseIP = netInfo.details.ipAddress.split('.').slice(0, 3).join('.');
+        console.log('📍 Base IP:', baseIP);
+        
+        // Scan common IP range (192.168.x.1 to 192.168.x.254)
+        const scanPromises = [];
+        for (let i = 1; i <= 254; i++) {
+          const targetIP = `${baseIP}.${i}`;
+          scanPromises.push(this.checkDeviceAtIP(targetIP));
+        }
+        
+        const results = await Promise.allSettled(scanPromises);
+        const foundDevices = results
+          .filter(result => result.status === 'fulfilled' && result.value)
+          .map(result => result.value);
+          
+        console.log('🎯 Found devices on local network:', foundDevices.length);
+        this.discoveredDevices.push(...foundDevices);
+      }
+    } catch (error) {
+      console.error('❌ Local network scan error:', error);
+    }
+  }
+  
+  async checkDeviceAtIP(ip) {
+    return new Promise((resolve) => {
+      const client = TcpSocket.createConnection({
+        port: this.serverPort,
+        host: ip,
+        timeout: 1000
+      });
+      
+      client.on('connect', () => {
+        console.log('✅ Found device at:', ip);
+        client.write(JSON.stringify({
+          type: 'discovery',
+          userName: this.userName,
+          timestamp: Date.now()
+        }));
+      });
+      
+      client.on('data', (data) => {
+        try {
+          const response = JSON.parse(data.toString());
+          if (response.type === 'discovery_response') {
+            resolve({
+              id: ip,
+              name: response.userName || `Device at ${ip}`,
+              ip: ip,
+              distance: '< 50m',
+              signal: 'strong',
+              type: 'wifi'
+            });
+          }
+        } catch (e) {
+          console.error('Parse error:', e);
+        }
+        client.destroy();
+      });
+      
+      client.on('error', () => {
+        resolve(null);
+      });
+      
+      client.on('timeout', () => {
+        client.destroy();
+        resolve(null);
+      });
+      
+      setTimeout(() => {
+        client.destroy();
+        resolve(null);
+      }, 1000);
+    });
+  }
+  
+  async requestLocationPermission() {
+    if (Platform.OS === 'android') {
+      console.log('📍 Requesting location permission...');
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+        {
+          title: 'Location Permission Required',
+          message: 'This app needs location permission to scan for nearby WiFi networks for P2P chat.',
+          buttonNeutral: 'Ask Me Later',
+          buttonNegative: 'Cancel',
+          buttonPositive: 'OK',
+        }
+      );
+      
+      if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+        console.log('❌ Location permission denied');
+        Alert.alert(
+          'Permission Required',
+          'Location permission is needed to scan for nearby devices. Please enable it in Settings.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings() }
+          ]
+        );
+        throw new Error('Location permission denied');
+      } else {
+        console.log('✅ Location permission granted');
+      }
+    }
+  }
+
+  async scanWiFiNetworks() {
+    console.log('📶 Scanning for WiFi networks...');
+    
+    try {
+      
+      const wifiList = await WifiManager.loadWifiList();
+      console.log('📡 Found WiFi networks:', wifiList.length);
+      
+      // Look for networks that might be hotspots from other users
+      const hotspotNetworks = wifiList.filter(network => 
+        network.SSID && 
+        (network.SSID.includes('BitChat') || 
+         network.SSID.includes('P2P') ||
+         network.SSID.includes('Direct') ||
+         network.SSID.includes('Hotspot'))
+      );
+      
+      hotspotNetworks.forEach(network => {
+        this.discoveredDevices.push({
+          id: network.BSSID || network.SSID,
+          name: network.SSID,
+          ip: 'hotspot',
+          distance: this.getDistanceFromSignal(network.level),
+          signal: this.getSignalStrength(network.level),
+          type: 'hotspot',
+          ssid: network.SSID,
+          level: network.level
+        });
+      });
+      
+      console.log('🔥 Found potential hotspot devices:', hotspotNetworks.length);
+      
+    } catch (error) {
+      console.error('❌ WiFi scan error:', error);
+    }
+  }
+  
+  getDistanceFromSignal(level) {
+    if (level > -50) return '< 5m';
+    if (level > -60) return '< 10m';
+    if (level > -70) return '< 20m';
+    return '< 50m';
+  }
+  
+  getSignalStrength(level) {
+    if (level > -50) return 'strong';
+    if (level > -70) return 'medium';
+    return 'weak';
+  }
+  
+  async makeDiscoverable(userName) {
+    console.log('📡 Making device discoverable...');
+    this.userName = userName;
+    
+      Alert.alert('Error', 'Failed to make device discoverable');
+    }
+  }
+  
+  async startTCPServer() {
+    return new Promise((resolve, reject) => {
+      if (this.tcpServer) {
+        this.tcpServer.close();
+        this.tcpServer = null;
+      }
+      
+      // Try different ports if current one is in use
+      const tryPort = (port) => {
+        this.tcpServer = TcpSocket.createServer((socket) => {
+          console.log('📱 Client connected:', socket.remoteAddress);
+          
+          socket.on('data', (data) => {
+            try {
+              const message = JSON.parse(data.toString());
+              console.log('📨 Received:', message);
+              
+              if (message.type === 'discovery') {
+                // Respond to discovery request
+                socket.write(JSON.stringify({
+                  type: 'discovery_response',
+                  userName: this.userName,
+                  timestamp: Date.now()
+                }));
+              } else if (message.type === 'chat') {
+                // Handle chat message
+                this.handleIncomingMessage(message);
+              }
+            } catch (error) {
+              console.error('❌ TCP message parse error:', error);
+            }
+          });
+          
+          socket.on('error', (error) => {
+            console.error('❌ TCP socket error:', error);
+          });
+          
+          socket.on('close', () => {
+            console.log('📱 Client disconnected');
+          });
+        });
+        
+        this.tcpServer.listen({ port: port, host: '0.0.0.0' }, () => {
+          console.log(`🚀 TCP server listening on port ${port}`);
+          this.serverPort = port;
+          resolve();
+        });
+        
+        this.tcpServer.on('error', (error) => {
+          console.error(`❌ TCP server error on port ${port}:`, error);
+          if (error.code === 'EADDRINUSE' && port < 9000) {
+            console.log(`🔄 Port ${port} in use, trying ${port + 1}`);
+            tryPort(port + 1);
+          } else {
+            reject(error);
+          }
+        });
+      };
+      
+      // Start with port 8888, try others if needed
+      tryPort(8888);
+    });
+  }
+  
+  async connectToDevice(device) {
+    console.log('🔗 Connecting to device:', device.name);
+    
+    try {
+      if (device.type === 'hotspot') {
+        // Connect to WiFi hotspot
+        await this.connectToHotspot(device);
+      } else if (device.type === 'wifi') {
+        // Connect via TCP to local network device
+        await this.connectToTCPDevice(device);
+      }
+    } catch (error) {
+      console.error('❌ Connection error:', error);
+      throw error;
+    }
+  }
+  
+  async connectToHotspot(device) {
+    Alert.alert(
+      '📶 Connect to Hotspot',
+      `To connect to ${device.name}:\n\n1. Go to WiFi Settings\n2. Connect to "${device.ssid}"\n3. Enter password if required\n4. Return to app`,
+      [
+        { text: 'Open WiFi Settings', onPress: this.openWiFiSettings },
+        { text: 'Connected', onPress: () => this.finishHotspotConnection(device) }
+      ]
+    );
+  }
+  
+  async finishHotspotConnection(device) {
+    // After connecting to hotspot, try to connect to the host device
+    try {
+      // Hotspot host is usually at 192.168.43.1 or 192.168.137.1
+      const hostIPs = ['192.168.43.1', '192.168.137.1', '10.0.0.1'];
+      
+      for (const hostIP of hostIPs) {
+        try {
+          await this.connectToTCPDevice({ ...device, ip: hostIP });
+          break;
+        } catch (e) {
+          console.log(`Failed to connect to ${hostIP}, trying next...`);
+        }
+      }
+    } catch (error) {
+      console.error('❌ Hotspot connection error:', error);
+      Alert.alert('Connection Failed', 'Could not connect to hotspot device');
+    }
+  }
+  
+  async connectToTCPDevice(device) {
+    return new Promise((resolve, reject) => {
+      this.tcpClient = TcpSocket.createConnection({
+        port: this.serverPort,
+        host: device.ip,
+        timeout: 5000
+      });
+      
+      this.tcpClient.on('connect', () => {
+        console.log('✅ Connected to device:', device.name);
+        this.isConnected = true;
+        this.connectedPeer = device;
+        
+        if (this.onConnectionChanged) {
+          this.onConnectionChanged(true, device);
+        }
+        
+        resolve();
+      });
+      
+      this.tcpClient.on('data', (data) => {
+        try {
+          const message = JSON.parse(data.toString());
+          if (message.type === 'chat') {
+            this.handleIncomingMessage(message);
+          }
+        } catch (error) {
+          console.error('❌ TCP message parse error:', error);
+        }
+      });
+      
+      this.tcpClient.on('error', (error) => {
+        console.error('❌ TCP client error:', error);
+        reject(error);
+      });
+      
+      this.tcpClient.on('close', () => {
+        console.log('📱 Disconnected from device');
+        this.isConnected = false;
+        this.connectedPeer = null;
+        
+        if (this.onConnectionChanged) {
+          this.onConnectionChanged(false, null);
+        }
+      });
+    });
+  }
+  
+  async sendMessage(messageText, senderName) {
+    if (!this.isConnected || !this.tcpClient) {
+      console.error('❌ Not connected to any device');
+      return false;
+    }
+    
+    try {
+      const message = {
+        type: 'chat',
+        id: Date.now().toString(),
+        text: messageText,
+        sender: senderName,
+        timestamp: new Date().toISOString(),
+        isOwn: true
+      };
+      
+      // Send via TCP
+      this.tcpClient.write(JSON.stringify(message));
+      
+      // Add to local messages
+      this.messages.push(message);
+      
+      console.log('✅ Message sent:', messageText);
+      return true;
+    } catch (error) {
+      console.error('❌ Send message error:', error);
+      return false;
+    }
+  }
+
+  async cleanup() {
+    // Close TCP connections
+    if (this.tcpServer) {
+      this.tcpServer.close();
+      this.tcpServer = null;
+    }
+    
+    if (this.tcpClient) {
+      this.tcpClient.destroy();
+      this.tcpClient = null;
+    }
+    
+    // Clear all P2P related storage when app closes
+    try {
+      const keys = await AsyncStorage.getAllKeys();
+      const p2pKeys = keys.filter(key => key.startsWith('p2p_'));
+      if (p2pKeys.length > 0) {
+        await AsyncStorage.multiRemove(p2pKeys);
+        console.log('Cleared all P2P data from storage');
+      }
+    } catch (error) {
+      console.error('Failed to clear P2P storage:', error);
+    }
+    
+    console.log('Offline P2P Service cleaned up');
+  }
+
+  handleIncomingMessage(message) {
+    console.log('📨 Handling incoming message:', message);
+    
+    // Add to local messages
+    const incomingMsg = {
+      id: message.id || Date.now().toString(),
+      text: message.text,
+      sender: message.sender,
+      timestamp: message.timestamp || new Date().toISOString(),
+      type: 'received'
+    };
+    
+    this.messages.push(incomingMsg);
+    
+    // Notify UI
+    if (this.onMessageReceived) {
+      this.onMessageReceived([...this.messages]);
+    }
+  }
+}
+
+export default new OfflineP2PService();

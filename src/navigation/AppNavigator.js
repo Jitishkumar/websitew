@@ -48,6 +48,7 @@ import ShareUserSelectionScreen from '../screens/ShareUserSelectionScreen';
 import CreateGroupScreen from '../screens/CreateGroupScreen';
 import GroupChatScreen from '../screens/GroupChatScreen';
 import GroupInfoScreen from '../screens/GroupInfoScreen';
+import NearbyPeopleScreen from '../screens/NearbyPeople';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -524,6 +525,7 @@ const AppNavigator = () => {
       <Stack.Screen name="CreateGroupScreen" component={CreateGroupScreen} options={{ headerShown: false }} />
       <Stack.Screen name="GroupChatScreen" component={GroupChatScreen} options={{ headerShown: false }} />
       <Stack.Screen name="GroupInfoScreen" component={GroupInfoScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="NearbyPeople" component={NearbyPeopleScreen} options={{ headerShown: false }} />
     </Stack.Navigator>
   );
 };

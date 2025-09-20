@@ -11,7 +11,8 @@ import {
   ActivityIndicator,
   Modal,
   Platform,
-  Animated
+  Animated,
+  ScrollView
 } from 'react-native';
 import { Video } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
@@ -36,6 +37,9 @@ const StoriesScreen = () => {
   const [paused, setPaused] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
   const [userInfo, setUserInfo] = useState(null);
+  const [currentUserId, setCurrentUserId] = useState(null);
+  const [storyInfoVisible, setStoryInfoVisible] = useState(false);
+  const [storyViewers, setStoryViewers] = useState([]);
   
   const videoRef = useRef(null);
   const progressInterval = useRef(null);
@@ -43,18 +47,15 @@ const StoriesScreen = () => {
   const touchTimer = useRef(null);
   const isTouchHolding = useRef(false);
 
-  // Animation refs for ultra-premium effects
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
-  const scaleAnim = useRef(new Animated.Value(0.8)).current;
+  // Simplified animation refs (removed sliding animations)
+  const fadeAnim = useRef(new Animated.Value(1)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
-  const shimmerAnim = useRef(new Animated.Value(0)).current;
-  const progressAnim = useRef(new Animated.Value(0)).current;
   
   // Load stories when component mounts
   useEffect(() => {
     loadStories();
+    getCurrentUser();
     initializeAnimations();
     
     // Cleanup on unmount
@@ -64,65 +65,37 @@ const StoriesScreen = () => {
     };
   }, []);
 
+  const getCurrentUser = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      setCurrentUserId(user?.id);
+    } catch (error) {
+      console.error('Error getting current user:', error);
+    }
+  };
+
   const initializeAnimations = () => {
-    // Main entrance animations
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-      Animated.timing(scaleAnim, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-    ]).start();
+    // Simplified animations (removed sliding)
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
 
-    // Continuous pulse animation
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.05,
-          duration: 2000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 2000,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
-
-    // Continuous glow animation
+    // Subtle glow animation
     Animated.loop(
       Animated.sequence([
         Animated.timing(glowAnim, {
-          toValue: 1,
-          duration: 3000,
+          toValue: 0.3,
+          duration: 2000,
           useNativeDriver: false,
         }),
         Animated.timing(glowAnim, {
           toValue: 0,
-          duration: 3000,
+          duration: 2000,
           useNativeDriver: false,
         }),
       ])
-    ).start();
-
-    // Continuous shimmer animation
-    Animated.loop(
-      Animated.timing(shimmerAnim, {
-        toValue: 1,
-        duration: 2500,
-        useNativeDriver: true,
-      })
     ).start();
   };
   
@@ -143,32 +116,55 @@ const StoriesScreen = () => {
       startProgress();
     }
   }, [currentIndex, stories, loading]);
+
+  // Handle menu visibility changes - pause/resume progress
+  useEffect(() => {
+    if (menuVisible || storyInfoVisible) {
+      // Menu or story info opened - clear intervals to stop progress immediately
+      clearInterval(progressInterval.current);
+      clearTimeout(storyTimeout.current);
+      // Pause video if playing
+      if (videoRef.current && currentStory?.type === 'video') {
+        videoRef.current.pauseAsync();
+      }
+    } else if (stories.length > 0 && !loading) {
+      // Menu closed - restart progress from current position
+      startProgressFromCurrent();
+      // Resume video if it was paused and not manually paused
+      if (videoRef.current && currentStory?.type === 'video' && !paused) {
+        videoRef.current.playAsync();
+      }
+    }
+  }, [menuVisible, storyInfoVisible]);
   
   const loadStories = async () => {
     try {
       setLoading(true);
       
+      // Get current user ID
+      const { data: { user } } = await supabase.auth.getUser();
+      const currentUserId = user?.id;
+
       // Get stories for the specific user/group
       const data = await StoriesService.getUserStories(userId);
-      // Fetch user's rank to apply special visibility/ordering rules for rank 1
-      const { data: ownerProfile } = await supabase
-        .from('profiles')
-        .select('rank')
-        .eq('id', userId)
-        .maybeSingle();
       
       if (data && data.length > 0) {
-        // If user is rank 1, make sure the first story is the designated first story
-        // (client-side ordering safeguard; actual visibility is handled by RLS)
-        const sortedStories = ownerProfile?.rank === 1
-          ? [...data].sort((a, b) => {
-              if (a.is_first_story === b.is_first_story) return 0;
-              return a.is_first_story ? -1 : 1;
-            })
-          : data;
+        // Sort stories: Your stories first, then by newest
+        const sortedStories = data.sort((a, b) => {
+          // If current user's stories, put them first
+          if (a.user_id === currentUserId && b.user_id !== currentUserId) {
+            return -1; // a comes first
+          }
+          if (b.user_id === currentUserId && a.user_id !== currentUserId) {
+            return 1; // b comes first
+          }
+          // If both are yours or both are not yours, sort by newest
+          return new Date(b.created_at) - new Date(a.created_at);
+        });
+        
         setStories(sortedStories);
-        setUserInfo(data[0].user);
       } else {
+        setStories([]);
         // No stories found, go back
         navigation.goBack();
       }
@@ -184,7 +180,9 @@ const StoriesScreen = () => {
   const markStoryAsViewed = async () => {
     if (stories.length > 0 && currentIndex < stories.length) {
       try {
+        console.log('Marking story as viewed:', stories[currentIndex].id);
         await StoriesService.markStoryAsViewed(stories[currentIndex].id);
+        console.log('Story marked as viewed successfully');
       } catch (error) {
         console.error('Error marking story as viewed:', error);
       }
@@ -199,7 +197,7 @@ const StoriesScreen = () => {
     
     // Start progress interval
     progressInterval.current = setInterval(() => {
-      if (!paused) {
+      if (!paused && !menuVisible && !isTouchHolding.current) {
         setProgress(prev => {
           const newProgress = prev + incrementValue;
           return newProgress >= 1 ? 1 : newProgress;
@@ -209,10 +207,40 @@ const StoriesScreen = () => {
     
     // Set timeout to move to next story
     storyTimeout.current = setTimeout(() => {
-      if (!paused) {
+      if (!paused && !menuVisible && !isTouchHolding.current) {
         goToNextStory();
       }
     }, storyDuration);
+  };
+
+  const startProgressFromCurrent = () => {
+    // Duration for each story (5 seconds)
+    const storyDuration = 5000;
+    const updateInterval = 50; // Update progress every 50ms
+    const incrementValue = updateInterval / storyDuration;
+    
+    // Calculate remaining time based on current progress
+    const remainingProgress = 1 - progress;
+    const remainingTime = remainingProgress * storyDuration;
+    
+    // Start progress interval from current position
+    progressInterval.current = setInterval(() => {
+      if (!paused && !menuVisible && !isTouchHolding.current) {
+        setProgress(prev => {
+          const newProgress = prev + incrementValue;
+          return newProgress >= 1 ? 1 : newProgress;
+        });
+      }
+    }, updateInterval);
+    
+    // Set timeout for remaining time
+    if (remainingTime > 0) {
+      storyTimeout.current = setTimeout(() => {
+        if (!paused && !menuVisible && !isTouchHolding.current) {
+          goToNextStory();
+        }
+      }, remainingTime);
+    }
   };
   
   const goToPreviousStory = () => {
@@ -346,14 +374,155 @@ const StoriesScreen = () => {
       setPaused(false);
     }
   };
+
+  const handleReportStory = async () => {
+    try {
+      setMenuVisible(false);
+      setPaused(true);
+      
+      Alert.alert(
+        'Report Story',
+        'Why are you reporting this story?',
+        [
+          {
+            text: 'Cancel',
+            onPress: () => setPaused(false),
+            style: 'cancel',
+          },
+          {
+            text: 'Inappropriate Content',
+            onPress: () => submitReport('inappropriate'),
+          },
+          {
+            text: 'Spam',
+            onPress: () => submitReport('spam'),
+          },
+          {
+            text: 'Harassment',
+            onPress: () => submitReport('harassment'),
+          },
+        ],
+        { cancelable: true }
+      );
+    } catch (error) {
+      console.error('Error handling report:', error);
+      setPaused(false);
+    }
+  };
+
+  const submitReport = async (reason) => {
+    try {
+      // Submit report to Supabase
+      const { error } = await supabase
+        .from('reports')
+        .insert({
+          reporter_id: currentUserId,
+          reported_user_id: currentStory.user_id,
+          content_type: 'story',
+          content_id: currentStory.id,
+          reason: reason,
+          status: 'pending'
+        });
+
+      if (error) throw error;
+
+      Alert.alert('Report Submitted', 'Thank you for your report. We will review it shortly.');
+      setPaused(false);
+    } catch (error) {
+      console.error('Error submitting report:', error);
+      Alert.alert('Error', 'Failed to submit report. Please try again.');
+      setPaused(false);
+    }
+  };
+
+  const fetchStoryViewers = async () => {
+    try {
+      // Only allow story owner to fetch viewers
+      if (currentStory.user_id !== currentUserId) {
+        console.log('Access denied: Only story owner can view story viewers');
+        setStoryViewers([]);
+        return;
+      }
+
+      console.log('Fetching story viewers for story:', currentStory.id);
+
+      // First get the story views
+      const { data: viewsData, error: viewsError } = await supabase
+        .from('story_views')
+        .select('user_id, created_at')
+        .eq('story_id', currentStory.id)
+        .order('created_at', { ascending: false });
+
+      console.log('Story views data:', viewsData, 'Error:', viewsError);
+
+      if (viewsError) throw viewsError;
+
+      if (!viewsData || viewsData.length === 0) {
+        console.log('No story views found');
+        setStoryViewers([]);
+        return;
+      }
+
+      // Get user IDs
+      const userIds = viewsData.map(view => view.user_id);
+      console.log('User IDs to fetch profiles for:', userIds);
+
+      // Then get the profiles for those users
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, username, full_name, avatar_url')
+        .in('id', userIds);
+
+      console.log('Profiles data:', profilesData, 'Error:', profilesError);
+
+      if (profilesError) throw profilesError;
+
+      // Process avatar URLs like in ProfileVisitsModal
+      const processedProfiles = profilesData?.map(profile => {
+        let avatarUrl = null;
+        if (profile.avatar_url) {
+          let avatarPath = profile.avatar_url;
+          if (avatarPath.includes('media/media/')) {
+            const parts = avatarPath.split('media/');
+            avatarPath = parts[parts.length - 1];
+          } else if (avatarPath.includes('media/')) {
+            avatarPath = avatarPath.split('media/').pop();
+          }
+          avatarUrl = `https://lckhaysswueoyinhfzyz.supabase.co/storage/v1/object/public/media/${avatarPath}`;
+        }
+        return { ...profile, avatar_url: avatarUrl };
+      }) || [];
+
+      // Combine the data
+      const viewersWithProfiles = viewsData.map(view => {
+        const profile = processedProfiles.find(p => p.id === view.user_id);
+        return {
+          user_id: view.user_id,
+          created_at: view.created_at,
+          profiles: profile || { username: 'Unknown User', full_name: 'Unknown User', avatar_url: null }
+        };
+      });
+
+      console.log('Final viewers with profiles:', viewersWithProfiles);
+      setStoryViewers(viewersWithProfiles);
+    } catch (error) {
+      console.error('Error fetching story viewers:', error);
+      setStoryViewers([]);
+    }
+  };
+
+  const handleViewStory = async () => {
+    setPaused(true);
+    setStoryInfoVisible(true);
+    await fetchStoryViewers();
+  };
   
   if (loading) {
     return (
       <LinearGradient colors={['#000000', '#1a0033', '#000000']} style={styles.loadingContainer}>
-        <Animated.View style={[styles.loadingContent, { opacity: fadeAnim, transform: [{ scale: pulseAnim }] }]}>
+        <View style={styles.loadingContent}>
           <ActivityIndicator size="large" color="#ff00ff" />
-          <Animated.View style={[styles.loadingGlow, { opacity: glowAnim }]} />
-        </Animated.View>
+        </View>
       </LinearGradient>
     );
   }
@@ -369,7 +538,7 @@ const StoriesScreen = () => {
       <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
       
       {/* Story Content */}
-      <Animated.View style={[styles.storyWrapper, { opacity: fadeAnim, transform: [{ translateY: slideAnim }, { scale: scaleAnim }] }]}>
+      <View style={styles.storyWrapper}>
         <TouchableOpacity 
           activeOpacity={1} 
           style={styles.storyContainer}
@@ -378,7 +547,7 @@ const StoriesScreen = () => {
           onPressOut={handleTouchEnd}
         >
           {/* Progress Bar */}
-          <Animated.View style={[styles.progressContainer, { paddingTop: insets.top, opacity: fadeAnim }]}>
+          <View style={[styles.progressContainer, { paddingTop: insets.top }]}>
             {stories.map((_, index) => (
               <View key={index} style={styles.progressBarBackground}>
                 <LinearGradient
@@ -392,21 +561,20 @@ const StoriesScreen = () => {
                 <Animated.View style={[styles.progressGlow, { opacity: glowAnim }]} />
               </View>
             ))}
-          </Animated.View>
+          </View>
           
           {/* User Info */}
-          <Animated.View style={[styles.header, { paddingTop: insets.top + 10, opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+          <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
             <LinearGradient colors={['rgba(255, 0, 255, 0.1)', 'rgba(0, 255, 255, 0.1)', 'transparent']} style={styles.headerGradient}>
               <View style={styles.userInfo}>
-                <Animated.View style={[styles.avatarContainer, { transform: [{ scale: pulseAnim }] }]}>
+                <View style={styles.avatarContainer}>
                   <LinearGradient colors={['#ff00ff', '#ff6b9d', '#00ffff']} style={styles.avatarBorder}>
                     <Image 
                       source={{ uri: userInfo?.avatar_url || 'https://via.placeholder.com/40' }} 
                       style={styles.avatar} 
                     />
                   </LinearGradient>
-                  <Animated.View style={[styles.avatarGlow, { opacity: glowAnim }]} />
-                </Animated.View>
+                </View>
                 <View style={styles.userTextContainer}>
                   <Text style={styles.username}>{userInfo?.username}</Text>
                   <Text style={styles.timestamp}>
@@ -415,36 +583,34 @@ const StoriesScreen = () => {
                 </View>
               </View>
               
-              {/* Menu Button (only show for user's own stories) */}
-              {currentStory.user_id === userId && (
-                <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-                  <TouchableOpacity 
-                    style={styles.menuButton}
-                    onPress={() => {
-                      setPaused(true);
-                      setMenuVisible(true);
-                    }}
-                  >
-                    <LinearGradient colors={['rgba(255, 0, 255, 0.3)', 'rgba(0, 255, 255, 0.3)']} style={styles.menuButtonGradient}>
-                      <Ionicons name="ellipsis-vertical" size={24} color="#fff" />
-                    </LinearGradient>
-                    <Animated.View style={[styles.menuButtonGlow, { opacity: glowAnim }]} />
-                  </TouchableOpacity>
-                </Animated.View>
-              )}
+              {/* Menu Button (show for all stories) */}
+              <TouchableOpacity 
+                style={styles.menuButton}
+                onPress={() => {
+                  setPaused(true);
+                  setMenuVisible(true);
+                  // Pause video if it's playing
+                  if (videoRef.current && currentStory.type === 'video') {
+                    videoRef.current.pauseAsync();
+                  }
+                }}
+              >
+                <LinearGradient colors={['rgba(255, 0, 255, 0.3)', 'rgba(0, 255, 255, 0.3)']} style={styles.menuButtonGradient}>
+                  <Ionicons name="ellipsis-vertical" size={24} color="#fff" />
+                </LinearGradient>
+              </TouchableOpacity>
             </LinearGradient>
-          </Animated.View>
+          </View>
           
           {/* Story Media */}
-          <Animated.View style={[styles.mediaContainer, { transform: [{ scale: scaleAnim }] }]}>
-            <Animated.View style={[styles.mediaGlow, { opacity: glowAnim }]} />
+          <View style={styles.mediaContainer}>
             {currentStory.type === 'video' ? (
               <Video
                 ref={videoRef}
                 source={{ uri: currentStory.media_url }}
                 style={styles.media}
                 resizeMode="contain"
-                play={!paused && !isTouchHolding.current}
+                play={!paused && !isTouchHolding.current && !menuVisible}
                 loop={false}
                 onPlaybackStatusUpdate={(status) => {
                   if (status.didJustFinish) {
@@ -459,20 +625,24 @@ const StoriesScreen = () => {
                 resizeMode="contain"
               />
             )}
-            <Animated.View style={[styles.shimmerOverlay, { 
-              opacity: shimmerAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 0.3, 0] }),
-              transform: [{ translateX: shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: [-width, width] }) }]
-            }]}>
-              <LinearGradient 
-                colors={['transparent', 'rgba(255, 0, 255, 0.4)', 'rgba(0, 255, 255, 0.4)', 'transparent']} 
-                start={{x: 0, y: 0}} 
-                end={{x: 1, y: 0}} 
-                style={styles.shimmerGradient} 
-              />
-            </Animated.View>
-          </Animated.View>
+          </View>
         </TouchableOpacity>
-      </Animated.View>
+
+        {/* View Story Button - Bottom (Only for story owner) */}
+        {currentStory.user_id === currentUserId && (
+          <View style={[styles.bottomContainer, { paddingBottom: insets.bottom + 20 }]}>
+            <TouchableOpacity 
+              style={styles.viewStoryButton}
+              onPress={handleViewStory}
+            >
+              <LinearGradient colors={['rgba(255, 0, 255, 0.2)', 'rgba(0, 255, 255, 0.2)']} style={styles.viewStoryGradient}>
+                <Ionicons name="eye-outline" size={20} color="#fff" />
+                <Text style={styles.viewStoryText}>View Story</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
       
       {/* Menu Modal */}
       <Modal
@@ -493,14 +663,77 @@ const StoriesScreen = () => {
           }}
         >
           <LinearGradient colors={['#1a1a1a', '#2a0a3a', '#1a1a1a']} style={[styles.menuContainer, { paddingBottom: insets.bottom > 0 ? insets.bottom : 20 }]}>
-            <Animated.View style={{ opacity: fadeAnim, transform: [{ scale: pulseAnim }] }}>
+            {/* Show different options based on story ownership */}
+            {currentStory.user_id === currentUserId ? (
               <TouchableOpacity style={styles.menuItem} onPress={handleDeleteStory}>
                 <Ionicons name="trash-outline" size={24} color="#ff3b30" />
                 <Text style={[styles.menuItemText, { color: '#ff3b30' }]}>Delete Story</Text>
               </TouchableOpacity>
-            </Animated.View>
+            ) : (
+              <TouchableOpacity style={styles.menuItem} onPress={handleReportStory}>
+                <Ionicons name="flag-outline" size={24} color="#ff9500" />
+                <Text style={[styles.menuItemText, { color: '#ff9500' }]}>Report Story</Text>
+              </TouchableOpacity>
+            )}
           </LinearGradient>
         </TouchableOpacity>
+      </Modal>
+
+      {/* Story Info Modal */}
+      <Modal
+        visible={storyInfoVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => {
+          setStoryInfoVisible(false);
+          setPaused(false);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity 
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => {
+              setStoryInfoVisible(false);
+              setPaused(false);
+            }}
+          />
+          <View style={styles.storyInfoContainer}>
+            <LinearGradient colors={['#1a1a1a', '#2a0a3a', '#1a1a1a']} style={[styles.storyInfoGradient, { paddingBottom: insets.bottom + 20 }]}>
+              <View style={styles.storyInfoHeader}>
+                <Text style={styles.storyInfoTitle}>Story Views</Text>
+                <Text style={styles.storyInfoCount}>{storyViewers.length} views</Text>
+              </View>
+              
+              <ScrollView style={styles.viewersList} showsVerticalScrollIndicator={false}>
+              {storyViewers.length > 0 ? (
+                storyViewers.map((viewer, index) => (
+                    <View key={index} style={styles.viewerItem}>
+                      <Image 
+                        source={{ uri: viewer.profiles?.avatar_url || 'https://via.placeholder.com/150' }} 
+                        style={styles.viewerAvatar} 
+                      />
+                      <View style={styles.viewerInfo}>
+                        <Text style={styles.viewerName}>{viewer.profiles?.full_name || viewer.profiles?.username || 'Unknown User'}</Text>
+                        <Text style={styles.viewerUsername}>@{viewer.profiles?.username || 'unknown'}</Text>
+                      </View>
+                      <View style={styles.viewTime}>
+                        <Text style={styles.viewTimeText}>
+                          {new Date(viewer.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </Text>
+                      </View>
+                    </View>
+                ))
+              ) : (
+                <View style={styles.noViewersContainer}>
+                  <Ionicons name="eye-off-outline" size={48} color="rgba(255, 255, 255, 0.3)" />
+                  <Text style={styles.noViewersText}>No views yet</Text>
+                </View>
+              )}
+              </ScrollView>
+            </LinearGradient>
+          </View>
+        </View>
       </Modal>
     </LinearGradient>
   );
@@ -736,6 +969,138 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(255, 59, 48, 0.3)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
+  },
+  bottomContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  viewStoryButton: {
+    borderRadius: 25,
+    overflow: 'hidden',
+  },
+  viewStoryGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 25,
+  },
+  viewStoryText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 8,
+    textShadowColor: 'rgba(255, 0, 255, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  modalBackdrop: {
+    flex: 1,
+  },
+  storyInfoContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    maxHeight: '80%',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    shadowColor: '#ff00ff',
+    shadowOffset: { width: 0, height: -5 },
+    shadowOpacity: 0.3,
+    shadowRadius: 15,
+    elevation: 20,
+  },
+  storyInfoGradient: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingVertical: 20,
+    minHeight: 300,
+  },
+  storyInfoHeader: {
+    paddingHorizontal: 20,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  storyInfoTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    textShadowColor: 'rgba(255, 0, 255, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  storyInfoCount: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  viewersList: {
+    flexGrow: 1,
+    paddingHorizontal: 20,
+    paddingTop: 15,
+    minHeight: 200,
+  },
+  viewerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 10,
+    backgroundColor: 'rgba(255, 0, 255, 0.1)',
+  },
+  viewerAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 2,
+    borderColor: '#ff00ff',
+    marginRight: 15,
+  },
+  viewerInfo: {
+    flex: 1,
+  },
+  viewerName: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    textShadowColor: 'rgba(255, 0, 255, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  viewerUsername: {
+    color: '#ff00ff',
+    fontSize: 14,
+    marginTop: 2,
+  },
+  viewTime: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 0, 255, 0.2)',
+    padding: 8,
+    borderRadius: 15,
+  },
+  viewTimeText: {
+    color: '#ff00ff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  noViewersContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  noViewersText: {
+    color: 'rgba(255, 255, 255, 0.5)',
+    fontSize: 16,
+    marginTop: 12,
+    textAlign: 'center',
   },
 });
 

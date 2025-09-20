@@ -4,7 +4,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import OfflineChatModal from './OfflineChatModal';
 import ProfileVisitsModal from './ProfileVisitsModal';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { donate } from '../lib/donate';
@@ -14,7 +13,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 const Sidebar = ({ isVisible, onClose }) => {
   const navigation = useNavigation();
-  const [showOfflineChatModal, setShowOfflineChatModal] = useState(false);
   const [showVisitsModal, setShowVisitsModal] = useState(false);
   const [showConfessionInfoModal, setShowConfessionInfoModal] = useState(false);
   const [isFemaleProfle, setIsFemaleProfle] = useState(false);
@@ -209,22 +207,23 @@ const Sidebar = ({ isVisible, onClose }) => {
              </LinearGradient>
            </TouchableOpacity>
 
-           {/* Offline Chat */}
-           <TouchableOpacity 
-             style={styles.menuItem}
-             onPress={() => setShowOfflineChatModal(true)}
-           >
-             <LinearGradient
-               colors={['rgba(0, 122, 255, 0.1)', 'rgba(0, 122, 255, 0.05)']}
-               style={styles.menuItemGradient}
-             >
-               <Ionicons name="wifi-outline" size={24} color="#007AFF" />
-               <Text style={styles.menuText}>Offline Chat</Text>
-               <Ionicons name="chevron-forward" size={16} color="rgba(0, 122, 255, 0.6)" />
-             </LinearGradient>
-           </TouchableOpacity>
+ 
+          {/* Nearby People */}
+          <TouchableOpacity 
+            style={styles.menuItem}
+            onPress={() => navigation.navigate('NearbyPeople')}
+          >
+            <LinearGradient
+              colors={['rgba(76, 175, 80, 0.1)', 'rgba(76, 175, 80, 0.05)']}
+              style={styles.menuItemGradient}
+            >
+              <Ionicons name="location" size={24} color="#4CAF50" />
+              <Text style={styles.menuText}>Nearby People</Text>
+              <Ionicons name="chevron-forward" size={16} color="rgba(76, 175, 80, 0.6)" />
+            </LinearGradient>
+          </TouchableOpacity>
 
-           {/* Logout */}
+          {/* Logout */}
            <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
             <LinearGradient
               colors={['rgba(255, 82, 82, 0.1)', 'rgba(255, 82, 82, 0.05)']}
@@ -313,10 +312,6 @@ const Sidebar = ({ isVisible, onClose }) => {
         </View>
       </Modal>
 
-      <OfflineChatModal
-        visible={showOfflineChatModal}
-        onClose={() => setShowOfflineChatModal(false)}
-      />
     </>
   );
 };

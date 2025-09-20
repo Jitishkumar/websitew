@@ -1,0 +1,114 @@
+create table public.story_views (
+  id uuid not null default gen_random_uuid (),
+  story_id uuid null,
+  user_id uuid null,
+  created_at timestamp with time zone null default now(),
+  constraint story_views_pkey primary key (id),
+  constraint story_views_story_id_user_id_key unique (story_id, user_id),
+  constraint story_views_story_id_fkey foreign KEY (story_id) references stories (id) on delete CASCADE,
+  constraint story_views_user_id_fkey foreign KEY (user_id) references auth.users (id) on delete CASCADE
+) TABLESPACE pg_default;
+
+create index IF not exists idx_story_views_story_id on public.story_views using btree (story_id) TABLESPACE pg_default;
+
+create index IF not exists idx_story_views_user_id on public.story_views using btree (user_id) TABLESPACE pg_default;
+
+
+
+Policy Name
+Users can insert their own story views
+Table
+
+on clause
+
+
+public.story_views
+Policy Behavior
+
+as clause
+
+permissive
+Policy Command
+
+for clause
+
+
+
+
+INSERT
+
+
+Target Roles
+
+to clause
+
+Defaults to all (public) roles if none selected
+Use options above to edit
+
+
+alter policy "Users can insert their own story views"
+
+
+on "public"."story_views"
+
+
+to public
+
+
+with check (
+
+
+  (auth.uid() = user_id)
+
+);
+
+
+
+
+
+Policy Name
+Users can view all story views
+Table
+
+on clause
+
+
+public.story_views
+Policy Behavior
+
+as clause
+
+permissive
+Policy Command
+
+for clause
+
+
+SELECT
+
+
+Target Roles
+
+to clause
+
+Defaults to all (public) roles if none selected
+Use options above to edit
+
+
+alter policy "Users can view all story views"
+
+
+on "public"."story_views"
+
+
+to public
+
+
+using (
+
+
+  true
+
+);
+
+

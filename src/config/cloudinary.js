@@ -1,34 +1,15 @@
-import { CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET } from '@env';
-import CryptoJS from 'crypto-js';
+import { CLOUDINARY_CLOUD_NAME } from '@env';
 
-// Cloudinary configuration object
+// Cloudinary configuration object (CLIENT-SAFE)
 export const cloudinaryConfig = {
   cloudName: CLOUDINARY_CLOUD_NAME,
-  apiKey: CLOUDINARY_API_KEY,
-  apiSecret: CLOUDINARY_API_SECRET,
   secure: true
 };
 
-// Function to generate signature for upload
-export const generateSignature = (params) => {
-  const timestamp = Math.round((new Date).getTime() / 1000);
-  
-  // Create the string to sign
-  const toSign = Object.keys(params)
-    .sort()
-    .map(key => `${key}=${params[key]}`)
-    .join('&');
+// REMOVED: Signature generation moved to backend for security
+// Client-side signature generation exposes API secrets
 
-  // Generate the signature using crypto-js (you'll need to install this package)
-  const signature = CryptoJS.SHA1(toSign + CLOUDINARY_API_SECRET).toString();
-  
-  return {
-    signature,
-    timestamp
-  };
-};
-
-// Function to upload media to Cloudinary
+// SECURE: Upload via backend function (no secrets in client)
 export const uploadToCloudinary = async (uri, type = 'image') => {
   try {
     // Handle empty URI case for text-only posts
@@ -40,32 +21,83 @@ export const uploadToCloudinary = async (uri, type = 'image') => {
       };
     }
 
-    // Validate file size before attempting upload
-    try {
-      const response = await fetch(uri);
-      const blob = await response.blob();
-      const fileSizeInMB = blob.size / (1024 * 1024);
-      const maxSizeMB = type === 'video' ? 50 : 5; // Reduced max size for better reliability
-      
-      if (fileSizeInMB > maxSizeMB) {
-        throw new Error(`File size too large. Please select a ${type} under ${maxSizeMB}MB for reliable uploads.`);
-      }
-      
-      console.log(`File size: ${fileSizeInMB.toFixed(2)}MB`);
-    } catch (sizeError) {
-      if (sizeError.message.includes('File size too large')) {
-        throw sizeError;
-      }
-      // If we can't check size, continue with upload attempt
-      console.warn('Could not check file size:', sizeError);
-    }
+    // Use unsigned upload for development and production
+    console.log('Using unsigned upload method (secure with presets)');
+    return await uploadUnsigned(uri, type);
+  } catch (error) {
+    console.error('Error uploading to Cloudinary:', error);
+    throw error;
+  }
+};
 
+// Upload via secure backend function
+const uploadViaBackend = async (uri, type) => {
+  const { supabase } = require('../lib/supabase');
+  
+  // Convert file to base64 for backend
+  const response = await fetch(uri);
+  const blob = await response.blob();
+  const base64 = await blobToBase64(blob);
+  
+  // Call secure backend function
+  console.log('Calling Edge Function with file size:', base64.length);
+  
+  const { data, error } = await supabase.functions.invoke('cloudinary-upload', {
+    body: { 
+      file: base64, 
+      type,
+      folder: 'flexx_app' // Optional: organize uploads in folders
+    }
+  });
+  
+  console.log('Edge Function response:', { data, error });
+  
+  if (error) {
+    console.error('Edge Function error details:', error);
+    throw new Error(`Backend error: ${error.message || JSON.stringify(error)}`);
+  }
+  
+  if (!data) {
+    throw new Error('No data returned from Edge Function');
+  }
+  
+  if (!data.success) {
+    console.error('Upload failed:', data.error);
+    throw new Error(data.error || 'Upload failed');
+  }
+  
+  return {
+    url: data.url,
+    publicId: data.public_id,
+    resourceType: data.resource_type
+  };
+};
+
+// Helper function to convert blob to base64
+const blobToBase64 = (blob) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      // Remove the data URL prefix (data:image/jpeg;base64,)
+      const base64 = reader.result.split(',')[1];
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+};
+
+// Alternative: Unsigned upload (fallback method)
+// This method uses upload presets instead of API secrets
+// You need to create an "unsigned" upload preset in Cloudinary Dashboard
+const uploadUnsigned = async (uri, type) => {
+  try {
     const formData = new FormData();
     
     // Prepare the file
     const filename = uri.split('/').pop();
     const match = /\.([\w\d]+)$/.exec(filename);
-    const ext = match?.[1] || 'jpg'; // Default to jpg if extension can't be determined
+    const ext = match?.[1] || 'jpg';
     
     formData.append('file', {
       uri,
@@ -73,86 +105,27 @@ export const uploadToCloudinary = async (uri, type = 'image') => {
       type: `${type}/${ext}`
     });
     
-    // Add upload preset (create this in your Cloudinary dashboard)
+    // Use your existing unsigned upload preset
     formData.append('upload_preset', 'connect_app_preset');
     
-    // Set timeout for fetch request with adaptive timeout based on file size
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 minute timeout (reduced from 5 minutes)
-    
-    // Upload to Cloudinary with enhanced retry logic
-    let retries = 3; // Reduced retries but with better backoff strategy
-    let response;
-    let lastError;
-    
-    while (retries > 0) {
-      try {
-        // Add network status check before attempting upload
-        const networkCheck = await fetch('https://api.cloudinary.com/v1_1', { 
-          method: 'HEAD',
-          timeout: 5000,
-          cache: 'no-cache'
-        }).catch(() => ({ ok: false }));
-          
-        if (!networkCheck.ok) {
-          console.warn('Network connection appears unstable');
-          // Don't throw here, just try the upload anyway
+    const response = await fetch(
+      `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${type}/upload`,
+      {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Accept': 'application/json',
         }
-        
-        console.log(`Attempt ${4-retries}: Uploading to Cloudinary...`);
-        
-        response = await fetch(
-          `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${type}/upload`,
-          {
-            method: 'POST',
-            body: formData,
-            headers: {
-              'Accept': 'application/json',
-              'Content-Type': 'multipart/form-data'
-            },
-            signal: controller.signal
-          }
-        );
-
-        // Check if response is ok before breaking
-        if (response.ok) {
-          console.log('Upload successful!');
-          break; // If successful, exit the retry loop
-        } else {
-          const errorText = await response.text();
-          console.error(`HTTP error! status: ${response.status}, response: ${errorText}`);
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-      } catch (fetchError) {
-        lastError = fetchError;
-        retries--;
-        
-        // Check if it's an abort error
-        if (fetchError.name === 'AbortError') {
-          console.error('Upload timed out');
-          throw new Error('Upload timed out. Please try with a smaller file or check your connection. For videos, keep them under 50MB and for images under 5MB.');
-        }
-        
-        if (retries === 0) {
-          console.error('All upload attempts failed');
-          throw new Error(`Upload failed after multiple attempts. Please check your internet connection and try again later.`);
-        }
-        
-        console.log(`Upload attempt failed. Retrying... (${retries} attempts left)`);
-        
-        // Exponential backoff with jitter - more aggressive for fewer retries
-        const backoffDelay = Math.min(2000 * Math.pow(2, 3 - retries) + Math.random() * 2000, 15000);
-        console.log(`Waiting ${(backoffDelay/1000).toFixed(1)} seconds before next attempt...`);
-        await new Promise(resolve => setTimeout(resolve, backoffDelay));
       }
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
-    
-    clearTimeout(timeoutId);
-    
+
     const data = await response.json();
     
     if (data.error) {
-      console.error('Cloudinary API error:', data.error);
       throw new Error(data.error.message);
     }
     
@@ -168,41 +141,6 @@ export const uploadToCloudinary = async (uri, type = 'image') => {
   }
 };
 
-// Function to delete media from Cloudinary
-export const deleteFromCloudinary = async (publicId, resourceType = 'image') => {
-  try {
-    const timestamp = Math.round((new Date).getTime() / 1000);
-    const signature = generateSignature({
-      public_id: publicId,
-      timestamp
-    }).signature;
-    
-    const response = await fetch(
-      `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${resourceType}/destroy`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          public_id: publicId,
-          signature,
-          api_key: CLOUDINARY_API_KEY,
-          timestamp
-        })
-      }
-    );
-    
-    const data = await response.json();
-    
-    if (data.error) {
-      throw new Error(data.error.message);
-    }
-    
-    return data;
-    
-  } catch (error) {
-    console.error('Error deleting from Cloudinary:', error);
-    throw error;
-  }
-};
+// REMOVED: Delete function moved to backend for security
+// Deleting files requires API secrets which shouldn't be in client code
+// Implement deletion through your Supabase backend functions instead

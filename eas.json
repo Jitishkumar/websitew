@@ -17,7 +17,23 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "NPM_CONFIG_LEGACY_PEER_DEPS": "true"
+        "NPM_CONFIG_LEGACY_PEER_DEPS": "true",
+        "CLOUDINARY_CLOUD_NAME": "dhsdpvrrc",
+        "SUPABASE_URL": "https://lckhaysswueoyinhfzyz.supabase.co",
+        "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxja2hheXNzd3Vlb3lpbmhmenl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDM4MzMyMTUsImV4cCI6MjA1OTQwOTIxNX0.o4Vlav3dUUuGNJzP0ndlydkPXEk9tyDVMokRaSvZrSI",
+        "RAZORPAY_KEY_ID": "$RAZORPAY_KEY_ID"
+      }
+    },
+    "debug": {
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "NPM_CONFIG_LEGACY_PEER_DEPS": "true",
+        "CLOUDINARY_CLOUD_NAME": "dhsdpvrrc",
+        "SUPABASE_URL": "https://lckhaysswueoyinhfzyz.supabase.co",
+        "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxja2hheXNzd3Vlb3lpbmhmenl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDM4MzMyMTUsImV4cCI6MjA1OTQwOTIxNX0.o4Vlav3dUUuGNJzP0ndlydkPXEk9tyDVMokRaSvZrSI",
+        "RAZORPAY_KEY_ID": "rzp_test_XXXXXXXXXX"
       }
     }
   },

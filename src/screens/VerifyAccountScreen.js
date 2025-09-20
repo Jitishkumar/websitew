@@ -270,7 +270,6 @@ const VerifyAccountScreen = () => {
         .eq('id', user.id)
         .single();
 
-      // Process payment
       const options = {
         description: "Account Verification (1 month)",
         currency: "INR",
@@ -278,20 +277,19 @@ const VerifyAccountScreen = () => {
         amount: 7000, // 70 rupees in paise
         name: 'Perfect FL',
         prefill: {
-          email: profile?.email || user.email || "user@example.com",
+          email: user.email || "user@example.com",
           contact: phoneNumber || "9999999999",
-          name: realName,
+          name: realName || "User",
         },
         theme: {
           color: "#ff00ff"
         },
       };
 
-      // Dismiss the processing alert before opening payment
       Alert.alert(
-        '',
-        '',
-        [{ text: 'OK', style: 'cancel' }],
+        'Processing Payment',
+        'Please wait while we process your payment...',
+        [],
         { cancelable: true }
       );
 

@@ -10,6 +10,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { StoriesService } from '../services/StoriesService';
 import { PostsService } from '../services/PostsService';
 import { Video } from 'expo-av';
+import { supabase } from '../lib/supabase';
 import PostItem from '../components/PostItem';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -371,6 +372,10 @@ const HomeScreen = () => {
 
   const loadStories = async () => {
     try {
+      // Get current user ID
+      const { data: { user } } = await supabase.auth.getUser();
+      const currentUserId = user?.id;
+
       const data = await StoriesService.getActiveStories();
       const formattedStories = data.map(group => ({
         ...group.stories[0],
@@ -379,7 +384,21 @@ const HomeScreen = () => {
         story_group_id: group.stories[0].story_group_id,
         has_unviewed: group.has_unviewed
       }));
-      setStories(formattedStories);
+
+      // Sort stories: Current user's stories first, then others by newest
+      const sortedStories = formattedStories.sort((a, b) => {
+        // If current user's stories, put them first
+        if (a.user_id === currentUserId && b.user_id !== currentUserId) {
+          return -1; // a comes first
+        }
+        if (b.user_id === currentUserId && a.user_id !== currentUserId) {
+          return 1; // b comes first
+        }
+        // If both are yours or both are not yours, sort by newest
+        return new Date(b.created_at) - new Date(a.created_at);
+      });
+
+      setStories(sortedStories);
     } catch (error) {
       console.error('Error loading stories:', error);
     } finally {
