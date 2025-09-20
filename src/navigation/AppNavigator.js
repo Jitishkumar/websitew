@@ -7,7 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNotifications } from '../context/NotificationContext';
 import { useMessages } from '../context/MessageContext';
-import HomeScreen from '../screens/HomeScreen';
+import ThemeAwareHomeScreen from '../screens/ThemeAwareHomeScreen';
 import LoginScreen from '../screens/LoginScreen';
 import SignupScreen from '../screens/SignupScreen';
 import OTPVerificationScreen from '../screens/OTPVerificationScreen';
@@ -452,7 +452,7 @@ const TabNavigator = () => {
   >
     <Tab.Screen 
       name="Home" 
-      component={HomeScreen}
+      component={ThemeAwareHomeScreen}
     />
     <Tab.Screen 
       name="Reels" 

@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useVideo } from '../context/VideoContext';
 import { useNotifications } from '../context/NotificationContext';
-import { useDarkMode } from '../context/DarkModeContext';
-import { StyleSheet, View, Text, TouchableOpacity, TextInput, Image, Modal, ActivityIndicator, FlatList, RefreshControl, Alert, Animated, ScrollView, Platform } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, TextInput, Image, Modal, ActivityIndicator, FlatList, RefreshControl, Alert, Animated, ScrollView, Platform, Dimensions } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useFonts, Poppins_700Bold } from '@expo-google-fonts/poppins';
 import { useNavigation } from '@react-navigation/native';
@@ -11,16 +10,18 @@ import * as ImagePicker from 'expo-image-picker';
 import { StoriesService } from '../services/StoriesService';
 import { PostsService } from '../services/PostsService';
 import { Video } from 'expo-av';
-import PostItem from '../components/PostItem';
+import { supabase } from '../lib/supabase';
+import ThemeAwarePostItem from '../components/ThemeAwarePostItem';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Easing } from 'react-native';
-import { supabase } from '../lib/supabase';
+
+const { width: screenWidth } = Dimensions.get('window');
+const isSmallScreen = screenWidth < 380;
 
 const HomeScreen = () => {
   const navigation = useNavigation();
   const { unreadCount: notificationUnreadCount } = useNotifications();
-  const { isDarkMode, isLoading: darkModeLoading } = useDarkMode();
   const [stories, setStories] = useState([]);
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -501,8 +502,7 @@ const HomeScreen = () => {
     return null;
   }
 
-  // Dark Mode Header (Gen Z Style)
-  const renderDarkHeader = () => {
+  const renderHeader = () => {
     return (
     <>
       <Animated.View style={{ opacity: headerAnim, transform: [{ translateY: slideAnim }] }}>
@@ -510,7 +510,7 @@ const HomeScreen = () => {
           colors={['rgba(10, 10, 42, 0.95)', 'rgba(15, 15, 35, 0.98)', 'rgba(8, 8, 28, 0.99)']}
           start={{x: 0, y: 0}}
           end={{x: 1, y: 1}}
-          style={isDarkMode ? styles.header : styles.headerLight}
+          style={styles.header}
         >
           <View style={styles.logoWrapper}>
             <TouchableOpacity 
@@ -638,7 +638,7 @@ const HomeScreen = () => {
               activeOpacity={0.7}
             >
               <View style={styles.iconBackground}>
-                <Ionicons name="notifications-outline" size={20} color="rgba(255, 255, 255, 0.8)" />
+                <Ionicons name="notifications-outline" size={isSmallScreen ? 18 : 20} color="rgba(255, 255, 255, 0.8)" />
                 {notificationUnreadCount > 0 && (
                   <LinearGradient
                     colors={['#ff00ff', '#ff6b9d']}
@@ -662,7 +662,7 @@ const HomeScreen = () => {
               activeOpacity={0.7}
             >
               <View style={styles.iconBackground}>
-                <MaterialIcons name="trending-up" size={20} color="rgba(255, 255, 255, 0.8)" />
+                <MaterialIcons name="trending-up" size={isSmallScreen ? 18 : 20} color="rgba(255, 255, 255, 0.8)" />
               </View>
             </TouchableOpacity>
             
@@ -672,7 +672,7 @@ const HomeScreen = () => {
               activeOpacity={0.7}
             >
               <View style={styles.iconBackground}>
-                <MaterialIcons name="search" size={20} color="rgba(255, 255, 255, 0.8)" />
+                <MaterialIcons name="search" size={isSmallScreen ? 18 : 20} color="rgba(255, 255, 255, 0.8)" />
               </View>
             </TouchableOpacity>
             
@@ -682,7 +682,7 @@ const HomeScreen = () => {
               activeOpacity={0.7}
             >
               <View style={styles.iconBackground}>
-                <MaterialIcons name="videocam" size={20} color="rgba(255, 255, 255, 0.8)" />
+                <MaterialIcons name="videocam" size={isSmallScreen ? 18 : 20} color="rgba(255, 255, 255, 0.8)" />
               </View>
             </TouchableOpacity>
           </View>
@@ -714,7 +714,7 @@ const HomeScreen = () => {
             >
               <View style={styles.postInputGradient}>
                 <MaterialIcons name="edit" size={20} color="rgba(255, 255, 255, 0.6)" />
-                <Text style={styles.postInputPlaceholder}>What's happening?</Text>
+                <Text style={styles.postInputPlaceholder}>Share Something</Text>
               </View>
             </TouchableOpacity>
           </View>
@@ -812,209 +812,6 @@ const HomeScreen = () => {
     );
   };
 
-  // Light Mode Header (Old Bright Style)
-  const renderLightHeader = () => {
-    return (
-    <>
-      <Animated.View style={{ opacity: headerAnim, transform: [{ translateY: slideAnim }] }}>
-        <LinearGradient
-          colors={['#0a0a2a', '#1a1a4a', '#2a1a4a']}
-          start={{x: 0, y: 0}}
-          end={{x: 1, y: 1}}
-          style={styles.headerLight}
-        >
-          <View style={styles.logoWrapper}>
-            <TouchableOpacity 
-              activeOpacity={0.9}
-              onPress={() => {
-                // Bounce animation
-                Animated.sequence([
-                  Animated.spring(scaleAnim, {
-                    toValue: 0.9,
-                    useNativeDriver: true,
-                  }),
-                  Animated.spring(scaleAnim, {
-                    toValue: 1.1,
-                    friction: 3,
-                    tension: 40,
-                    useNativeDriver: true,
-                  }),
-                  Animated.spring(scaleAnim, {
-                    toValue: 1,
-                    friction: 7,
-                    tension: 40,
-                    useNativeDriver: true,
-                  })
-                ]).start();
-                
-                // Create particles
-                createParticles();
-                
-                // Refresh the feed
-                loadPosts();
-              }}
-            >
-              <Animated.View style={[
-                styles.logoGradientContainer,
-                { 
-                  transform: [
-                    { scale: Animated.multiply(scaleAnim, pulseAnim) },
-                    { translateY: floatAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [0, -5]
-                      }) 
-                    }
-                  ]
-                }
-              ]}>
-                <Animated.View style={[
-                  styles.logoGradientLight,
-                  {
-                    backgroundColor: colorAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: ['#ff00ff', '#ff6b9d']
-                    })
-                  }
-                ]}>
-                  <View style={styles.logoContent}>
-                    <Animated.View style={{
-                      transform: [{
-                        rotate: colorAnim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: ['0deg', '360deg']
-                        })
-                      }]
-                    }}>
-                      <MaterialIcons name="flash-on" size={22} color="#fff" style={styles.logoIcon} />
-                    </Animated.View>
-                    <Text style={styles.logo}>Flexx</Text>
-                  </View>
-                </Animated.View>
-                <Animated.View style={[
-                  styles.logoGlow,
-                  {
-                    opacity: pulseAnim.interpolate({
-                      inputRange: [0.9, 1, 1.1],
-                      outputRange: [0.6, 1, 0.6]
-                    }),
-                    transform: [{
-                      scale: pulseAnim.interpolate({
-                        inputRange: [0.9, 1.1],
-                        outputRange: [0.9, 1.1]
-                      })
-                    }]
-                  }
-                ]} />
-                <Animated.View style={[
-                  styles.logoShine,
-                  {
-                    transform: [{
-                      translateX: colorAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [-30, 100]
-                      })
-                    }]
-                  }
-                ]} />
-              </Animated.View>
-            </TouchableOpacity>
-            
-            {/* Particles */}
-            {particles.map((particle, index) => (
-              <Animated.View
-                key={index}
-                style={[
-                  styles.particle,
-                  {
-                    left: particle.x,
-                    top: particle.y,
-                    backgroundColor: particle.color,
-                    transform: [
-                      { translateX: particle.anim.x },
-                      { translateY: particle.anim.y },
-                      { rotate: particle.anim.rotate },
-                      { scale: particle.anim.scale }
-                    ],
-                    opacity: particle.anim.opacity
-                  }
-                ]}
-              />
-            ))}
-          </View>
-          
-          <View style={styles.headerIcons}>
-            <TouchableOpacity 
-              style={styles.iconButton}
-              onPress={() => navigation.navigate('Notifications')}
-              activeOpacity={0.7}
-            >
-              <LinearGradient
-                colors={['rgba(255, 0, 255, 0.2)', 'rgba(255, 0, 255, 0.1)']}
-                style={styles.iconBackgroundLight}
-              >
-                <Ionicons name="notifications-outline" size={22} color="#ff00ff" />
-                {notificationUnreadCount > 0 && (
-                  <LinearGradient
-                    colors={['#ff00ff', '#ff6b9d']}
-                    style={[styles.notificationBadge, {
-                      width: notificationUnreadCount > 99 ? 20 : notificationUnreadCount > 9 ? 18 : 16,
-                    }]}
-                  >
-                    <Text style={[styles.notificationBadgeText, {
-                      fontSize: notificationUnreadCount > 99 ? 8 : 10,
-                    }]}>
-                      {notificationUnreadCount > 99 ? '99+' : notificationUnreadCount}
-                    </Text>
-                  </LinearGradient>
-                )}
-              </LinearGradient>
-            </TouchableOpacity>
-          
-            <TouchableOpacity 
-              style={styles.iconButton}
-              onPress={() => navigation.navigate('Trending')}
-              activeOpacity={0.7}
-            >
-              <LinearGradient
-                colors={['rgba(255, 107, 157, 0.2)', 'rgba(255, 107, 157, 0.1)']}
-                style={styles.iconBackgroundLight}
-              >
-                <MaterialIcons name="trending-up" size={22} color="#ff6b9d" />
-              </LinearGradient>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.iconButton} 
-              onPress={() => navigation.navigate('Search')}
-              activeOpacity={0.7}
-            >
-              <LinearGradient
-                colors={['rgba(196, 69, 105, 0.2)', 'rgba(196, 69, 105, 0.1)']}
-                style={styles.iconBackgroundLight}
-              >
-                <MaterialIcons name="search" size={22} color="#c44569" />
-              </LinearGradient>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.iconButton}
-              onPress={() => setShowTermsModal(true)}
-              activeOpacity={0.7}
-            >
-              <LinearGradient
-                colors={['rgba(255, 0, 255, 0.2)', 'rgba(255, 0, 255, 0.1)']}
-                style={styles.iconBackgroundLight}
-              >
-                <MaterialIcons name="videocam" size={22} color="#ff00ff" />
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-        </LinearGradient>
-      </Animated.View>
-    </>
-    );
-  };
-
   return (
     <>
       <StatusBar style="light" />
@@ -1038,7 +835,7 @@ const HomeScreen = () => {
             }
             contentContainerStyle={styles.scrollViewContent}
           >
-            {isDarkMode ? renderDarkHeader() : renderLightHeader()}
+            {renderHeader()}
             
             {loading ? (
               <View style={styles.loadingContainer}>
@@ -1055,7 +852,7 @@ const HomeScreen = () => {
                 }
                 
                 return (
-                  <PostItem
+                  <ThemeAwarePostItem
                     key={item.id}
                     post={item}
                     onOptionsPress={(action) => {
@@ -1307,8 +1104,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderBottomWidth: 0.5,
     borderBottomColor: 'rgba(255, 255, 255, 0.05)',
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
@@ -1317,10 +1114,11 @@ const styles = StyleSheet.create({
   },
   logoWrapper: {
     position: 'relative',
-    marginLeft: 10,
-    height: 60,
-    width: 120,
+    flex: 1,
+    height: 50,
     justifyContent: 'center',
+    alignItems: 'flex-start',
+    maxWidth: '60%',
   },
   logoContainer: {
     position: 'relative',
@@ -1404,16 +1202,20 @@ const styles = StyleSheet.create({
   headerIcons: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'flex-end',
+    gap: isSmallScreen ? 4 : 6,
+    flex: 0,
+    minWidth: isSmallScreen ? 160 : 180,
+    paddingRight: 4,
   },
   iconButton: {
-    padding: 8,
-    borderRadius: 12,
+    padding: isSmallScreen ? 4 : 6,
+    borderRadius: 10,
   },
   iconBackground: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
+    width: isSmallScreen ? 34 : 36,
+    height: isSmallScreen ? 34 : 36,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
