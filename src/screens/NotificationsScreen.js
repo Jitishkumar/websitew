@@ -77,6 +77,9 @@ const NotificationsScreen = () => {
     // Fetch real notifications from the database
     fetchNotifications();
     
+    // Mark all notifications as read when screen opens
+    markAllNotificationsAsRead();
+    
     // Set up real-time subscription for new notifications
     const notificationsSubscription = supabase
       .channel('public:notifications')
@@ -167,6 +170,36 @@ const NotificationsScreen = () => {
       }
     } catch (error) {
       console.error('Error marking notification as read:', error);
+    }
+  };
+
+  const markAllNotificationsAsRead = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (user) {
+        // Mark all unread notifications as read in the database
+        const { error } = await supabase
+          .from('notifications')
+          .update({ is_read: true })
+          .eq('recipient_id', user.id)
+          .eq('is_read', false);
+        
+        if (error) {
+          console.error('Error marking all notifications as read:', error);
+        } else {
+          console.log('All notifications marked as read');
+          // Update local state to reflect all notifications as read
+          setNotifications(prevNotifications =>
+            prevNotifications.map(notification => ({
+              ...notification,
+              is_read: true
+            }))
+          );
+        }
+      }
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error);
     }
   };
 

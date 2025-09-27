@@ -1044,7 +1044,7 @@ const PostItem = ({ post, onOptionsPress }) => {
             <Text style={styles.actionText}>{commentsCount}</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.actionButton}>
+          <TouchableOpacity style={styles.actionButton} onPress={handleShare}>
             <View style={styles.actionButtonGradient}>
               <Ionicons name="share-outline" size={20} color="rgba(255, 255, 255, 0.7)" />
             </View>

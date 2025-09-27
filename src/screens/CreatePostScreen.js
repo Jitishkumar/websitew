@@ -15,6 +15,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Video } from 'expo-av';
+import * as FileSystem from 'expo-file-system';
 import { useNavigation } from '@react-navigation/native';
 import { PostsService } from '../services/PostsService';
 import { supabase } from '../lib/supabase';
@@ -29,6 +30,26 @@ const CreatePostScreen = () => {
   const [selectedMedia, setSelectedMedia] = useState(null);
   const [postText, setPostText] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+
+  // Helper function to get file size
+  const getFileSize = async (uri) => {
+    try {
+      const fileInfo = await FileSystem.getInfoAsync(uri);
+      return fileInfo.size || 0;
+    } catch (error) {
+      console.error('Error getting file size:', error);
+      return 0;
+    }
+  };
+
+  // Helper function to format file size for display
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
 
   const handleMediaPicker = async () => {
     try {
@@ -56,9 +77,38 @@ const CreatePostScreen = () => {
           Alert.alert('Error', 'Failed to get image/video');
           return;
         }
-        const type = uri.endsWith('.mp4') ? 'video' : 'image';
-        setSelectedMedia({ uri, type });
-        console.log(`Selected ${type} with URI: ${uri}`);
+        
+        // Determine file type
+        const type = uri.endsWith('.mp4') || uri.endsWith('.mov') || uri.endsWith('.avi') ? 'video' : 'image';
+        
+        // Check file size
+        const fileSize = await getFileSize(uri);
+        const fileSizeMB = fileSize / (1024 * 1024); // Convert to MB
+        
+        // File size limits
+        const MAX_IMAGE_SIZE_MB = 10;
+        const MAX_VIDEO_SIZE_MB = 100;
+        
+        if (type === 'image' && fileSizeMB > MAX_IMAGE_SIZE_MB) {
+          Alert.alert(
+            'File Too Large', 
+            `Image size is ${formatFileSize(fileSize)}. Maximum allowed size for images is ${MAX_IMAGE_SIZE_MB}MB. Please choose a smaller image or compress it.`,
+            [{ text: 'OK', style: 'default' }]
+          );
+          return;
+        }
+        
+        if (type === 'video' && fileSizeMB > MAX_VIDEO_SIZE_MB) {
+          Alert.alert(
+            'File Too Large', 
+            `Video size is ${formatFileSize(fileSize)}. Maximum allowed size for videos is ${MAX_VIDEO_SIZE_MB}MB. Please choose a smaller video or compress it.`,
+            [{ text: 'OK', style: 'default' }]
+          );
+          return;
+        }
+        
+        setSelectedMedia({ uri, type, size: fileSize });
+        console.log(`Selected ${type} with URI: ${uri}, Size: ${formatFileSize(fileSize)}`);
       }
     } catch (error) {
       console.error('Error selecting media:', error);
@@ -246,6 +296,14 @@ const CreatePostScreen = () => {
                   resizeMode="contain"
                 />
               )}
+              
+              {/* File size indicator */}
+              <View style={styles.fileSizeIndicator}>
+                <Text style={styles.fileSizeText}>
+                  {selectedMedia.size ? formatFileSize(selectedMedia.size) : 'Unknown size'}
+                </Text>
+              </View>
+              
               <TouchableOpacity 
                 onPress={() => setSelectedMedia(null)}
                 disabled={uploading}
@@ -475,6 +533,20 @@ const styles = StyleSheet.create({
   },
   errorIcon: {
     marginRight: 4,
+  },
+  fileSizeIndicator: {
+    position: 'absolute',
+    bottom: 10,
+    left: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  fileSizeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '500',
   },
 });
 

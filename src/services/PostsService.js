@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { uploadToCloudinary, deleteFromCloudinary } from '../config/cloudinary';
+import * as FileSystem from 'expo-file-system';
 
 export class PostsService {
   // Create a new post
@@ -26,7 +27,9 @@ export class PostsService {
       // Handle media upload if URI is provided
       if (uri) {
         try {
-          // Let cloudinary.js handle file size validation
+          // Validate file size before upload
+          await this.validateFileSize(uri, finalType);
+          
           console.log(`Uploading ${finalType} to Cloudinary...`);
           
           const cloudinaryResponse = await uploadToCloudinary(uri, finalType);
@@ -83,6 +86,41 @@ export class PostsService {
       console.error('Error creating post:', error);
       throw error;
     }
+  }
+  
+  // Validate file size before upload
+  static async validateFileSize(uri, type) {
+    try {
+      const fileInfo = await FileSystem.getInfoAsync(uri);
+      const fileSize = fileInfo.size || 0;
+      const fileSizeMB = fileSize / (1024 * 1024); // Convert to MB
+      
+      // File size limits
+      const MAX_IMAGE_SIZE_MB = 10;
+      const MAX_VIDEO_SIZE_MB = 100;
+      
+      if (type === 'image' && fileSizeMB > MAX_IMAGE_SIZE_MB) {
+        throw new Error(`Image size (${this.formatFileSize(fileSize)}) exceeds the maximum limit of ${MAX_IMAGE_SIZE_MB}MB. Please choose a smaller image or compress it.`);
+      }
+      
+      if (type === 'video' && fileSizeMB > MAX_VIDEO_SIZE_MB) {
+        throw new Error(`Video size (${this.formatFileSize(fileSize)}) exceeds the maximum limit of ${MAX_VIDEO_SIZE_MB}MB. Please choose a smaller video or compress it.`);
+      }
+      
+      console.log(`File size validation passed: ${this.formatFileSize(fileSize)}`);
+    } catch (error) {
+      console.error('File size validation error:', error);
+      throw error;
+    }
+  }
+  
+  // Helper function to format file size for display
+  static formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   }
   
   // Get all posts with likes and comments count
