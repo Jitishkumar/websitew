@@ -729,6 +729,9 @@ const MessageScreen = () => {
             media_url: msg.media_url || null,
             media_type: msg.media_type || null,
             cloudinary_public_id: msg.cloudinary_public_id || null,
+            audio_url: msg.audio_url || null,
+            audio_public_id: msg.audio_public_id || null,
+            audio_duration: msg.audio_duration || 0,
             created_at: msg.created_at
         }));
 
