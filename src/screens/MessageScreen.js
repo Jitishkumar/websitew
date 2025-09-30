@@ -26,8 +26,84 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMessages } from '../context/MessageContext';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
-import { cloudinaryConfig } from '../config/cloudinary';
+import { cloudinaryConfig, uploadToCloudinary } from '../config/cloudinary';
 import { NotificationService } from '../services/NotificationService';
+
+// Audio Player Component for Messages
+const MessageAudioPlayer = ({ audioUrl, duration }) => {
+  const [sound, setSound] = useState(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [position, setPosition] = useState(0);
+  const [audioDuration, setAudioDuration] = useState(duration || 0);
+
+  useEffect(() => {
+    return () => {
+      if (sound) {
+        sound.unloadAsync();
+      }
+    };
+  }, [sound]);
+
+  const playPauseAudio = async () => {
+    try {
+      if (sound) {
+        if (isPlaying) {
+          await sound.pauseAsync();
+          setIsPlaying(false);
+        } else {
+          await sound.playAsync();
+          setIsPlaying(true);
+        }
+      } else {
+        const { sound: newSound } = await Audio.Sound.createAsync(
+          { uri: audioUrl },
+          { shouldPlay: true },
+          onPlaybackStatusUpdate
+        );
+        setSound(newSound);
+        setIsPlaying(true);
+      }
+    } catch (error) {
+      console.error('Error playing audio:', error);
+    }
+  };
+
+  const onPlaybackStatusUpdate = (status) => {
+    if (status.isLoaded) {
+      setPosition(status.positionMillis / 1000);
+      setAudioDuration(status.durationMillis / 1000);
+      
+      if (status.didJustFinish) {
+        setIsPlaying(false);
+        setPosition(0);
+      }
+    }
+  };
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <View style={styles.messageAudioPlayerContainer}>
+      <TouchableOpacity onPress={playPauseAudio} style={styles.messageAudioPlayButton}>
+        <Ionicons 
+          name={isPlaying ? 'pause' : 'play'} 
+          size={20} 
+          color="#fff" 
+        />
+      </TouchableOpacity>
+      <View style={styles.messageAudioWaveform}>
+        <View style={[styles.messageAudioProgress, { width: `${(position / audioDuration) * 100}%` }]} />
+      </View>
+      <Text style={styles.messageAudioDuration}>
+        {formatTime(position)} / {formatTime(audioDuration)}
+      </Text>
+    </View>
+  );
+};
 
 const MessageScreen = () => {
   const insets = useSafeAreaInsets();
@@ -73,6 +149,9 @@ const MessageScreen = () => {
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [hasAudioPermission, setHasAudioPermission] = useState(null);
   const recordingTimer = useRef(null);
+  const [audioUri, setAudioUri] = useState(null);
+  const [audioSound, setAudioSound] = useState(null);
+  const [isPlayingPreview, setIsPlayingPreview] = useState(false);
   
   // Audio playback states
   const [playingAudio, setPlayingAudio] = useState(null);
@@ -726,16 +805,10 @@ const MessageScreen = () => {
     if (loadingOlder || !hasMoreMessages) return;
     
     const nextPage = currentPage + 1;
-    await loadMessages(conversationId, userId, nextPage, true);
   };
 
   // Start voice recording
   const startRecording = async () => {
-    if (!hasAudioPermission) {
-      Alert.alert('Permission Required', 'Please grant microphone permission to record voice messages.');
-      return;
-    }
-
     try {
       // Clean up any existing recording first
       if (recording) {
@@ -747,12 +820,26 @@ const MessageScreen = () => {
         setRecording(null);
       }
 
-      // Set audio mode before creating recording
+      // Clean up any existing audio sound
+      if (audioSound) {
+        try {
+          await audioSound.unloadAsync();
+        } catch (cleanupError) {
+          console.log('Audio cleanup error (expected):', cleanupError);
+        }
+        setAudioSound(null);
+      }
+
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please grant microphone permission to record audio');
+        return;
+      }
+
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
       });
-
       const recordingOptions = {
         android: {
           extension: '.m4a',
@@ -776,9 +863,13 @@ const MessageScreen = () => {
       };
 
       console.log('Creating recording with options:', recordingOptions);
-      const { recording: newRecording } = await Audio.Recording.createAsync(recordingOptions);
+      const { recording: newRecording } = await Audio.Recording.createAsync(
+        recordingOptions,
+        null,
+        100 // Update interval in milliseconds
+      );
       
-      console.log('Recording created, starting...');
+      console.log('Recording created successfully');
       setRecording(newRecording);
       setIsRecording(true);
       setRecordingDuration(0);
@@ -788,7 +879,6 @@ const MessageScreen = () => {
         setRecordingDuration(prev => prev + 1);
       }, 1000);
 
-      await newRecording.startAsync();
       console.log('Recording started successfully');
     } catch (error) {
       console.error('Failed to start recording:', error);
@@ -804,31 +894,80 @@ const MessageScreen = () => {
     }
   };
 
-  // Stop voice recording and send
-  const stopRecordingAndSend = async () => {
+  // Stop voice recording (without sending)
+  const stopRecording = async () => {
     if (!recording) return;
 
     try {
-      setIsRecording(false);
-      
       if (recordingTimer.current) {
         clearInterval(recordingTimer.current);
         recordingTimer.current = null;
       }
 
+      setIsRecording(false);
+      
       await recording.stopAndUnloadAsync();
       const uri = recording.getURI();
       
-      if (uri && recordingDuration > 0) {
-        await sendVoiceMessage(uri, recordingDuration);
+      if (uri) {
+        setAudioUri(uri);
       }
 
       setRecording(null);
-      setRecordingDuration(0);
     } catch (error) {
       console.error('Failed to stop recording:', error);
-      Alert.alert('Error', 'Failed to process voice message. Please try again.');
+      Alert.alert('Error', 'Failed to stop recording');
+      setRecording(null);
+      setRecordingDuration(0);
     }
+  };
+
+  // Play audio preview
+  const playPreview = async () => {
+    try {
+      if (!audioUri) return;
+
+      if (isPlayingPreview && audioSound) {
+        await audioSound.pauseAsync();
+        setIsPlayingPreview(false);
+        return;
+      }
+
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: audioUri },
+        { shouldPlay: true }
+      );
+
+      setAudioSound(sound);
+      setIsPlayingPreview(true);
+
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.didJustFinish) {
+          setIsPlayingPreview(false);
+        }
+      });
+
+    } catch (error) {
+      console.error('Failed to play audio:', error);
+      Alert.alert('Error', 'Failed to play audio');
+    }
+  };
+
+  // Delete audio recording
+  const deleteAudioRecording = () => {
+    setAudioUri(null);
+    setRecordingDuration(0);
+    if (audioSound) {
+      audioSound.unloadAsync();
+      setAudioSound(null);
+    }
+  };
+
+  // Format duration
+  const formatDuration = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   // Send voice message
@@ -1020,7 +1159,14 @@ const MessageScreen = () => {
   };
 
   const sendMessage = async () => {
-    if (!inputText.trim()) return;
+    if (!inputText.trim() && !audioUri) return;
+    
+    // If there's audio, send it as voice message
+    if (audioUri) {
+      await sendVoiceMessage(audioUri, recordingDuration);
+      deleteAudioRecording();
+      return;
+    }
     
     try {
       if (!userId || !conversationId) {
@@ -1919,8 +2065,36 @@ const MessageScreen = () => {
               colors={['#1a1a3a', '#0d0d2a']}
               start={{x: 0, y: 0}}
               end={{x: 1, y: 1}}
-              style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, 20) }]}
+              style={[styles.inputContainer, { paddingBottom: insets.bottom > 0 ? insets.bottom : 10 }]}
             >
+              {/* Audio Recording Preview */}
+              {audioUri && !isRecording && (
+                <View style={styles.audioPreviewContainer}>
+                  <TouchableOpacity onPress={playPreview} style={styles.audioPreviewButton}>
+                    <Ionicons 
+                      name={isPlayingPreview ? 'pause-circle' : 'play-circle'} 
+                      size={32} 
+                      color="#ff00ff" 
+                    />
+                  </TouchableOpacity>
+                  <View style={styles.audioPreviewInfo}>
+                    <Text style={styles.audioPreviewText}>Audio recorded</Text>
+                    <Text style={styles.audioPreviewDuration}>{formatDuration(recordingDuration)}</Text>
+                  </View>
+                  <TouchableOpacity onPress={deleteAudioRecording} style={styles.audioDeleteButton}>
+                    <Ionicons name="trash-outline" size={20} color="#ff4444" />
+                  </TouchableOpacity>
+                </View>
+              )}
+              
+              {/* Recording Indicator */}
+              {isRecording && (
+                <View style={styles.recordingIndicatorBanner}>
+                  <View style={styles.recordingDot} />
+                  <Text style={styles.recordingText}>Recording... {formatDuration(recordingDuration)}</Text>
+                </View>
+              )}
+              
               <View style={styles.inputWrapper}>
                 <TouchableOpacity onPress={() => setShowMediaPicker(true)}>
                   <LinearGradient
@@ -1931,6 +2105,18 @@ const MessageScreen = () => {
                   </LinearGradient>
                 </TouchableOpacity>
                 
+                <TouchableOpacity 
+                  onPress={isRecording ? stopRecording : startRecording}
+                  style={styles.audioButtonWrapper}
+                  disabled={inputText.trim().length > 0}
+                >
+                  <Ionicons 
+                    name={isRecording ? 'stop' : 'mic'} 
+                    size={24} 
+                    color={isRecording ? '#ff4444' : (inputText.trim() ? '#666' : '#ff00ff')} 
+                  />
+                </TouchableOpacity>
+                
                 <TextInput
                   style={styles.input}
                   value={inputText}
@@ -1938,49 +2124,22 @@ const MessageScreen = () => {
                   placeholder="Type a message..."
                   placeholderTextColor="#8e8e8e"
                   multiline
+                  editable={!isRecording}
                 />
                 
-                {!inputText.trim() ? (
-                  <TouchableOpacity 
-                    style={[styles.mediaButton, isRecording && styles.recordingButton]}
-                    onPressIn={startRecording}
-                    onPressOut={stopRecordingAndSend}
-                    activeOpacity={0.8}
+                <TouchableOpacity 
+                  onPress={sendMessage}
+                  disabled={(!inputText.trim() && !audioUri) || isRecording}
+                >
+                  <LinearGradient
+                    colors={(inputText.trim() || audioUri) ? ['#ff00ff', '#9900ff'] : ['#666', '#444']}
+                    style={styles.sendButton}
                   >
-                    {isRecording ? (
-                      <View style={styles.recordingIndicator}>
-                        <MaterialCommunityIcons name="microphone" size={24} color="#fff" />
-                        <View style={styles.recordingPulse} />
-                      </View>
-                    ) : (
-                      <MaterialCommunityIcons name="microphone" size={24} color="#ff00ff" />
-                    )}
-                  </TouchableOpacity>
-                ) : (
-                  <TouchableOpacity onPress={sendMessage}>
-                    <LinearGradient
-                      colors={['#ff00ff', '#9900ff']}
-                      style={styles.sendButton}
-                    >
-                      <Ionicons name="send" size={24} color="#fff" />
-                    </LinearGradient>
-                  </TouchableOpacity>
-                )}
+                    <Ionicons name="send" size={24} color="#fff" />
+                  </LinearGradient>
+                </TouchableOpacity>
               </View>
             </LinearGradient>
-
-            {/* Recording Duration Display */}
-            {isRecording && (
-              <View style={styles.recordingDurationContainer}>
-                <View style={styles.recordingDurationBadge}>
-                  <MaterialCommunityIcons name="microphone" size={16} color="#ff00ff" />
-                  <Text style={styles.recordingDurationText}>
-                    {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60).toString().padStart(2, '0')}
-                  </Text>
-                  <Text style={styles.recordingHintText}>Release to send</Text>
-                </View>
-              </View>
-            )}
 
             <MediaPickerModal />
             
@@ -2198,7 +2357,7 @@ const styles = StyleSheet.create({
   },
   messageListContent: {
     paddingTop: 16,
-    paddingBottom: 8,
+    paddingBottom: 120, // Extra padding to prevent messages from being hidden behind input
   },
   messageBubble: {
     marginVertical: 8,
@@ -2369,14 +2528,15 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingHorizontal: 10,
     paddingTop: 12,
-    paddingBottom: 12,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 0, 255, 0.2)',
     backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
   },
   inputWrapper: {
     flexDirection: 'row',
@@ -2855,6 +3015,58 @@ const styles = StyleSheet.create({
   recordingHintText: {
     color: '#ccc',
     fontSize: 12,
+  },
+  // New audio recording styles
+  audioButtonWrapper: {
+    marginRight: 10,
+    padding: 5,
+  },
+  audioPreviewContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 0, 255, 0.1)',
+    borderRadius: 15,
+    padding: 10,
+    marginBottom: 10,
+  },
+  audioPreviewButton: {
+    marginRight: 10,
+  },
+  audioPreviewInfo: {
+    flex: 1,
+  },
+  audioPreviewText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  audioPreviewDuration: {
+    color: '#999',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  audioDeleteButton: {
+    padding: 5,
+  },
+  recordingIndicatorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 68, 68, 0.1)',
+    borderRadius: 15,
+    padding: 10,
+    marginBottom: 10,
+  },
+  recordingDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#ff4444',
+    marginRight: 10,
+  },
+  recordingText: {
+    color: '#ff4444',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
   audioMessageContainer: {
     flexDirection: 'row',

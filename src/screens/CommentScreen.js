@@ -23,8 +23,86 @@ import { sendCommentNotification } from '../utils/notificationService';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { processMentions } from '../utils/mentionService';
+import { Audio } from 'expo-av';
+import { uploadToCloudinary } from '../config/cloudinary';
 
 const { height } = Dimensions.get('window');
+
+// Audio Player Component
+const AudioPlayer = ({ audioUrl, duration }) => {
+  const [sound, setSound] = useState(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [position, setPosition] = useState(0);
+  const [audioDuration, setAudioDuration] = useState(duration || 0);
+
+  useEffect(() => {
+    return () => {
+      if (sound) {
+        sound.unloadAsync();
+      }
+    };
+  }, [sound]);
+
+  const playPauseAudio = async () => {
+    try {
+      if (sound) {
+        if (isPlaying) {
+          await sound.pauseAsync();
+          setIsPlaying(false);
+        } else {
+          await sound.playAsync();
+          setIsPlaying(true);
+        }
+      } else {
+        const { sound: newSound } = await Audio.Sound.createAsync(
+          { uri: audioUrl },
+          { shouldPlay: true },
+          onPlaybackStatusUpdate
+        );
+        setSound(newSound);
+        setIsPlaying(true);
+      }
+    } catch (error) {
+      console.error('Error playing audio:', error);
+    }
+  };
+
+  const onPlaybackStatusUpdate = (status) => {
+    if (status.isLoaded) {
+      setPosition(status.positionMillis / 1000);
+      setAudioDuration(status.durationMillis / 1000);
+      
+      if (status.didJustFinish) {
+        setIsPlaying(false);
+        setPosition(0);
+      }
+    }
+  };
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <View style={styles.audioPlayerContainer}>
+      <TouchableOpacity onPress={playPauseAudio} style={styles.audioPlayButton}>
+        <Ionicons 
+          name={isPlaying ? 'pause' : 'play'} 
+          size={20} 
+          color="#ff00ff" 
+        />
+      </TouchableOpacity>
+      <View style={styles.audioWaveform}>
+        <View style={[styles.audioProgress, { width: `${(position / audioDuration) * 100}%` }]} />
+      </View>
+      <Text style={styles.audioDuration}>
+        {formatTime(position)} / {formatTime(audioDuration)}
+      </Text>
+    </View>
+  );
+};
 
 const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }) => {
   const navigation = useNavigation();
@@ -56,6 +134,15 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
   const [currentUser, setCurrentUser] = useState(null);
   const [currentUserUsername, setCurrentUserUsername] = useState(null); // New state for current user's username
   const [isAnonymous, setIsAnonymous] = useState(false);
+  
+  // Audio recording states
+  const [recording, setRecording] = useState(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [audioUri, setAudioUri] = useState(null);
+  const [audioSound, setAudioSound] = useState(null);
+  const [isPlayingPreview, setIsPlayingPreview] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const recordingTimerRef = useRef(null);
   
   // Load comments when modal becomes visible
   useEffect(() => {
@@ -330,7 +417,7 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
   };
 
   const handleAddComment = async () => {
-    if (!commentText.trim()) return;
+    if (!commentText.trim() && !audioUri) return;
     
     try {
       setSubmitting(true);
@@ -340,14 +427,34 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
         return;
       }
       
+      let audioUrl = null;
+      let audioPublicId = null;
+
+      // Upload audio if exists
+      if (audioUri) {
+        try {
+          const audioUpload = await uploadToCloudinary(audioUri, 'video'); // Cloudinary uses 'video' for audio
+          audioUrl = audioUpload.url;
+          audioPublicId = audioUpload.publicId;
+        } catch (uploadError) {
+          console.error('Error uploading audio:', uploadError);
+          Alert.alert('Error', 'Failed to upload audio recording');
+          setSubmitting(false);
+          return;
+        }
+      }
+      
       const { data, error } = await supabase
         .from('post_comments')
         .insert({
           post_id: currentPostId,
           user_id: user.id, // Always store the user ID
           creator_id: user.id, // Always store the actual creator ID
-          content: commentText.trim(),
-          is_anonymous: isAnonymous // Use this flag to control comment display
+          content: commentText.trim() || (audioUrl ? '🎤 Audio message' : ''),
+          is_anonymous: isAnonymous, // Use this flag to control comment display
+          audio_url: audioUrl,
+          audio_public_id: audioPublicId,
+          audio_duration: recordingDuration
         })
         .select(`
           *,
@@ -368,13 +475,16 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
         // Send notification to post owner
         await sendCommentNotification(currentPostId, data.id, user.id, postData.user_id);
         
-        // Process mentions in the comment text
-        await processMentions(commentText.trim(), user.id, isAnonymous, data.id, 'post_comment');
+        // Process mentions in the comment text (only if there's text)
+        if (commentText.trim()) {
+          await processMentions(commentText.trim(), user.id, isAnonymous, data.id, 'post_comment');
+        }
 
         // Add new comment to the list
         setComments([...comments, data]);
         setCommentText('');
         setIsAnonymous(false); // Reset anonymous toggle after posting
+        deleteAudioRecording(); // Clear audio recording
       }
     } catch (error) {
       console.error('Error adding comment:', error);
@@ -437,6 +547,102 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
     } finally {
       setSubmitting(false);
     }
+  };
+
+  // Audio recording functions
+  const startRecording = async () => {
+    try {
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please grant microphone permission to record audio');
+        return;
+      }
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+
+      setRecording(recording);
+      setIsRecording(true);
+      setRecordingDuration(0);
+
+      // Start timer
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingDuration(prev => prev + 1);
+      }, 1000);
+
+    } catch (error) {
+      console.error('Failed to start recording:', error);
+      Alert.alert('Error', 'Failed to start recording');
+    }
+  };
+
+  const stopRecording = async () => {
+    try {
+      if (!recording) return;
+
+      clearInterval(recordingTimerRef.current);
+      setIsRecording(false);
+      
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      setAudioUri(uri);
+      setRecording(null);
+
+    } catch (error) {
+      console.error('Failed to stop recording:', error);
+      Alert.alert('Error', 'Failed to stop recording');
+    }
+  };
+
+  const playPreview = async () => {
+    try {
+      if (!audioUri) return;
+
+      if (isPlayingPreview && audioSound) {
+        await audioSound.pauseAsync();
+        setIsPlayingPreview(false);
+        return;
+      }
+
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: audioUri },
+        { shouldPlay: true }
+      );
+
+      setAudioSound(sound);
+      setIsPlayingPreview(true);
+
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.didJustFinish) {
+          setIsPlayingPreview(false);
+        }
+      });
+
+    } catch (error) {
+      console.error('Failed to play audio:', error);
+      Alert.alert('Error', 'Failed to play audio');
+    }
+  };
+
+  const deleteAudioRecording = () => {
+    setAudioUri(null);
+    setRecordingDuration(0);
+    if (audioSound) {
+      audioSound.unloadAsync();
+      setAudioSound(null);
+    }
+  };
+
+  const formatDuration = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   const toggleExpanded = (commentId) => {
@@ -595,6 +801,15 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
             </Text>
           </TouchableOpacity>
           {renderCommentContentWithMentions(item.content)}
+          
+          {/* Audio Player */}
+          {item.audio_url && (
+            <AudioPlayer 
+              audioUrl={item.audio_url} 
+              duration={item.audio_duration || 0}
+            />
+          )}
+          
           <Text style={styles.timestamp}>
             {formatTimestamp(item.created_at)}
           </Text>
@@ -767,6 +982,33 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
           </View>
         )}
         
+        {/* Audio Recording Preview */}
+        {audioUri && !isRecording && (
+          <View style={styles.audioPreviewContainer}>
+            <TouchableOpacity onPress={playPreview} style={styles.audioPreviewButton}>
+              <Ionicons 
+                name={isPlayingPreview ? 'pause-circle' : 'play-circle'} 
+                size={32} 
+                color="#ff00ff" 
+              />
+            </TouchableOpacity>
+            <View style={styles.audioPreviewInfo}>
+              <Text style={styles.audioPreviewText}>Audio recorded</Text>
+              <Text style={styles.audioPreviewDuration}>{formatDuration(recordingDuration)}</Text>
+            </View>
+            <TouchableOpacity onPress={deleteAudioRecording} style={styles.audioDeleteButton}>
+              <Ionicons name="trash-outline" size={20} color="#ff4444" />
+            </TouchableOpacity>
+          </View>
+        )}
+        
+        {/* Recording Indicator */}
+        {isRecording && (
+          <View style={styles.recordingIndicator}>
+            <View style={styles.recordingDot} />
+            <Text style={styles.recordingText}>Recording... {formatDuration(recordingDuration)}</Text>
+          </View>
+        )}
       
       <Animated.View 
         style={[
@@ -777,6 +1019,24 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
           }
         ]}
       >
+        {/* Audio Record Button */}
+        <TouchableOpacity
+          onPress={isRecording ? stopRecording : startRecording}
+          style={styles.audioButton}
+          disabled={submitting}
+        >
+          <LinearGradient
+            colors={isRecording ? ['#ff4444', '#ff6b6b'] : ['rgba(255, 0, 255, 0.2)', 'rgba(255, 0, 255, 0.1)']}
+            style={styles.audioButtonGradient}
+          >
+            <Ionicons 
+              name={isRecording ? 'stop' : 'mic'} 
+              size={20} 
+              color={isRecording ? '#fff' : '#ff00ff'} 
+            />
+          </LinearGradient>
+        </TouchableOpacity>
+        
         <LinearGradient
           colors={['rgba(255, 0, 255, 0.1)', 'rgba(255, 107, 157, 0.05)']}
           style={styles.textInputContainer}
@@ -789,16 +1049,17 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
             onChangeText={setCommentText}
             multiline
             maxLength={500}
+            editable={!isRecording}
           />
         </LinearGradient>
         
         <TouchableOpacity
-          style={[styles.sendButton, { opacity: commentText.trim() ? 1 : 0.5 }]}
+          style={[styles.sendButton, { opacity: (commentText.trim() || audioUri) ? 1 : 0.5 }]}
           onPress={handleAddComment}
-          disabled={!commentText.trim() || submitting}
+          disabled={(!commentText.trim() && !audioUri) || submitting || isRecording}
         >
           <LinearGradient
-            colors={commentText.trim() ? ['#ff00ff', '#ff6b9d'] : ['#666', '#444']}
+            colors={(commentText.trim() || audioUri) ? ['#ff00ff', '#ff6b9d'] : ['#666', '#444']}
             style={styles.sendButtonGradient}
           >
             {submitting ? (
@@ -1058,6 +1319,15 @@ const styles = StyleSheet.create({
     marginRight: 10,
     overflow: 'hidden',
   },
+  textInput: {
+    flex: 1,
+    color: '#fff',
+    fontSize: 14,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    maxHeight: 100,
+    minHeight: 40,
+  },
   sendButtonGradient: {
     width: 40,
     height: 40,
@@ -1073,6 +1343,96 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 15,
     marginTop: 10,
+  },
+  // Audio recording styles
+  audioButton: {
+    marginRight: 10,
+  },
+  audioButtonGradient: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  audioPreviewContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 0, 255, 0.1)',
+    borderRadius: 15,
+    padding: 10,
+    marginBottom: 10,
+  },
+  audioPreviewButton: {
+    marginRight: 10,
+  },
+  audioPreviewInfo: {
+    flex: 1,
+  },
+  audioPreviewText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  audioPreviewDuration: {
+    color: '#999',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  audioDeleteButton: {
+    padding: 5,
+  },
+  recordingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 68, 68, 0.1)',
+    borderRadius: 15,
+    padding: 10,
+    marginBottom: 10,
+  },
+  recordingDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#ff4444',
+    marginRight: 10,
+  },
+  recordingText: {
+    color: '#ff4444',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  // Audio player styles
+  audioPlayerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 0, 255, 0.05)',
+    borderRadius: 12,
+    padding: 8,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  audioPlayButton: {
+    marginRight: 10,
+  },
+  audioWaveform: {
+    flex: 1,
+    height: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 2,
+    overflow: 'hidden',
+    marginRight: 10,
+  },
+  audioProgress: {
+    height: '100%',
+    backgroundColor: '#ff00ff',
+    borderRadius: 2,
+  },
+  audioDuration: {
+    color: '#999',
+    fontSize: 11,
+    minWidth: 60,
+    textAlign: 'right',
   },
 });
 

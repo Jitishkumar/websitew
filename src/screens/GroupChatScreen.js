@@ -21,6 +21,84 @@ import { StatusBar } from 'expo-status-bar';
 import { supabase } from '../lib/supabase';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Audio } from 'expo-av';
+import { uploadToCloudinary } from '../config/cloudinary';
+
+// Audio Player Component for Messages
+const AudioPlayer = ({ audioUrl, duration }) => {
+  const [sound, setSound] = useState(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [position, setPosition] = useState(0);
+  const [audioDuration, setAudioDuration] = useState(duration || 0);
+
+  useEffect(() => {
+    return () => {
+      if (sound) {
+        sound.unloadAsync();
+      }
+    };
+  }, [sound]);
+
+  const playPauseAudio = async () => {
+    try {
+      if (sound) {
+        if (isPlaying) {
+          await sound.pauseAsync();
+          setIsPlaying(false);
+        } else {
+          await sound.playAsync();
+          setIsPlaying(true);
+        }
+      } else {
+        const { sound: newSound } = await Audio.Sound.createAsync(
+          { uri: audioUrl },
+          { shouldPlay: true },
+          onPlaybackStatusUpdate
+        );
+        setSound(newSound);
+        setIsPlaying(true);
+      }
+    } catch (error) {
+      console.error('Error playing audio:', error);
+    }
+  };
+
+  const onPlaybackStatusUpdate = (status) => {
+    if (status.isLoaded) {
+      setPosition(status.positionMillis / 1000);
+      setAudioDuration(status.durationMillis / 1000);
+      
+      if (status.didJustFinish) {
+        setIsPlaying(false);
+        setPosition(0);
+      }
+    }
+  };
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <View style={styles.audioPlayerContainer}>
+      <TouchableOpacity onPress={playPauseAudio} style={styles.audioPlayButton}>
+        <Ionicons 
+          name={isPlaying ? 'pause' : 'play'} 
+          size={16} 
+          color="#ff00ff" 
+        />
+      </TouchableOpacity>
+      <View style={styles.audioWaveform}>
+        <View style={[styles.audioProgress, { width: `${(position / audioDuration) * 100}%` }]} />
+      </View>
+      <Text style={styles.audioDuration}>
+        {formatTime(position)} / {formatTime(audioDuration)}
+      </Text>
+    </View>
+  );
+};
 
 const GroupChatScreen = () => {
   const insets = useSafeAreaInsets();
@@ -35,6 +113,15 @@ const GroupChatScreen = () => {
   const route = useRoute();
   const { groupId, groupName, groupAvatar } = route.params;
   const flatListRef = useRef(null);
+  
+  // Audio recording states
+  const [recording, setRecording] = useState(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [audioUri, setAudioUri] = useState(null);
+  const [audioSound, setAudioSound] = useState(null);
+  const [isPlayingPreview, setIsPlayingPreview] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const recordingTimerRef = useRef(null);
 
   // Get current user and set up group
   useEffect(() => {
@@ -138,21 +225,151 @@ const GroupChatScreen = () => {
     }
   };
 
+  // Audio recording functions
+  const startRecording = async () => {
+    try {
+      // Clean up any existing recording first
+      if (recording) {
+        try {
+          await recording.stopAndUnloadAsync();
+        } catch (cleanupError) {
+          console.log('Cleanup error (expected):', cleanupError);
+        }
+        setRecording(null);
+      }
+
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please grant microphone permission to record audio');
+        return;
+      }
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      const { recording: newRecording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+
+      setRecording(newRecording);
+      setIsRecording(true);
+      setRecordingDuration(0);
+
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingDuration(prev => prev + 1);
+      }, 1000);
+
+    } catch (error) {
+      console.error('Failed to start recording:', error);
+      Alert.alert('Error', 'Failed to start recording');
+      setIsRecording(false);
+      setRecording(null);
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+      }
+    }
+  };
+
+  const stopRecording = async () => {
+    try {
+      if (!recording) return;
+
+      clearInterval(recordingTimerRef.current);
+      setIsRecording(false);
+      
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      setAudioUri(uri);
+      setRecording(null);
+
+    } catch (error) {
+      console.error('Failed to stop recording:', error);
+      Alert.alert('Error', 'Failed to stop recording');
+    }
+  };
+
+  const playPreview = async () => {
+    try {
+      if (!audioUri) return;
+
+      if (isPlayingPreview && audioSound) {
+        await audioSound.pauseAsync();
+        setIsPlayingPreview(false);
+        return;
+      }
+
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: audioUri },
+        { shouldPlay: true }
+      );
+
+      setAudioSound(sound);
+      setIsPlayingPreview(true);
+
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.didJustFinish) {
+          setIsPlayingPreview(false);
+        }
+      });
+
+    } catch (error) {
+      console.error('Failed to play audio:', error);
+      Alert.alert('Error', 'Failed to play audio');
+    }
+  };
+
+  const deleteAudioRecording = () => {
+    setAudioUri(null);
+    setRecordingDuration(0);
+    if (audioSound) {
+      audioSound.unloadAsync();
+      setAudioSound(null);
+    }
+  };
+
+  const formatDuration = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   // Send message
   const sendMessage = async () => {
-    if (!inputText.trim() || !userId || !groupId) return;
+    if ((!inputText.trim() && !audioUri) || !userId || !groupId) return;
 
     try {
       const messageContent = inputText.trim();
+      let audioUrl = null;
+      let audioPublicId = null;
+
+      // Upload audio if exists
+      if (audioUri) {
+        try {
+          const audioUpload = await uploadToCloudinary(audioUri, 'video');
+          audioUrl = audioUpload.url;
+          audioPublicId = audioUpload.publicId;
+        } catch (uploadError) {
+          console.error('Error uploading audio:', uploadError);
+          Alert.alert('Error', 'Failed to upload audio recording');
+          return;
+        }
+      }
+
       setInputText('');
+      deleteAudioRecording();
 
       const { error } = await supabase
         .from('group_messages')
         .insert({
           group_id: groupId,
           sender_id: userId,
-          content: messageContent,
-          message_type: 'text'
+          content: messageContent || (audioUrl ? '🎤 Audio message' : ''),
+          message_type: audioUrl ? 'audio' : 'text',
+          audio_url: audioUrl,
+          audio_public_id: audioPublicId,
+          audio_duration: recordingDuration
         });
 
       if (error) throw error;
@@ -194,6 +411,15 @@ const GroupChatScreen = () => {
           <Text style={[styles.messageText, isOwnMessage ? styles.ownMessageText : styles.otherMessageText]}>
             {item.content}
           </Text>
+          
+          {/* Audio Player */}
+          {item.audio_url && (
+            <AudioPlayer 
+              audioUrl={item.audio_url} 
+              duration={item.audio_duration || 0}
+            />
+          )}
+          
           <Text style={[styles.messageTime, isOwnMessage ? styles.ownMessageTime : styles.otherMessageTime]}>
             {formatTime(item.created_at)}
           </Text>
@@ -290,10 +516,50 @@ const GroupChatScreen = () => {
           colors={['rgba(102, 126, 234, 0.1)', 'rgba(156, 136, 255, 0.05)']}
           style={styles.inputContainer}
         >
+          {/* Audio Recording Preview */}
+          {audioUri && !isRecording && (
+            <View style={styles.audioPreviewContainer}>
+              <TouchableOpacity onPress={playPreview} style={styles.audioPreviewButton}>
+                <Ionicons 
+                  name={isPlayingPreview ? 'pause-circle' : 'play-circle'} 
+                  size={32} 
+                  color="#ff00ff" 
+                />
+              </TouchableOpacity>
+              <View style={styles.audioPreviewInfo}>
+                <Text style={styles.audioPreviewText}>Audio recorded</Text>
+                <Text style={styles.audioPreviewDuration}>{formatDuration(recordingDuration)}</Text>
+              </View>
+              <TouchableOpacity onPress={deleteAudioRecording} style={styles.audioDeleteButton}>
+                <Ionicons name="trash-outline" size={20} color="#ff4444" />
+              </TouchableOpacity>
+            </View>
+          )}
+          
+          {/* Recording Indicator */}
+          {isRecording && (
+            <View style={styles.recordingIndicator}>
+              <View style={styles.recordingDot} />
+              <Text style={styles.recordingText}>Recording... {formatDuration(recordingDuration)}</Text>
+            </View>
+          )}
+          
           <LinearGradient
             colors={['rgba(255, 255, 255, 0.08)', 'rgba(255, 255, 255, 0.04)']}
             style={styles.inputWrapper}
           >
+            {/* Audio Record Button */}
+            <TouchableOpacity
+              onPress={isRecording ? stopRecording : startRecording}
+              style={styles.audioButton}
+            >
+              <Ionicons 
+                name={isRecording ? 'stop' : 'mic'} 
+                size={24} 
+                color={isRecording ? '#ff4444' : '#ff00ff'} 
+              />
+            </TouchableOpacity>
+            
             <TextInput
               style={styles.textInput}
               placeholder="Type a message..."
@@ -302,14 +568,15 @@ const GroupChatScreen = () => {
               onChangeText={setInputText}
               multiline
               maxLength={1000}
+              editable={!isRecording}
             />
             <TouchableOpacity
               style={styles.sendButton}
               onPress={sendMessage}
-              disabled={!inputText.trim()}
+              disabled={(!inputText.trim() && !audioUri) || isRecording}
             >
               <LinearGradient
-                colors={inputText.trim() ? 
+                colors={(inputText.trim() || audioUri) ? 
                   ['rgba(255, 107, 107, 0.9)', 'rgba(255, 82, 82, 0.8)'] :
                   ['rgba(255, 255, 255, 0.1)', 'rgba(255, 255, 255, 0.05)']}
                 style={styles.sendButtonGradient}
@@ -317,7 +584,7 @@ const GroupChatScreen = () => {
                 <Ionicons 
                   name="send" 
                   size={20} 
-                  color={inputText.trim() ? "#fff" : "rgba(255,255,255,0.3)"} 
+                  color={(inputText.trim() || audioUri) ? "#fff" : "rgba(255,255,255,0.3)"} 
                 />
               </LinearGradient>
             </TouchableOpacity>
@@ -490,6 +757,90 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  // Audio recording styles
+  audioButton: {
+    marginRight: 10,
+    padding: 5,
+  },
+  audioPreviewContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 0, 255, 0.1)',
+    borderRadius: 15,
+    padding: 10,
+    marginBottom: 10,
+  },
+  audioPreviewButton: {
+    marginRight: 10,
+  },
+  audioPreviewInfo: {
+    flex: 1,
+  },
+  audioPreviewText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  audioPreviewDuration: {
+    color: '#999',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  audioDeleteButton: {
+    padding: 5,
+  },
+  recordingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 68, 68, 0.1)',
+    borderRadius: 15,
+    padding: 10,
+    marginBottom: 10,
+  },
+  recordingDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#ff4444',
+    marginRight: 10,
+  },
+  recordingText: {
+    color: '#ff4444',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  // Audio player styles
+  audioPlayerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 0, 255, 0.05)',
+    borderRadius: 12,
+    padding: 8,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  audioPlayButton: {
+    marginRight: 10,
+  },
+  audioWaveform: {
+    flex: 1,
+    height: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 2,
+    overflow: 'hidden',
+    marginRight: 10,
+  },
+  audioProgress: {
+    height: '100%',
+    backgroundColor: '#ff00ff',
+    borderRadius: 2,
+  },
+  audioDuration: {
+    color: '#999',
+    fontSize: 11,
+    minWidth: 60,
+    textAlign: 'right',
   },
 });
 
