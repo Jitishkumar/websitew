@@ -1012,11 +1012,10 @@ const MessageScreen = () => {
         sender_id: userId,
         timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
         read: false,
-        media_url: cloudinaryData.secure_url,
-        media_type: 'audio',
-        cloudinary_public_id: cloudinaryData.public_id,
-        created_at: new Date().toISOString(),
-        audio_duration: duration
+        audio_url: cloudinaryData.secure_url,
+        audio_public_id: cloudinaryData.public_id,
+        audio_duration: duration,
+        created_at: new Date().toISOString()
       };
 
       const updatedMessages = [...messages, newMessage];
@@ -1039,9 +1038,9 @@ const MessageScreen = () => {
           sender_id: userId,
           receiver_id: recipientId,
           content: newMessage.text,
-          media_url: cloudinaryData.secure_url,
-          media_type: 'audio',
-          cloudinary_public_id: cloudinaryData.public_id,
+          audio_url: cloudinaryData.secure_url,
+          audio_public_id: cloudinaryData.public_id,
+          audio_duration: duration,
           created_at: new Date().toISOString()
         })
         .select()
@@ -1544,7 +1543,7 @@ const MessageScreen = () => {
             </View>
           ) : null}
 
-          {item.text ? (
+          {item.text && !item.audio_url ? (
             <TouchableOpacity
               onLongPress={() => onLongPress(item)}
               onPress={() => {
@@ -1803,6 +1802,14 @@ const MessageScreen = () => {
                 />
               )}
             </TouchableOpacity>
+          ) : null}
+          
+          {/* Audio Message Player (for new audio_url field) */}
+          {item.audio_url ? (
+            <MessageAudioPlayer 
+              audioUrl={item.audio_url} 
+              duration={item.audio_duration || 0}
+            />
           ) : null}
           
           <View style={styles.messageFooter}>
@@ -3067,6 +3074,43 @@ const styles = StyleSheet.create({
     color: '#ff4444',
     fontSize: 14,
     fontWeight: 'bold',
+  },
+  // Message audio player styles
+  messageAudioPlayerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    padding: 10,
+    marginVertical: 8,
+  },
+  messageAudioPlayButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  messageAudioWaveform: {
+    flex: 1,
+    height: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 2,
+    overflow: 'hidden',
+    marginRight: 10,
+  },
+  messageAudioProgress: {
+    height: '100%',
+    backgroundColor: '#fff',
+    borderRadius: 2,
+  },
+  messageAudioDuration: {
+    color: '#fff',
+    fontSize: 11,
+    minWidth: 70,
+    textAlign: 'right',
   },
   audioMessageContainer: {
     flexDirection: 'row',
