@@ -292,6 +292,28 @@ const ShareUserSelectionScreen = () => {
           </View>
         )}
 
+        {/* Share to Your Story Button */}
+        <TouchableOpacity
+          style={styles.shareToStoryButton}
+          onPress={() => navigation.navigate('StoryCreation', { sharePayload })}
+        >
+          <LinearGradient
+            colors={['#6c3fd8', '#8b5cf6', '#a78bfa']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.shareToStoryGradient}
+          >
+            <View style={styles.shareToStoryIcon}>
+              <Ionicons name="add-circle" size={24} color="#fff" />
+            </View>
+            <View style={styles.shareToStoryContent}>
+              <Text style={styles.shareToStoryTitle}>Share to Your Story</Text>
+              <Text style={styles.shareToStorySubtitle}>Add to your story with custom positioning</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={24} color="rgba(255,255,255,0.7)" />
+          </LinearGradient>
+        </TouchableOpacity>
+
         {selectedUsers.length > 0 && (
           <View style={styles.selectedUsersContainer}>
             <Text style={styles.selectedUsersTitle}>

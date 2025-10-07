@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TextInput, ScrollView, Image, TouchableOpacity, ActivityIndicator, Animated, Modal, Alert, StatusBar } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -31,10 +31,88 @@ const MessagesScreen = () => {
   const [groupDescription, setGroupDescription] = useState('');
   const [selectedMembers, setSelectedMembers] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
-  
-  // Cache keys
+  const [showConversationOptions, setShowConversationOptions] = useState(false);
+  const [selectedConversation, setSelectedConversation] = useState(null);
   const CONVERSATIONS_CACHE_KEY = 'conversations_cache';
   const CONVERSATIONS_METADATA_KEY = 'conversations_metadata';
+  
+  // Animation refs
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+  const scaleAnim = useRef(new Animated.Value(0.8)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const searchBarAnim = useRef(new Animated.Value(0)).current;
+  const shimmerAnim = useRef(new Animated.Value(0)).current;
+  const glowAnim = useRef(new Animated.Value(0)).current;
+  
+  // Animation functions
+  const startAnimations = () => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(searchBarAnim, {
+        toValue: 1,
+        duration: 1000,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const startContinuousAnimations = () => {
+    // Pulse animation
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.05,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+
+    // Shimmer animation
+    Animated.loop(
+      Animated.timing(shimmerAnim, {
+        toValue: 1,
+        duration: 2000,
+        useNativeDriver: true,
+      })
+    ).start();
+
+    // Glow animation
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowAnim, {
+          toValue: 1,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(glowAnim, {
+          toValue: 0,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  };
   
   // Function to mark a conversation as read
   const handleMarkAsRead = async (conversation) => {
@@ -145,6 +223,12 @@ const MessagesScreen = () => {
       return Infinity;
     }
   };
+  
+  // Initialize animations
+  useEffect(() => {
+    startAnimations();
+    startContinuousAnimations();
+  }, []);
   
   // Get current user and set up subscriptions
   useEffect(() => {
@@ -342,8 +426,10 @@ const MessagesScreen = () => {
         const participants = [userId, otherUserId].sort();
         const conversationId = `${participants[0]}_${participants[1]}`;
         
-        // Only count unread messages that were sent to the current user (not sent by them)
-        const isUnread = message.receiver_id === userId && !message.read;
+        // Only count unread messages that were sent to the current user and not dismissed
+        const dismissedBy = message.dismissed_by || [];
+        const isDismissed = dismissedBy.includes(userId);
+        const isUnread = message.receiver_id === userId && !message.read && !isDismissed;
         
         if (!conversationsMap[conversationId]) {
           conversationsMap[conversationId] = {
@@ -893,7 +979,10 @@ const MessagesScreen = () => {
   );
 
   return (
-    <LinearGradient colors={['#1a1a2e', '#16213e', '#0f3460']} style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: activeTab === 'communities' ? '#000' : undefined }]}>
+      {activeTab !== 'communities' && (
+        <LinearGradient colors={['#1a1a2e', '#16213e', '#0f3460']} style={StyleSheet.absoluteFillObject} />
+      )}
       <LinearGradient
         colors={['rgba(102, 126, 234, 0.3)', 'rgba(156, 136, 255, 0.2)', 'transparent']}
         style={styles.header}
@@ -926,34 +1015,84 @@ const MessagesScreen = () => {
         </TouchableOpacity>
       </LinearGradient>
 
+      {/* Enhanced Search Container */}
+      <Animated.View
+        style={[
+          styles.searchContainer,
+          {
+            opacity: searchBarAnim,
+            transform: [
+              { scale: scaleAnim },
+              { translateY: slideAnim }
+            ]
+          }
+        ]}
+      >
+        {/* Search container glow */}
+        <Animated.View
+          style={[
+            styles.searchGlow,
+            {
+              opacity: glowAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0.2, 0.6]
+              })
+            }
+          ]}
+        />
+        
         <LinearGradient
-          colors={['rgba(102, 126, 234, 0.1)', 'rgba(156, 136, 255, 0.05)']}
-          start={{x: 0, y: 0}}
-          end={{x: 1, y: 1}}
-          style={styles.searchContainer}
+          colors={['rgba(26, 26, 46, 0.9)', 'rgba(22, 33, 62, 0.8)']}
+          style={styles.searchInputContainer}
+        >
+          <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+            <Ionicons name="search" size={20} color="#ff00ff" style={styles.searchIcon} />
+          </Animated.View>
+          
+          <TextInput
+            style={styles.searchInput}
+            placeholder={activeTab === 'communities' ? "Search groups..." : "Search conversations..."}
+            placeholderTextColor="rgba(255,255,255,0.4)"
+            value={searchQuery}
+            onChangeText={(text) => {
+              setSearchQuery(text);
+              if (activeTab === 'communities' && currentUserId) {
+                fetchPublicGroups(currentUserId, text);
+              }
+            }}
+          />
+          
+          {searchLoading && (
+            <ActivityIndicator size="small" color="#667eea" style={styles.searchLoader} />
+          )}
+        </LinearGradient>
+        
+        {/* Shimmer effect */}
+        <Animated.View
+          style={[
+            styles.shimmerOverlay,
+            {
+              opacity: shimmerAnim.interpolate({
+                inputRange: [0, 0.5, 1],
+                outputRange: [0, 0.3, 0]
+              }),
+              transform: [{
+                translateX: shimmerAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [-100, 100]
+                })
+              }]
+            }
+          ]}
         >
           <LinearGradient
-            colors={['rgba(255, 255, 255, 0.08)', 'rgba(255, 255, 255, 0.04)']}
-            style={styles.searchInputContainer}
-          >
-            <Ionicons name="search" size={20} color="rgba(255,255,255,0.6)" style={styles.searchIcon} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder={activeTab === 'communities' ? "Search groups..." : "Search conversations..."}
-              placeholderTextColor="rgba(255,255,255,0.4)"
-              value={searchQuery}
-              onChangeText={(text) => {
-                setSearchQuery(text);
-                if (activeTab === 'communities' && currentUserId) {
-                  fetchPublicGroups(currentUserId, text);
-                }
-              }}
-            />
-            {searchLoading && (
-              <ActivityIndicator size="small" color="#667eea" style={styles.searchLoader} />
-            )}
-          </LinearGradient>
-        </LinearGradient>
+            colors={['transparent', 'rgba(255, 0, 255, 0.4)', 'rgba(0, 255, 255, 0.4)', 'transparent']}
+            start={{x: 0, y: 0}}
+            end={{x: 1, y: 0}}
+            style={styles.shimmerGradient}
+          />
+        </Animated.View>
+      </Animated.View>
 
         {/* Tab Navigation */}
         <View style={styles.tabContainer}>
@@ -1008,6 +1147,10 @@ const MessagesScreen = () => {
                     recipientName: conversation.name,
                     recipientAvatar: conversation.avatar,
                   });
+                }}
+                onLongPress={() => {
+                  setSelectedConversation(conversation);
+                  setShowConversationOptions(true);
                 }}
               >
                 <LinearGradient
@@ -1267,12 +1410,12 @@ const MessagesScreen = () => {
               </View>
 
               <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Add Members * ({allUsers.length} users available)</Text>
-                {allUsers.length === 0 ? (
+                <Text style={styles.inputLabel}>Add Members * ({allUsers ? allUsers.length : 0} users available)</Text>
+                {allUsers && allUsers.length === 0 ? (
                   <Text style={styles.noUsersText}>Loading users...</Text>
                 ) : (
                   <ScrollView style={styles.membersList} nestedScrollEnabled>
-                    {allUsers.map((user) => (
+                    {allUsers && allUsers.map((user) => (
                     <TouchableOpacity
                       key={user.id}
                       style={[
@@ -1333,7 +1476,44 @@ const MessagesScreen = () => {
           </LinearGradient>
         </View>
       </Modal>
-    </LinearGradient>
+
+      {/* Conversation Options Modal */}
+      <Modal
+        visible={showConversationOptions}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowConversationOptions(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.optionsModalContent}>
+            <View style={styles.optionsModalHeader}>
+              <Text style={styles.optionsModalTitle}>
+                {selectedConversation?.name || 'Conversation Options'}
+              </Text>
+              <TouchableOpacity onPress={() => setShowConversationOptions(false)}>
+                <Ionicons name="close" size={24} color="#fff" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.optionsModalBody}>
+              <TouchableOpacity
+                style={styles.optionButton}
+                onPress={() => {
+                  if (selectedConversation) {
+                    handleMarkAsRead(selectedConversation);
+                  }
+                  setShowConversationOptions(false);
+                }}
+              >
+                <Ionicons name="checkmark-circle-outline" size={24} color="#00ff88" />
+                <Text style={styles.optionButtonText}>Mark as Read</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+    </View>
   );
 };
 
@@ -1394,33 +1574,49 @@ const styles = StyleSheet.create({
     padding: 5,
   },
   searchContainer: {
-    marginHorizontal: 20,
-    marginVertical: 15,
-    borderRadius: 15,
-    overflow: 'hidden',
-    shadowColor: '#667eea',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    margin: 16,
+    marginTop: 8,
+    position: 'relative',
+  },
+  searchGlow: {
+    position: 'absolute',
+    top: -4,
+    left: -4,
+    right: -4,
+    bottom: -4,
+    borderRadius: 29,
+    backgroundColor: 'rgba(255, 0, 255, 0.3)',
+  },
+  shimmerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: 100,
+  },
+  shimmerGradient: {
+    flex: 1,
+    borderRadius: 25,
   },
   searchInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 15,
-    height: 45,
-    borderWidth: 1,
-    borderColor: 'rgba(102, 126, 234, 0.3)',
-    borderRadius: 15,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 0, 255, 0.3)',
+    borderRadius: 25,
   },
   searchIcon: {
-    marginRight: 10,
+    marginRight: 12,
   },
   searchInput: {
     flex: 1,
     height: 45,
     color: '#fff',
     fontSize: 16,
+    fontWeight: '500',
   },
   searchLoader: {
     marginLeft: 10,
@@ -1762,6 +1958,47 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.8)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  optionsModalContent: {
+    width: '80%',
+    maxWidth: 300,
+    backgroundColor: 'rgba(26, 26, 46, 0.95)',
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 0, 255, 0.3)',
+  },
+  optionsModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+  },
+  optionsModalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    flex: 1,
+  },
+  optionsModalBody: {
+    paddingVertical: 10,
+  },
+  optionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 15,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    marginBottom: 8,
+  },
+  optionButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '500',
+    marginLeft: 15,
   },
   modalContent: {
     width: '95%',

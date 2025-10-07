@@ -429,7 +429,7 @@ const GroupChatScreen = () => {
   };
 
   return (
-    <LinearGradient colors={['#1a1a2e', '#16213e', '#0f3460']} style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: '#111' }]}>
       <StatusBar style="light" />
       
       {/* Header */}
@@ -591,7 +591,7 @@ const GroupChatScreen = () => {
           </LinearGradient>
         </LinearGradient>
       </KeyboardAvoidingView>
-    </LinearGradient>
+    </View>
   );
 };
 
@@ -692,7 +692,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 5,
   },
   ownBubble: {
-    backgroundColor: 'rgba(255, 107, 107, 0.8)',
+    backgroundColor: 'rgba(156, 136, 255, 0.4)',
     borderBottomRightRadius: 5,
   },
   otherBubble: {

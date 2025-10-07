@@ -19,23 +19,29 @@ export const MessageProvider = ({ children }) => {
     }
   };
 
-  // Fetch unread messages count
+  // Fetch unread messages count (excluding dismissed messages)
   const fetchUnreadCount = async () => {
     try {
       setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
       
       if (user) {
-        // Count unread messages
+        // Count unread messages that haven't been dismissed by this user
         const { data, error } = await supabase
           .from('messages')
-          .select('*')
+          .select('id, dismissed_by')
           .eq('receiver_id', user.id)
           .eq('read', false);
           
         if (error) throw error;
         
-        setUnreadCount(data ? data.length : 0);
+        // Filter out messages dismissed by current user
+        const undismissedMessages = data?.filter(msg => {
+          const dismissedBy = msg.dismissed_by || [];
+          return !dismissedBy.includes(user.id);
+        }) || [];
+        
+        setUnreadCount(undismissedMessages.length);
       }
     } catch (error) {
       console.error('Error fetching unread messages count:', error);
@@ -65,7 +71,55 @@ export const MessageProvider = ({ children }) => {
     }
   };
 
-  // Mark all messages from a conversation as read
+  // Clear local unread count without marking backend (for when read receipts are off)
+  const clearLocalUnreadCount = async (conversationId) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        console.error('User not authenticated');
+        return { success: false, count: 0 };
+      }
+
+      // Get unread messages for this conversation
+      const { data: unreadMessages, error: fetchError } = await supabase
+        .from('messages')
+        .select('id, dismissed_by')
+        .eq('conversation_id', conversationId)
+        .eq('receiver_id', user.id)
+        .eq('read', false);
+
+      if (fetchError) throw fetchError;
+
+      if (unreadMessages && unreadMessages.length > 0) {
+        // Mark messages as dismissed for this user (without marking as read)
+        for (const message of unreadMessages) {
+          const dismissedBy = message.dismissed_by || [];
+          
+          // Only update if user hasn't already dismissed
+          if (!dismissedBy.includes(user.id)) {
+            await supabase
+              .from('messages')
+              .update({ 
+                dismissed_by: [...dismissedBy, user.id]
+              })
+              .eq('id', message.id);
+          }
+        }
+        
+        // Decrease local unread count
+        setUnreadCount(prev => Math.max(0, prev - unreadMessages.length));
+        console.log(`Dismissed ${unreadMessages.length} notifications for conversation: ${conversationId}`);
+      }
+      
+      return { success: true, count: unreadMessages?.length || 0 };
+    } catch (error) {
+      console.error('Error clearing local unread count:', error);
+      return { success: false, count: 0 };
+    }
+  };
+
+  // Mark all messages from a conversation as read (respects read receipt settings)
   const markConversationAsRead = async (conversationId) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -75,7 +129,7 @@ export const MessageProvider = ({ children }) => {
         return false;
       }
       
-      // Check if read receipts are enabled for the current user
+      // Check read receipt preference
       const { data: settings, error: settingsError } = await supabase
         .from('user_message_settings')
         .select('show_read_receipts')
@@ -83,42 +137,46 @@ export const MessageProvider = ({ children }) => {
         .single();
 
       if (settingsError && settingsError.code !== 'PGRST116') {
-        console.error('Error fetching user settings:', settingsError);
+        console.error('Error fetching message settings:', settingsError);
       }
 
-      // If read receipts are disabled, don't mark messages as read
-      if (settings && !settings.show_read_receipts) {
-        console.log('Read receipts are disabled for the current user. Not marking messages as read.');
-        return true;
+      // If read receipts are disabled, only clear local count
+      if (settings && settings.show_read_receipts === false) {
+        console.log('Read receipts disabled; clearing local count only.');
+        const result = await clearLocalUnreadCount(conversationId);
+        return result.success;
       }
-      
-      // Get the most recent unread message (if any)
+
+      // Read receipts enabled: mark as read in backend
       const { data: unreadMessages, error: fetchError } = await supabase
         .from('messages')
         .select('id')
         .eq('conversation_id', conversationId)
         .eq('receiver_id', user.id)
         .eq('read', false)
-        .order('created_at', { ascending: false })
-        .limit(1);
+        .order('created_at', { ascending: false });
 
       if (fetchError) throw fetchError;
 
       if (unreadMessages && unreadMessages.length > 0) {
-        const lastUnreadId = unreadMessages[0].id;
-        // Mark only the latest unread message as read
+        const unreadIds = unreadMessages.map(message => message.id);
+
+        // Mark all unread messages as read in backend
         const { error: updateError } = await supabase
           .from('messages')
           .update({ read: true })
-          .eq('id', lastUnreadId);
+          .in('id', unreadIds);
 
         if (updateError) throw updateError;
 
-        // Decrease unread count by 1
-        setUnreadCount(prev => Math.max(0, prev - 1));
-        console.log(`Marked latest message (${lastUnreadId}) as read in conversation: ${conversationId}`);
+        // Decrease unread count
+        setUnreadCount(prev => Math.max(0, prev - unreadIds.length));
+        console.log(`Marked ${unreadIds.length} messages as read (with receipts) in conversation: ${conversationId}`);
       }
-      return true; // Operation completed successfully
+      
+      // Refresh total unread count
+      await fetchUnreadCount();
+      return true;
     } catch (error) {
       console.error('Error marking conversation as read:', error);
       return false;
@@ -271,6 +329,7 @@ export const MessageProvider = ({ children }) => {
         fetchUnreadCount,
         markMessageAsRead,
         markConversationAsRead,
+        clearLocalUnreadCount,
         markAllAsRead,
         onlineStatus,
         fetchOnlineStatus,

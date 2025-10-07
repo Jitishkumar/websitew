@@ -13,7 +13,8 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
-  Dimensions
+  Dimensions,
+  PanResponder
 } from 'react-native';
 import { Video } from 'expo-av';
 import { Audio } from 'expo-av';
@@ -29,7 +30,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { cloudinaryConfig, uploadToCloudinary } from '../config/cloudinary';
 import { NotificationService } from '../services/NotificationService';
 
-// Audio Player Component for Messages
+// Audio Player Component for Messages (same as CommentScreen)
 const MessageAudioPlayer = ({ audioUrl, duration }) => {
   const [sound, setSound] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -92,11 +93,11 @@ const MessageAudioPlayer = ({ audioUrl, duration }) => {
         <Ionicons 
           name={isPlaying ? 'pause' : 'play'} 
           size={20} 
-          color="#fff" 
+          color="#ff00ff" 
         />
       </TouchableOpacity>
       <View style={styles.messageAudioWaveform}>
-        <View style={[styles.messageAudioProgress, { width: `${(position / audioDuration) * 100}%` }]} />
+        <View style={[styles.messageAudioProgress, { width: `${(position / (audioDuration || 1)) * 100}%` }]} />
       </View>
       <Text style={styles.messageAudioDuration}>
         {formatTime(position)} / {formatTime(audioDuration)}
@@ -1817,7 +1818,7 @@ const MessageScreen = () => {
           
           <View style={styles.messageFooter}>
             <Text style={styles.timestamp}>{item.timestamp}</Text>
-            {item.sender === 'me' && (
+            {item.sender === 'me' && currentUserReadReceipts && (
               <View style={styles.readStatus}>
                 <Ionicons 
                   name={item.read && recipientReadReceipts ? "checkmark-done" : "checkmark"} 
@@ -3106,7 +3107,7 @@ const styles = StyleSheet.create({
   },
   messageAudioProgress: {
     height: '100%',
-    backgroundColor: '#fff',
+    backgroundColor: '#ff00ff',
     borderRadius: 2,
   },
   messageAudioDuration: {
