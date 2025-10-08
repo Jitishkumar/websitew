@@ -553,10 +553,20 @@ const StoriesScreen = () => {
   const CARD_W = 250;
   const CARD_H = 350;
   const cardScale = Number(currentStory?.scale) > 0 ? Number(currentStory.scale) : 1;
-  const centerX = (currentStory?.position_x ?? 0.5) * viewerSize.width;
-  const centerY = (currentStory?.position_y ?? 0.5) * viewerSize.height;
-  const leftPos = centerX - (CARD_W * cardScale) / 2;
-  const topPos = centerY - (CARD_H * cardScale) / 2;
+  const sidePadding = 12;
+  // Reserve space at top for header/progress and at bottom for CTA/gesture bar
+  const topReserve = 90;
+  const bottomReserve = currentStory.user_id === currentUserId ? 110 : 40;
+  // Compute available height first, then cap scale to fit
+  const availableHeight = Math.max(0, viewerSize.height - topReserve - bottomReserve);
+  const maxScaleByWidth = (viewerSize.width - 2 * sidePadding) / CARD_W;
+  const maxScaleByHeight = availableHeight / CARD_H;
+  const cardScaleUsed = Math.max(0.3, Math.min(cardScale, maxScaleByWidth, maxScaleByHeight));
+  const scaledW = CARD_W * cardScaleUsed;
+  const scaledH = CARD_H * cardScaleUsed;
+  // Always center within reserved area
+  const leftPos = Math.max(sidePadding, (viewerSize.width - scaledW) / 2);
+  const topPos = topReserve + Math.max(0, (availableHeight - scaledH) / 2);
   
   return (
     <LinearGradient colors={['#000000', '#1a0033', '#000000']} style={styles.container}>
@@ -634,27 +644,35 @@ const StoriesScreen = () => {
           }}>
             {/* If this is a shared story, render as a positioned small card (center-based) */}
             {isShared ? (
-              <View
-                style={[
-                  styles.sharedCardContainer,
-                  {
-                    width: CARD_W * cardScale,
-                    height: CARD_H * cardScale,
-                    left: leftPos,
-                    top: topPos,
-                  },
-                ]}
-              >
-                {currentStory.type === 'video' ? (
-                  <Video
-                    ref={videoRef}
-                    source={{ uri: currentStory.media_url }}
-                    style={styles.sharedMediaSmall}
-                    resizeMode="cover"
-                    play={!paused && !isTouchHolding.current && !menuVisible}
-                    loop={false}
-                    onPlaybackStatusUpdate={(status) => {
-                      if (status.didJustFinish) {
+              <View style={{
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                top: topReserve,
+                bottom: bottomReserve,
+                justifyContent: 'center',
+                alignItems: 'center',
+              }}>
+                <View
+                  style={[
+                    styles.sharedCardContainer,
+                    {
+                      position: 'relative',
+                      width: scaledW,
+                      height: scaledH,
+                    },
+                  ]}
+                >
+                  {currentStory.type === 'video' ? (
+                    <Video
+                      ref={videoRef}
+                      source={{ uri: currentStory.media_url }}
+                      style={styles.sharedMediaSmall}
+                      resizeMode="cover"
+                      play={!paused && !isTouchHolding.current && !menuVisible}
+                      loop={false}
+                      onPlaybackStatusUpdate={(status) => {
+                        if (status.didJustFinish) {
                         goToNextStory();
                       }
                     }}
@@ -666,6 +684,16 @@ const StoriesScreen = () => {
                     resizeMode="cover"
                   />
                 )}
+                {currentStory.shared_from_username && (
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    onPress={() => navigation.navigate('UserProfileScreen', { userId: currentStory.shared_from_user_id })}
+                    style={styles.cardTag}
+                  >
+                    <Text style={styles.cardTagText}>@{currentStory.shared_from_username}</Text>
+                  </TouchableOpacity>
+                )}
+                </View>
               </View>
             ) : (
               // Fallback: regular story full screen
@@ -694,23 +722,6 @@ const StoriesScreen = () => {
               </>
             )}
 
-            {/* Username overlay for shared stories (clickable) */}
-            {currentStory.shared_from_username && (
-              <TouchableOpacity
-                activeOpacity={0.9}
-                onPress={() => navigation.navigate('UserProfileScreen', { userId: currentStory.shared_from_user_id })}
-                style={styles.sharedStoryOverlay}
-              >
-                <LinearGradient
-                  colors={['transparent', 'rgba(0,0,0,0.8)']}
-                  style={styles.sharedUsernameGradient}
-                >
-                  <Text style={styles.sharedUsernameText}>
-                    @{currentStory.shared_from_username}
-                  </Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            )}
 
             {/* Mention bubble shown when tapping anywhere */}
             {currentStory.shared_from_username && mentionVisible && (
@@ -1003,11 +1014,9 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
   },
   sharedCardContainer: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
     width: 250,
     height: 350,
     borderRadius: 20,
@@ -1246,6 +1255,23 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '700',
     fontSize: 14,
+    letterSpacing: 0.3,
+  },
+  cardTag: {
+    position: 'absolute',
+    left: 10,
+    bottom: 10,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)'
+  },
+  cardTagText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 12,
     letterSpacing: 0.3,
   },
   noViewersContainer: {
