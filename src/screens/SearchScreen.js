@@ -5,15 +5,38 @@ import { supabase } from '../lib/supabase';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Video } from 'expo-av';
+import { useFocusEffect } from '@react-navigation/native';
 
 const { width, height } = Dimensions.get('window');
 
-const SearchScreen = () => {
+const MediaGridItem = ({ item, index, onPress, videoRefs }) => {
+  React.useEffect(() => {
+    videoRefs.current.set(item.id, videoRef);
+    return () => {
+      videoRefs.current.delete(item.id);
+    };
+  }, [item.id, videoRefs]);
+
+  const renderMediaItem = ({ item, index }) => (
+    <MediaGridItem
+      item={item}
+      index={index}
+      onPress={() => handleMediaPress(index)}
+      videoRefs={videoRefs}
+    />
+  );
+
+  const handleMediaPress = (index) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [selectedTab, setSelectedTab] = useState('users');
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+
+  // Video refs for cleanup
+  const videoRefs = useRef(new Map());
 
   // Animation refs
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -98,18 +121,45 @@ const SearchScreen = () => {
     ).start();
   };
 
-  // Search for users when query changes
+  // Search for users or media when query changes
   useEffect(() => {
-    const delayDebounceFn = setTimeout(() => {
+    if (selectedTab === 'users') {
       if (searchQuery.trim().length > 0) {
         searchUsers();
       } else {
         setSearchResults([]);
       }
-    }, 500); // Debounce search for 500ms
+    } else {
+      // For media tab, always load media (with or without search query)
+      searchMedia();
+    }
+  }, [searchQuery, selectedTab]);
 
-    return () => clearTimeout(delayDebounceFn);
-  }, [searchQuery]);
+  // Cleanup videos when screen loses focus
+  useFocusEffect(
+    React.useCallback(() => {
+      // Screen is focused - videos can be active
+      return () => {
+        // Screen is unfocused - cleanup all video resources
+        cleanupVideos();
+      };
+    }, [])
+  );
+
+  const cleanupVideos = async () => {
+    try {
+      const promises = [];
+      videoRefs.current.forEach((videoRef) => {
+        if (videoRef.current) {
+          promises.push(videoRef.current.unloadAsync().catch(() => {}));
+        }
+      });
+      await Promise.all(promises);
+      videoRefs.current.clear();
+    } catch (error) {
+      console.warn('Error cleaning up videos:', error);
+    }
+  };
 
   const searchUsers = async () => {
     setLoading(true);
@@ -168,6 +218,53 @@ const SearchScreen = () => {
       setSearchResults(usersWithStatus.filter(Boolean) || []);
     } catch (error) {
       console.error('Error searching users:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const searchMedia = async () => {
+    setLoading(true);
+    try {
+      let query = supabase
+        .from('posts')
+        .select(`
+          *,
+          profiles:user_id (id, username, avatar_url),
+          likes:post_likes (count),
+          comments:post_comments (count)
+        `)
+        .neq('type', 'text')  // Only media posts
+        .order('created_at', { ascending: false })
+        .limit(searchQuery.trim().length > 0 ? 50 : 100); // More results when showing all
+
+      // Add caption search filter if there's a search query
+      if (searchQuery.trim().length > 0) {
+        query = query.ilike('caption', `%${searchQuery}%`);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      // Filter out posts from private accounts
+      const publicPosts = [];
+      for (const post of data) {
+        const { data: settingsData } = await supabase
+          .from('user_settings')
+          .select('private_account')
+          .eq('user_id', post.user_id)
+          .maybeSingle();
+
+        // Include post if account is not private (default to public)
+        if (!settingsData?.private_account) {
+          publicPosts.push(post);
+        }
+      }
+
+      setSearchResults(publicPosts);
+    } catch (error) {
+      console.error('Error searching media:', error);
     } finally {
       setLoading(false);
     }
@@ -354,6 +451,65 @@ const SearchScreen = () => {
     </Animated.View>
   );
 
+  const renderMediaItem = ({ item, index }) => {
+    const videoRef = useRef(null);
+
+    // Store video ref for cleanup
+    React.useEffect(() => {
+      videoRefs.current.set(item.id, videoRef);
+      return () => {
+        videoRefs.current.delete(item.id);
+      };
+    }, [item.id]);
+
+    return (
+      <TouchableOpacity 
+        style={styles.mediaGridItem}
+        onPress={() => handleMediaPress(index)}
+        activeOpacity={0.8}
+      >
+        {item.type === 'video' ? (
+          <View style={styles.mediaContainer}>
+            <Video
+              ref={videoRef}
+              source={{ uri: item.media_url }}
+              style={styles.mediaImage}
+              resizeMode="cover"
+              shouldPlay={false}
+              positionMillis={1000} // Show thumbnail at 1 second
+              useNativeControls={false}
+            />
+            <View style={styles.videoOverlay}>
+              <Ionicons name="play" size={24} color="#fff" />
+            </View>
+          </View>
+        ) : (
+          <Image 
+            source={{ uri: item.media_url }}
+            style={styles.mediaImage}
+            resizeMode="cover"
+          />
+        )}
+        
+        <View style={styles.mediaItemOverlay}>
+          <View style={styles.mediaItemStats}>
+            <Ionicons name="heart" size={14} color="#fff" />
+            <Text style={styles.mediaItemStatsText}>{item.likes?.[0]?.count || 0}</Text>
+            <Ionicons name="chatbubble" size={14} color="#fff" style={{ marginLeft: 8 }} />
+            <Text style={styles.mediaItemStatsText}>{item.comments?.[0]?.count || 0}</Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const handleMediaPress = (index) => {
+    navigation.navigate('PostViewer', {
+      posts: searchResults,
+      initialIndex: index,
+    });
+  };
+
   return (
     <View style={styles.container}>
       {/* Enhanced Header with animations */}
@@ -456,7 +612,7 @@ const SearchScreen = () => {
           
           <TextInput
             style={styles.searchInput}
-            placeholder="Search for users..."
+            placeholder={`Search for ${selectedTab === 'users' ? 'users' : 'media'}...`}
             placeholderTextColor="#999"
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -472,6 +628,30 @@ const SearchScreen = () => {
           )}
         </LinearGradient>
       </Animated.View>
+
+      {/* Tab Buttons */}
+      <View style={styles.tabsContainer}>
+        <TouchableOpacity
+          style={[styles.tabButton, selectedTab === 'users' && styles.activeTab]}
+          onPress={() => {
+            setSelectedTab('users');
+            setSearchResults([]);
+          }}
+        >
+          <Text style={[styles.tabButtonText, selectedTab === 'users' && styles.activeTabText]}>Users</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={[styles.tabButton, selectedTab === 'media' && styles.activeTab]}
+          onPress={() => {
+            setSelectedTab('media');
+            // Load media immediately when switching to media tab
+            searchMedia();
+          }}
+        >
+          <Text style={[styles.tabButtonText, selectedTab === 'media' && styles.activeTabText]}>Media</Text>
+        </TouchableOpacity>
+      </View>
 
       {loading ? (
         <Animated.View 
@@ -503,11 +683,14 @@ const SearchScreen = () => {
         >
           <FlatList
             data={searchResults}
-            renderItem={renderUserItem}
+            renderItem={selectedTab === 'users' ? renderUserItem : renderMediaItem}
             keyExtractor={(item) => item.id}
+            key={selectedTab}  // Force re-render when tab changes
+            numColumns={selectedTab === 'media' ? 3 : 1}
+            columnWrapperStyle={selectedTab === 'media' ? styles.gridRow : null}
             showsVerticalScrollIndicator={false}
             ListEmptyComponent={
-              searchQuery.length > 0 ? (
+              searchQuery.length > 0 || selectedTab === 'users' ? (
                 <Animated.View
                   style={[
                     styles.emptyContainer,
@@ -522,13 +705,19 @@ const SearchScreen = () => {
                     style={styles.emptyGradient}
                   >
                     <Ionicons name="search" size={60} color="#ff00ff" />
-                    <Text style={styles.emptyText}>No users found</Text>
-                    <Text style={styles.emptySubtext}>Try searching with different keywords</Text>
+                    <Text style={styles.emptyText}>
+                      {selectedTab === 'users' ? 'No users found' : 'No media found'}
+                    </Text>
+                    <Text style={styles.emptySubtext}>
+                      {searchQuery.length > 0 ? 'Try searching with different keywords' : 
+                       selectedTab === 'users' ? 'Start typing to search for users' : 
+                       'No public media posts available'}
+                    </Text>
                   </LinearGradient>
                 </Animated.View>
               ) : null
             }
-            contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
+            contentContainerStyle={selectedTab === 'media' ? styles.gridContainer : { paddingBottom: insets.bottom + 20 }}
           />
         </Animated.View>
       )}
@@ -740,6 +929,83 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     marginTop: 8,
+  },
+  tabsContainer: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderRadius: 20,
+    backgroundColor: 'rgba(26, 26, 46, 0.6)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 0, 255, 0.3)',
+    marginHorizontal: 4,
+  },
+  activeTab: {
+    backgroundColor: 'rgba(255, 0, 255, 0.2)',
+    borderColor: '#ff00ff',
+  },
+  tabButtonText: {
+    color: '#ccc',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  activeTabText: {
+    color: '#ff00ff',
+  },
+  mediaGridItem: {
+    flex: 1/3,
+    aspectRatio: 1,
+    margin: 1,
+    position: 'relative',
+  },
+  mediaContainer: {
+    flex: 1,
+    position: 'relative',
+  },
+  mediaImage: {
+    width: '100%',
+    height: '100%',
+  },
+  videoOverlay: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: [{ translateX: -12 }, { translateY: -12 }],
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 20,
+    padding: 8,
+  },
+  mediaItemOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    padding: 4,
+  },
+  mediaItemStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  mediaItemStatsText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginLeft: 2,
+  },
+  gridRow: {
+    justifyContent: 'space-between',
+  },
+  gridContainer: {
+    padding: 2,
+    paddingBottom: 100,
   },
 });
 

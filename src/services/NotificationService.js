@@ -18,11 +18,13 @@ export class NotificationService {
 
     try {
       if (Platform.OS === 'android') {
-        await Notifications.setNotificationChannelAsync('default', {
-          name: 'default',
+        await Notifications.setNotificationChannelAsync('messages', {
+          name: 'Messages',
           importance: Notifications.AndroidImportance.MAX,
+          sound: 'default',
           vibrationPattern: [0, 250, 250, 250],
           lightColor: '#FF231F7C',
+          lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
         });
       }
 
@@ -93,16 +95,20 @@ export class NotificationService {
         return;
       }
 
+      // Determine sender id from current session
+      const { data: { user: senderUser } } = await supabase.auth.getUser();
+
       // Send push notification
       const message = {
         to: tokenData.push_token,
         sound: 'default',
+        channelId: 'messages',
         title: `New message from ${senderName}`,
-        body: messageText.length > 100 ? messageText.substring(0, 97) + '...' : messageText,
+        body: messageText && messageText.length > 100 ? messageText.substring(0, 97) + '...' : (messageText || 'You received a message'),
         data: {
           type: 'message',
-          senderId: recipientUserId,
-          senderName: senderName
+          senderId: senderUser?.id || null,
+          senderName: senderName,
         },
         badge: 1,
       };
@@ -121,6 +127,23 @@ export class NotificationService {
       console.log('Notification sent:', result);
     } catch (error) {
       console.error('Error sending notification:', error);
+    }
+  }
+
+  static async showLocalMessageNotification({ title, body, data }) {
+    try {
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title,
+          body,
+          data,
+          sound: 'default',
+          channelId: 'messages',
+        },
+        trigger: null,
+      });
+    } catch (e) {
+      console.log('Error scheduling local notification:', e?.message || e);
     }
   }
 

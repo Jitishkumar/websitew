@@ -474,11 +474,11 @@ const ProfileScreen = () => {
           <View style={styles.coverStats}>
             <View style={styles.coverStatItem}>
               <MaterialIcons name="visibility" size={16} color="#ffd700" />
-              <Text style={styles.coverStatText}>{totalViews >= 1000 ? `${(totalViews / 1000).toFixed(1)}K` : totalViews}</Text>
+              <Text style={styles.coverStatText}>{totalViews >= 1000 ? `${Math.round(totalViews / 1000)}K` : totalViews}</Text>
             </View>
             <View style={styles.coverStatItem}>
               <MaterialIcons name="favorite" size={16} color="#ff69b4" />
-              <Text style={styles.coverStatText}>{totalLikes >= 1000 ? `${(totalLikes / 1000).toFixed(1)}K` : totalLikes}</Text>
+              <Text style={styles.coverStatText}>{totalLikes >= 1000 ? `${Math.round(totalLikes / 1000)}K` : totalLikes}</Text>
             </View>
           </View>
         </View>
