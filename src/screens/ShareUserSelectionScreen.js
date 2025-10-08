@@ -671,6 +671,45 @@ const styles = StyleSheet.create({
     marginTop: 15,
     fontWeight: '500',
   },
+  shareToStoryButton: {
+    marginHorizontal: 20,
+    marginBottom: 20,
+    borderRadius: 15,
+    overflow: 'hidden',
+    shadowColor: '#6c3fd8',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  shareToStoryGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 18,
+    gap: 15,
+  },
+  shareToStoryIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  shareToStoryContent: {
+    flex: 1,
+  },
+  shareToStoryTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 4,
+    letterSpacing: 0.5,
+  },
+  shareToStorySubtitle: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 14,
+  },
 });
 
 export default ShareUserSelectionScreen;

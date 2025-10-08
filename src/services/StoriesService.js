@@ -206,6 +206,64 @@ export class StoriesService {
       throw error;
     }
   }
+
+  // Create a shared story (post shared to story)
+  static async createStory(storyData) {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      // Check if user has any stories in the last 24 hours
+      const now = new Date();
+      const { data: existingStories, error: fetchError } = await supabase
+        .from('stories')
+        .select('id, story_group_id')
+        .eq('user_id', user.id)
+        .gte('created_at', new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString())
+        .order('created_at', { ascending: false });
+      
+      if (fetchError) throw fetchError;
+      
+      let storyGroupId;
+      let isFirstStory = true;
+      
+      if (existingStories && existingStories.length > 0) {
+        storyGroupId = existingStories[0].story_group_id;
+        isFirstStory = false;
+      } else {
+        storyGroupId = generateUUID();
+      }
+
+      // Insert the shared story
+      const { data, error } = await supabase
+        .from('stories')
+        .insert({
+          user_id: user.id,
+          media_url: storyData.media_url,
+          type: storyData.media_type || 'image',
+          caption: storyData.caption || '',
+          shared_from_user_id: storyData.shared_from_user_id || null,
+          shared_from_username: storyData.shared_from_username || null,
+          position_x: storyData.position_x || 0,
+          position_y: storyData.position_y || 0,
+          scale: storyData.scale || 1,
+          story_group_id: storyGroupId,
+          is_first_story: isFirstStory
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating shared story:', error);
+        return { success: false, error: error.message };
+      }
+
+      return { success: true, data };
+    } catch (error) {
+      console.error('Error in createStory:', error);
+      return { success: false, error: error.message };
+    }
+  }
   
   // Delete a story
   static async deleteStory(storyId) {

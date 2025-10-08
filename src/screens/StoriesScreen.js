@@ -40,6 +40,9 @@ const StoriesScreen = () => {
   const [currentUserId, setCurrentUserId] = useState(null);
   const [storyInfoVisible, setStoryInfoVisible] = useState(false);
   const [storyViewers, setStoryViewers] = useState([]);
+  const [viewerSize, setViewerSize] = useState({ width, height: height * 0.8 });
+  const [mentionVisible, setMentionVisible] = useState(false);
+  const mentionTimer = useRef(null);
   
   const videoRef = useRef(null);
   const progressInterval = useRef(null);
@@ -62,6 +65,7 @@ const StoriesScreen = () => {
     return () => {
       clearInterval(progressInterval.current);
       clearTimeout(storyTimeout.current);
+      if (mentionTimer.current) clearTimeout(mentionTimer.current);
     };
   }, []);
 
@@ -263,28 +267,40 @@ const StoriesScreen = () => {
   
   const handlePress = (event) => {
     const { locationX } = event.nativeEvent;
-    
-    // Determine if press is on left or right side of screen
-    if (locationX < width / 3) {
-      // Left side - go to previous story
+
+    // Edge taps still navigate
+    if (locationX < width / 6) {
       goToPreviousStory();
-    } else if (locationX > (width * 2) / 3) {
-      // Right side - go to next story
+      return;
+    }
+    if (locationX > (width * 5) / 6) {
       goToNextStory();
-    } else {
-      // Middle - pause/play
-      setPaused(!paused);
-      
-      if (videoRef.current) {
-        if (paused) {
-          videoRef.current.playAsync();
-        } else {
-          videoRef.current.pauseAsync();
-        }
+      return;
+    }
+
+    // If story has a shared mention, show the bubble like Instagram
+    if (currentStory?.shared_from_username) {
+      setMentionVisible(true);
+      setPaused(true);
+      if (mentionTimer.current) clearTimeout(mentionTimer.current);
+      mentionTimer.current = setTimeout(() => {
+        setMentionVisible(false);
+        setPaused(false);
+      }, 2000);
+      return;
+    }
+
+    // Otherwise toggle pause/play
+    setPaused(!paused);
+    if (videoRef.current) {
+      if (paused) {
+        videoRef.current.playAsync();
+      } else {
+        videoRef.current.pauseAsync();
       }
     }
   };
-  
+
   // Add touch handlers for press-to-pause functionality
   const handleTouchStart = () => {
     // Clear any existing touch timer
@@ -532,6 +548,25 @@ const StoriesScreen = () => {
   }
   
   const currentStory = stories[currentIndex];
+  // Precompute shared card geometry (center-based)
+  const isShared = !!(currentStory?.shared_from_username || typeof currentStory?.position_x === 'number');
+  const CARD_W = 250;
+  const CARD_H = 350;
+  const cardScale = Number(currentStory?.scale) > 0 ? Number(currentStory.scale) : 1;
+  const sidePadding = 12;
+  // Reserve space at top for header/progress and at bottom for CTA/gesture bar
+  const topReserve = 90;
+  const bottomReserve = currentStory.user_id === currentUserId ? 110 : 40;
+  // Compute available height first, then cap scale to fit
+  const availableHeight = Math.max(0, viewerSize.height - topReserve - bottomReserve);
+  const maxScaleByWidth = (viewerSize.width - 2 * sidePadding) / CARD_W;
+  const maxScaleByHeight = availableHeight / CARD_H;
+  const cardScaleUsed = Math.max(0.3, Math.min(cardScale, maxScaleByWidth, maxScaleByHeight));
+  const scaledW = CARD_W * cardScaleUsed;
+  const scaledH = CARD_H * cardScaleUsed;
+  // Always center within reserved area
+  const leftPos = Math.max(sidePadding, (viewerSize.width - scaledW) / 2);
+  const topPos = topReserve + Math.max(0, (availableHeight - scaledH) / 2);
   
   return (
     <LinearGradient colors={['#000000', '#1a0033', '#000000']} style={styles.container}>
@@ -603,60 +638,65 @@ const StoriesScreen = () => {
           </View>
           
           {/* Story Media */}
-          <View style={styles.mediaContainer}>
-            {currentStory.shared_from_user_id ? (
-              // Shared story with custom positioning and background (matches StoryCreationScreen)
-              <LinearGradient
-                colors={['#1a0f2e', '#2a1f3e', '#1a0f2e']}
-                style={styles.sharedStoryContainer}
-              >
-                <View 
+          <View style={styles.mediaContainer} onLayout={(e)=>{
+            const { width: w, height: h } = e.nativeEvent.layout;
+            if (w && h) setViewerSize({ width: w, height: h });
+          }}>
+            {/* If this is a shared story, render as a positioned small card (center-based) */}
+            {isShared ? (
+              <View style={{
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                top: topReserve,
+                bottom: bottomReserve,
+                justifyContent: 'center',
+                alignItems: 'center',
+              }}>
+                <View
                   style={[
-                    styles.sharedContentWrapper,
+                    styles.sharedCardContainer,
                     {
-                      left: currentStory.position_x || 0,
-                      top: currentStory.position_y || 0,
-                      transform: [{ scale: currentStory.scale || 1 }],
-                    }
+                      position: 'relative',
+                      width: scaledW,
+                      height: scaledH,
+                    },
                   ]}
                 >
                   {currentStory.type === 'video' ? (
                     <Video
                       ref={videoRef}
                       source={{ uri: currentStory.media_url }}
-                      style={styles.sharedMedia}
+                      style={styles.sharedMediaSmall}
                       resizeMode="cover"
                       play={!paused && !isTouchHolding.current && !menuVisible}
                       loop={false}
                       onPlaybackStatusUpdate={(status) => {
                         if (status.didJustFinish) {
-                          goToNextStory();
-                        }
-                      }}
-                    />
-                  ) : (
-                    <Image
-                      source={{ uri: currentStory.media_url }}
-                      style={styles.sharedMedia}
-                      resizeMode="cover"
-                    />
-                  )}
-                  
-                  {/* Username overlay on shared content */}
-                  {currentStory.shared_from_username && (
-                    <LinearGradient
-                      colors={['transparent', 'rgba(0,0,0,0.8)']}
-                      style={styles.sharedUsernameOverlay}
-                    >
-                      <Text style={styles.sharedUsername}>
-                        @{currentStory.shared_from_username}
-                      </Text>
-                    </LinearGradient>
-                  )}
+                        goToNextStory();
+                      }
+                    }}
+                  />
+                ) : (
+                  <Image
+                    source={{ uri: currentStory.media_url }}
+                    style={styles.sharedMediaSmall}
+                    resizeMode="cover"
+                  />
+                )}
+                {currentStory.shared_from_username && (
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    onPress={() => navigation.navigate('UserProfileScreen', { userId: currentStory.shared_from_user_id })}
+                    style={styles.cardTag}
+                  >
+                    <Text style={styles.cardTagText}>@{currentStory.shared_from_username}</Text>
+                  </TouchableOpacity>
+                )}
                 </View>
-              </LinearGradient>
+              </View>
             ) : (
-              // Regular story (full screen)
+              // Fallback: regular story full screen
               <>
                 {currentStory.type === 'video' ? (
                   <Video
@@ -680,6 +720,18 @@ const StoriesScreen = () => {
                   />
                 )}
               </>
+            )}
+
+
+            {/* Mention bubble shown when tapping anywhere */}
+            {currentStory.shared_from_username && mentionVisible && (
+              <TouchableOpacity
+                style={styles.mentionBubble}
+                activeOpacity={0.95}
+                onPress={() => navigation.navigate('UserProfileScreen', { userId: currentStory.shared_from_user_id })}
+              >
+                <Text style={styles.mentionText}>@{currentStory.shared_from_username}</Text>
+              </TouchableOpacity>
             )}
           </View>
         </TouchableOpacity>
@@ -964,6 +1016,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     position: 'relative',
   },
+  sharedCardContainer: {
+    width: 250,
+    height: 350,
+    borderRadius: 20,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  sharedMediaSmall: {
+    width: '100%',
+    height: '100%',
+  },
+  
   mediaGlow: {
     position: 'absolute',
     top: -10,
@@ -982,49 +1053,6 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     borderRadius: 10,
-  },
-  sharedStoryContainer: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
-    position: 'relative',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  sharedContentWrapper: {
-    position: 'absolute',
-    width: 200,
-    height: 300,
-    borderRadius: 15,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.3)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  sharedMedia: {
-    width: '100%',
-    height: '100%',
-  },
-  sharedUsernameOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-  },
-  sharedUsername: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '700',
-    textShadowColor: 'rgba(0,0,0,0.8)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
   },
   shimmerOverlay: {
     position: 'absolute',
@@ -1189,6 +1217,62 @@ const styles = StyleSheet.create({
     color: '#ff00ff',
     fontSize: 12,
     fontWeight: 'bold',
+  },
+  sharedStoryOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 80,
+  },
+  sharedUsernameGradient: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    paddingBottom: 15,
+    paddingHorizontal: 20,
+  },
+  sharedUsernameText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+    textShadowColor: 'rgba(0,0,0,0.9)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+    letterSpacing: 0.5,
+  },
+  mentionBubble: {
+    position: 'absolute',
+    bottom: 110,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  mentionText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 14,
+    letterSpacing: 0.3,
+  },
+  cardTag: {
+    position: 'absolute',
+    left: 10,
+    bottom: 10,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)'
+  },
+  cardTagText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 12,
+    letterSpacing: 0.3,
   },
   noViewersContainer: {
     alignItems: 'center',
