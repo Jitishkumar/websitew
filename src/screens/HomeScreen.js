@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useVideo } from '../context/VideoContext';
 import { useNotifications } from '../context/NotificationContext';
+import { useTheme } from '../context/ThemeContext';
 import { StyleSheet, View, Text, TouchableOpacity, TextInput, Image, Modal, ActivityIndicator, FlatList, RefreshControl, Alert, Animated, ScrollView, Platform, Dimensions } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useFonts, Poppins_700Bold } from '@expo-google-fonts/poppins';
@@ -11,7 +12,8 @@ import { StoriesService } from '../services/StoriesService';
 import { PostsService } from '../services/PostsService';
 import { Video } from 'expo-av';
 import { supabase } from '../lib/supabase';
-import ThemeAwarePostItem from '../components/ThemeAwarePostItem';
+import PostItem from '../components/PostItem';
+import PostItemOld from '../components/PostItemold';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Easing } from 'react-native';
@@ -22,6 +24,7 @@ const isSmallScreen = screenWidth < 380;
 const HomeScreen = () => {
   const navigation = useNavigation();
   const { unreadCount: notificationUnreadCount } = useNotifications();
+  const { isDarkMode } = useTheme();
   const [stories, setStories] = useState([]);
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -507,7 +510,9 @@ const HomeScreen = () => {
     <>
       <Animated.View style={{ opacity: headerAnim, transform: [{ translateY: slideAnim }] }}>
         <LinearGradient
-          colors={['rgba(10, 10, 42, 0.95)', 'rgba(15, 15, 35, 0.98)', 'rgba(8, 8, 28, 0.99)']}
+          colors={isDarkMode ? 
+            ['rgba(10, 10, 42, 0.95)', 'rgba(15, 15, 35, 0.98)', 'rgba(8, 8, 28, 0.99)'] : 
+            ['#0a0a2a', '#1a1a4a', '#2a1a4a']}
           start={{x: 0, y: 0}}
           end={{x: 1, y: 1}}
           style={styles.header}
@@ -576,7 +581,7 @@ const HomeScreen = () => {
                     }}>
                       <MaterialIcons name="flash-on" size={22} color="#fff" style={styles.logoIcon} />
                     </Animated.View>
-                    <Text style={styles.logo}>Flexx</Text>
+                    <Text style={styles.logo}>{isDarkMode ? 'Flexx' : 'flexx'}</Text>
                   </View>
                 </Animated.View>
                 <Animated.View style={[
@@ -637,23 +642,46 @@ const HomeScreen = () => {
               onPress={() => navigation.navigate('Notifications')}
               activeOpacity={0.7}
             >
-              <View style={styles.iconBackground}>
-                <Ionicons name="notifications-outline" size={isSmallScreen ? 18 : 20} color="rgba(255, 255, 255, 0.8)" />
-                {notificationUnreadCount > 0 && (
-                  <LinearGradient
-                    colors={['#ff00ff', '#ff6b9d']}
-                    style={[styles.notificationBadge, {
-                      width: notificationUnreadCount > 99 ? 20 : notificationUnreadCount > 9 ? 18 : 16,
-                    }]}
-                  >
-                    <Text style={[styles.notificationBadgeText, {
-                      fontSize: notificationUnreadCount > 99 ? 8 : 10,
-                    }]}>
-                      {notificationUnreadCount > 99 ? '99+' : notificationUnreadCount}
-                    </Text>
-                  </LinearGradient>
-                )}
-              </View>
+              {isDarkMode ? (
+                <View style={styles.iconBackground}>
+                  <Ionicons name="notifications-outline" size={isSmallScreen ? 18 : 20} color="rgba(255, 255, 255, 0.8)" />
+                  {notificationUnreadCount > 0 && (
+                    <LinearGradient
+                      colors={['#ff00ff', '#ff6b9d']}
+                      style={[styles.notificationBadge, {
+                        width: notificationUnreadCount > 99 ? 20 : notificationUnreadCount > 9 ? 18 : 16,
+                      }]}
+                    >
+                      <Text style={[styles.notificationBadgeText, {
+                        fontSize: notificationUnreadCount > 99 ? 8 : 10,
+                      }]}>
+                        {notificationUnreadCount > 99 ? '99+' : notificationUnreadCount}
+                      </Text>
+                    </LinearGradient>
+                  )}
+                </View>
+              ) : (
+                <LinearGradient
+                  colors={['rgba(255, 0, 255, 0.2)', 'rgba(255, 0, 255, 0.1)']}
+                  style={styles.iconBackground}
+                >
+                  <Ionicons name="notifications-outline" size={22} color="#ff00ff" />
+                  {notificationUnreadCount > 0 && (
+                    <LinearGradient
+                      colors={['#ff00ff', '#ff6b9d']}
+                      style={[styles.notificationBadge, {
+                        width: notificationUnreadCount > 99 ? 20 : notificationUnreadCount > 9 ? 18 : 16,
+                      }]}
+                    >
+                      <Text style={[styles.notificationBadgeText, {
+                        fontSize: notificationUnreadCount > 99 ? 8 : 10,
+                      }]}>
+                        {notificationUnreadCount > 99 ? '99+' : notificationUnreadCount}
+                      </Text>
+                    </LinearGradient>
+                  )}
+                </LinearGradient>
+              )}
             </TouchableOpacity>
           
             <TouchableOpacity 
@@ -661,9 +689,18 @@ const HomeScreen = () => {
               onPress={() => navigation.navigate('Trending')}
               activeOpacity={0.7}
             >
-              <View style={styles.iconBackground}>
-                <MaterialIcons name="trending-up" size={isSmallScreen ? 18 : 20} color="rgba(255, 255, 255, 0.8)" />
-              </View>
+              {isDarkMode ? (
+                <View style={styles.iconBackground}>
+                  <MaterialIcons name="trending-up" size={isSmallScreen ? 18 : 20} color="rgba(255, 255, 255, 0.8)" />
+                </View>
+              ) : (
+                <LinearGradient
+                  colors={['rgba(255, 107, 157, 0.2)', 'rgba(255, 107, 157, 0.1)']}
+                  style={styles.iconBackground}
+                >
+                  <MaterialIcons name="trending-up" size={22} color="#ff6b9d" />
+                </LinearGradient>
+              )}
             </TouchableOpacity>
             
             <TouchableOpacity 
@@ -671,9 +708,18 @@ const HomeScreen = () => {
               onPress={() => navigation.navigate('Search')}
               activeOpacity={0.7}
             >
-              <View style={styles.iconBackground}>
-                <MaterialIcons name="search" size={isSmallScreen ? 18 : 20} color="rgba(255, 255, 255, 0.8)" />
-              </View>
+              {isDarkMode ? (
+                <View style={styles.iconBackground}>
+                  <MaterialIcons name="search" size={isSmallScreen ? 18 : 20} color="rgba(255, 255, 255, 0.8)" />
+                </View>
+              ) : (
+                <LinearGradient
+                  colors={['rgba(196, 69, 105, 0.2)', 'rgba(196, 69, 105, 0.1)']}
+                  style={styles.iconBackground}
+                >
+                  <MaterialIcons name="search" size={22} color="#c44569" />
+                </LinearGradient>
+              )}
             </TouchableOpacity>
             
             <TouchableOpacity 
@@ -681,9 +727,18 @@ const HomeScreen = () => {
               onPress={() => setShowTermsModal(true)}
               activeOpacity={0.7}
             >
-              <View style={styles.iconBackground}>
-                <MaterialIcons name="videocam" size={isSmallScreen ? 18 : 20} color="rgba(255, 255, 255, 0.8)" />
-              </View>
+              {isDarkMode ? (
+                <View style={styles.iconBackground}>
+                  <MaterialIcons name="videocam" size={isSmallScreen ? 18 : 20} color="rgba(255, 255, 255, 0.8)" />
+                </View>
+              ) : (
+                <LinearGradient
+                  colors={['rgba(255, 0, 255, 0.2)', 'rgba(255, 0, 255, 0.1)']}
+                  style={styles.iconBackground}
+                >
+                  <MaterialIcons name="videocam" size={22} color="#ff00ff" />
+                </LinearGradient>
+              )}
             </TouchableOpacity>
           </View>
         </LinearGradient>
@@ -691,19 +746,33 @@ const HomeScreen = () => {
 
       <Animated.View style={{ opacity: createPostAnim, transform: [{ scale: scaleAnim }] }}>
         <LinearGradient
-          colors={['rgba(255, 255, 255, 0.03)', 'rgba(255, 255, 255, 0.01)', 'transparent']}
+          colors={isDarkMode ? 
+            ['rgba(255, 255, 255, 0.03)', 'rgba(255, 255, 255, 0.01)', 'transparent'] : 
+            ['rgba(255, 0, 255, 0.1)', 'rgba(255, 0, 255, 0.05)', 'transparent']}
           start={{x: 0, y: 0}}
           end={{x: 1, y: 1}}
           style={styles.createPost}
         >
           <View style={styles.postInputContainer}>
             <View style={styles.avatarContainer}>
-              <View style={styles.avatarBorder}>
-                <Image
-                  style={styles.userAvatar}
-                  source={{ uri: 'https://via.placeholder.com/40' }}
-                />
-              </View>
+              {isDarkMode ? (
+                <View style={styles.avatarBorder}>
+                  <Image
+                    style={styles.userAvatar}
+                    source={{ uri: 'https://via.placeholder.com/40' }}
+                  />
+                </View>
+              ) : (
+                <LinearGradient
+                  colors={['#ff00ff', '#ff6b9d', '#c44569']}
+                  style={styles.avatarBorder}
+                >
+                  <Image
+                    style={styles.userAvatar}
+                    source={{ uri: 'https://via.placeholder.com/40' }}
+                  />
+                </LinearGradient>
+              )}
               <View style={styles.avatarGlow} />
             </View>
             
@@ -712,10 +781,20 @@ const HomeScreen = () => {
               onPress={handleCreatePost}
               activeOpacity={0.8}
             >
-              <View style={styles.postInputGradient}>
-                <MaterialIcons name="edit" size={20} color="rgba(255, 255, 255, 0.6)" />
-                <Text style={styles.postInputPlaceholder}>Share Something</Text>
-              </View>
+              {isDarkMode ? (
+                <View style={styles.postInputGradient}>
+                  <MaterialIcons name="edit" size={20} color="rgba(255, 255, 255, 0.6)" />
+                  <Text style={styles.postInputPlaceholder}>Share Something</Text>
+                </View>
+              ) : (
+                <LinearGradient
+                  colors={['rgba(255, 0, 255, 0.1)', 'rgba(255, 0, 255, 0.05)']}
+                  style={styles.postInputGradient}
+                >
+                  <MaterialIcons name="edit" size={20} color="#ff00ff" />
+                  <Text style={styles.postInputPlaceholder}>Share Something</Text>
+                </LinearGradient>
+              )}
             </TouchableOpacity>
           </View>
           
@@ -725,10 +804,20 @@ const HomeScreen = () => {
               onPress={handleCreatePost}
               activeOpacity={0.8}
             >
-              <View style={styles.createPostButton}>
-                <MaterialIcons name="add" size={18} color="rgba(255, 255, 255, 0.9)" />
-                <Text style={styles.createPostText}>Create Post</Text>
-              </View>
+              {isDarkMode ? (
+                <View style={styles.createPostButton}>
+                  <MaterialIcons name="add" size={18} color="rgba(255, 255, 255, 0.9)" />
+                  <Text style={styles.createPostText}>Create Post</Text>
+                </View>
+              ) : (
+                <LinearGradient
+                  colors={['#ff00ff', '#ff6b9d', '#c44569']}
+                  style={styles.createPostButton}
+                >
+                  <MaterialIcons name="add" size={18} color="#fff" />
+                  <Text style={styles.createPostText}>Create Post</Text>
+                </LinearGradient>
+              )}
               <View style={styles.createPostGlow} />
             </TouchableOpacity>
           </View>
@@ -737,7 +826,9 @@ const HomeScreen = () => {
 
       <Animated.View style={{ opacity: storiesAnim, transform: [{ translateY: slideAnim }] }}>
         <LinearGradient
-          colors={['rgba(255, 255, 255, 0.02)', 'rgba(255, 255, 255, 0.01)', 'transparent']}
+          colors={isDarkMode ? 
+            ['rgba(255, 255, 255, 0.02)', 'rgba(255, 255, 255, 0.01)', 'transparent'] : 
+            ['rgba(255, 0, 255, 0.08)', 'rgba(255, 0, 255, 0.04)', 'transparent']}
           start={{x: 0, y: 0}}
           end={{x: 1, y: 1}}
           style={styles.stories}
@@ -771,13 +862,26 @@ const HomeScreen = () => {
                       </View>
                     ) : (
                       // No story - show add button
-                      <View style={styles.addStoryButton}>
-                        {uploading ? (
-                          <ActivityIndicator size="small" color="rgba(255, 255, 255, 0.8)" />
-                        ) : (
-                          <MaterialIcons name="add" size={24} color="rgba(255, 255, 255, 0.8)" />
-                        )}
-                      </View>
+                      isDarkMode ? (
+                        <View style={styles.addStoryButton}>
+                          {uploading ? (
+                            <ActivityIndicator size="small" color="rgba(255, 255, 255, 0.8)" />
+                          ) : (
+                            <MaterialIcons name="add" size={24} color="rgba(255, 255, 255, 0.8)" />
+                          )}
+                        </View>
+                      ) : (
+                        <LinearGradient
+                          colors={['rgba(255, 0, 255, 0.15)', 'rgba(255, 0, 255, 0.1)']}
+                          style={styles.addStoryButton}
+                        >
+                          {uploading ? (
+                            <ActivityIndicator size="small" color="#ff00ff" />
+                          ) : (
+                            <MaterialIcons name="add" size={24} color="#ff00ff" />
+                          )}
+                        </LinearGradient>
+                      )
                     )}
                     <Text style={styles.storyText}>Your story</Text>
                   </TouchableOpacity>
@@ -789,9 +893,13 @@ const HomeScreen = () => {
                   onPress={() => handleStoryPress(item)}
                 >
                   <LinearGradient
-                    colors={item.has_unviewed ? 
-                      ['rgba(255, 255, 255, 0.4)', 'rgba(255, 255, 255, 0.3)', 'rgba(255, 255, 255, 0.2)'] : 
-                      ['rgba(255, 255, 255, 0.15)', 'rgba(255, 255, 255, 0.1)', 'rgba(255, 255, 255, 0.05)']}
+                    colors={isDarkMode ? 
+                      (item.has_unviewed ? 
+                        ['rgba(255, 255, 255, 0.4)', 'rgba(255, 255, 255, 0.3)', 'rgba(255, 255, 255, 0.2)'] : 
+                        ['rgba(255, 255, 255, 0.15)', 'rgba(255, 255, 255, 0.1)', 'rgba(255, 255, 255, 0.05)']) :
+                      (item.has_unviewed ? 
+                        ['#ff00ff', '#ff6b9d', '#c44569'] : 
+                        ['#666666', '#888888', '#666666'])}
                     start={{x: 0, y: 0}}
                     end={{x: 1, y: 1}}
                     style={styles.storyRing}
@@ -815,9 +923,9 @@ const HomeScreen = () => {
   return (
     <>
       <StatusBar style="light" />
-      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: isDarkMode ? '#0a0a1a' : '#0a0a2a' }]} edges={['top', 'left', 'right']}>
         <LinearGradient
-          colors={['#0a0a1a', '#0f0f25', '#0a0a1a']}
+          colors={isDarkMode ? ['#0a0a1a', '#0f0f25', '#0a0a1a'] : ['#0a0a2a', '#1a1a4a', '#2a1a4a']}
           style={styles.container}
         >
           <ScrollView
@@ -851,8 +959,10 @@ const HomeScreen = () => {
                   return null;
                 }
                 
+                const PostComponent = isDarkMode ? PostItem : PostItemOld;
+                
                 return (
-                  <ThemeAwarePostItem
+                  <PostComponent
                     key={item.id}
                     post={item}
                     onOptionsPress={(action) => {
