@@ -28,39 +28,69 @@ const StoryCreationScreen = () => {
   const { sharePayload } = route.params || {};
 
   const [uploading, setUploading] = useState(false);
-  const [scale, setScale] = useState(0.6); // Initial scale
-  const [position, setPosition] = useState({ x: width / 2 - 100, y: height / 2 - 150 });
+  const [scale, setScale] = useState(0.7); // Initial scale
+  const [position, setPosition] = useState({ x: width / 2 - 125, y: height / 2 - 200 });
+  const [previewSize, setPreviewSize] = useState({ width, height: height * 0.6 });
 
   // Animation values
   const pan = useRef(new Animated.ValueXY(position)).current;
   const scaleAnim = useRef(new Animated.Value(scale)).current;
 
-  // Pan responder for dragging
+  // Multi-touch gesture handling for pinch-to-zoom
+  const lastDistance = useRef(0);
+  const lastScale = useRef(scale);
+
+  // Pan responder for dragging and pinch-to-zoom
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
+      onPanResponderGrant: (evt) => {
         pan.setOffset({
           x: pan.x._value,
           y: pan.y._value,
         });
+        lastScale.current = scale;
       },
-      onPanResponderMove: Animated.event(
-        [null, { dx: pan.x, dy: pan.y }],
-        { useNativeDriver: false }
-      ),
+      onPanResponderMove: (evt, gestureState) => {
+        // Check if it's a pinch gesture (2 touches)
+        if (evt.nativeEvent.touches.length === 2) {
+          const touch1 = evt.nativeEvent.touches[0];
+          const touch2 = evt.nativeEvent.touches[1];
+          
+          const distance = Math.sqrt(
+            Math.pow(touch2.pageX - touch1.pageX, 2) +
+            Math.pow(touch2.pageY - touch1.pageY, 2)
+          );
+
+          if (lastDistance.current === 0) {
+            lastDistance.current = distance;
+          } else {
+            const scaleDelta = distance / lastDistance.current;
+            const newScale = Math.max(0.3, Math.min(1.5, lastScale.current * scaleDelta));
+            setScale(newScale);
+            scaleAnim.setValue(newScale);
+          }
+        } else {
+          // Single touch - drag
+          Animated.event(
+            [null, { dx: pan.x, dy: pan.y }],
+            { useNativeDriver: false }
+          )(evt, gestureState);
+        }
+      },
       onPanResponderRelease: () => {
         pan.flattenOffset();
         setPosition({
           x: pan.x._value,
           y: pan.y._value,
         });
+        lastDistance.current = 0;
       },
     })
   ).current;
 
-  // Pinch to zoom handlers
+  // Button handlers for zoom
   const handleScaleIncrease = () => {
     const newScale = Math.min(scale + 0.1, 1.5);
     setScale(newScale);
@@ -95,16 +125,23 @@ const StoryCreationScreen = () => {
         return;
       }
 
+      // Normalize position to percentages relative to preview canvas
+      const CARD_W = 250;
+      const CARD_H = 350;
+      // Save CENTER coordinates as percentages (0..1)
+      const posXPercent = Math.max(0, Math.min(1, (position.x + CARD_W / 2) / Math.max(1, previewSize.width)));
+      const posYPercent = Math.max(0, Math.min(1, (position.y + CARD_H / 2) / Math.max(1, previewSize.height)));
+
       // Create story with shared content
       const storyData = {
         user_id: user.id,
         media_url: sharePayload.media_url,
-        media_type: sharePayload.media_type || 'image',
+        media_type: sharePayload.type || sharePayload.media_type || (sharePayload.media_url?.includes('.mp4') ? 'video' : 'image'),
         caption: sharePayload.caption || '',
-        shared_from_user_id: sharePayload.author?.id || null,
+        shared_from_user_id: sharePayload.author?.user_id || null,
         shared_from_username: sharePayload.author?.username || null,
-        position_x: position.x,
-        position_y: position.y,
+        position_x: posXPercent, // store as 0..1
+        position_y: posYPercent, // store as 0..1
         scale: scale,
       };
 
@@ -117,7 +154,12 @@ const StoryCreationScreen = () => {
           [
             {
               text: 'OK',
-              onPress: () => navigation.navigate('Home'),
+              onPress: () => {
+                navigation.reset({
+                  index: 0,
+                  routes: [{ name: 'MainApp' }],
+                });
+              },
             },
           ]
         );
@@ -196,7 +238,10 @@ const StoryCreationScreen = () => {
         </View>
 
         {/* Story Preview */}
-        <View style={styles.previewContainer}>
+        <View style={styles.previewContainer} onLayout={(e) => {
+          const { width: w, height: h } = e.nativeEvent.layout;
+          if (w && h) setPreviewSize({ width: w, height: h });
+        }}>
           {renderSharedContent()}
         </View>
 
@@ -219,7 +264,7 @@ const StoryCreationScreen = () => {
           </View>
 
           <Text style={styles.instructionText}>
-            Drag to reposition • Tap +/- to resize
+            Drag to move • Pinch to zoom • Tap +/- to resize
           </Text>
 
           {/* Publish Button */}
@@ -281,18 +326,18 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   sharedContentContainer: {
-    width: 200,
-    height: 300,
-    borderRadius: 15,
+    width: 250,
+    height: 350,
+    borderRadius: 20,
     overflow: 'hidden',
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.3)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.4)',
+    shadowColor: '#6c3fd8',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    elevation: 8,
   },
   sharedMedia: {
     width: '100%',

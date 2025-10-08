@@ -45,6 +45,7 @@ import ConfessionPersonScreen from '../screens/ConfessionPersonScreen'; // Impor
 import ConfessionPersonCommentScreen from '../screens/ConfessionPersonCommentScreen'; // Import the new Person Confession Comment screen
 import ReelsScreen from '../screens/ReelsScreen'; // Import the new Reels screen
 import ShareUserSelectionScreen from '../screens/ShareUserSelectionScreen';
+import StoryCreationScreen from '../screens/StoryCreationScreen';
 import CreateGroupScreen from '../screens/CreateGroupScreen';
 import GroupChatScreen from '../screens/GroupChatScreen';
 import GroupInfoScreen from '../screens/GroupInfoScreen';
@@ -522,6 +523,7 @@ const AppNavigator = () => {
       <Stack.Screen name="ConfessionPerson" component={ConfessionPersonScreen} options={{ headerShown: false }} />
       <Stack.Screen name="ConfessionPersonComment" component={ConfessionPersonCommentScreen} options={{ headerShown: false }} />
       <Stack.Screen name="ShareUserSelection" component={ShareUserSelectionScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="StoryCreation" component={StoryCreationScreen} options={{ headerShown: false }} />
       <Stack.Screen name="CreateGroupScreen" component={CreateGroupScreen} options={{ headerShown: false }} />
       <Stack.Screen name="GroupChatScreen" component={GroupChatScreen} options={{ headerShown: false }} />
       <Stack.Screen name="GroupInfoScreen" component={GroupInfoScreen} options={{ headerShown: false }} />
