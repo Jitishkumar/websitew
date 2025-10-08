@@ -1,24 +1,22 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, Image, ActivityIndicator, Animated, Dimensions } from 'react-native';
+import { Video } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Video } from 'expo-av';
 
 const { width, height } = Dimensions.get('window');
 
 const SearchScreen = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
+  const [mediaResults, setMediaResults] = useState([]);
+  const [activeTab, setActiveTab] = useState('users'); // 'users' or 'media'
   const [loading, setLoading] = useState(false);
-  const [selectedTab, setSelectedTab] = useState('users');
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-
-  // Video refs for cleanup
-  const videoRefs = useRef(new Map());
 
   // Animation refs
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -103,43 +101,69 @@ const SearchScreen = () => {
     ).start();
   };
 
-  // Search for users or media when query changes
+  // Search for users when query changes
   useEffect(() => {
-    if (selectedTab === 'users') {
-      if (searchQuery.trim().length > 0) {
-        searchUsers();
-      } else {
-        setSearchResults([]);
-      }
-    } else {
-      // For media tab, always load media (with or without search query)
-      searchMedia();
-    }
-  }, [searchQuery, selectedTab]);
-
-  // Cleanup videos when screen loses focus
-  useFocusEffect(
-    React.useCallback(() => {
-      // Screen is focused - videos can be active
-      return () => {
-        // Screen is unfocused - cleanup all video resources
-        cleanupVideos();
-      };
-    }, [])
-  );
-
-  const cleanupVideos = async () => {
-    try {
-      const promises = [];
-      videoRefs.current.forEach((videoRef) => {
-        if (videoRef.current) {
-          promises.push(videoRef.current.unloadAsync().catch(() => {}));
+    const delayDebounceFn = setTimeout(() => {
+      if (activeTab === 'users') {
+        if (searchQuery.trim().length > 0) {
+          searchUsers();
+        } else {
+          setSearchResults([]);
         }
+      } else if (activeTab === 'media') {
+        // For media, search even if query is empty to show all public posts
+        searchMedia();
+      }
+    }, 500); // Debounce search for 500ms
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchQuery, activeTab]);
+
+  const searchMedia = async () => {
+    setLoading(true);
+    try {
+      let query = supabase
+        .from('posts')
+        .select(`
+          id,
+          caption,
+          type,
+          media_url,
+          created_at,
+          user_id,
+          profiles:user_id (
+            id,
+            username,
+            avatar_url,
+            user_settings (
+              private_account
+            )
+          )
+        `)
+        .order('created_at', { ascending: false })
+        .limit(60);
+
+      if (searchQuery.trim().length > 0) {
+        query = query.ilike('caption', `%${searchQuery}%`);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      const visibleMedia = (data || []).filter(post => {
+        const settings = post?.profiles?.user_settings;
+        const privateSetting = Array.isArray(settings)
+          ? settings[0]?.private_account
+          : settings?.private_account;
+        return privateSetting !== true;
       });
-      await Promise.all(promises);
-      videoRefs.current.clear();
+
+      setMediaResults(visibleMedia);
     } catch (error) {
-      console.warn('Error cleaning up videos:', error);
+      console.error('Error searching media:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -279,6 +303,34 @@ const SearchScreen = () => {
       // Default to UserProfileScreen in case of error, consistent with our approach for missing data
       navigation.navigate('UserProfileScreen', { userId });
     }
+  };
+
+  const renderMediaItem = ({ item }) => {
+    const isVideo = (item?.type || item?.media_type) === 'video';
+    return (
+      <TouchableOpacity 
+        style={styles.mediaItem}
+        onPress={() => navigation.navigate('PostDetail', { postId: item.id })}
+        activeOpacity={0.85}
+      >
+        {isVideo ? (
+          <View style={styles.mediaVideoWrapper}>
+            <Video
+              source={{ uri: item.media_url }}
+              style={styles.mediaImage}
+              resizeMode="cover"
+              shouldPlay={false}
+              isLooping={false}
+              useNativeControls={false}
+            />
+            <View style={styles.videoOverlay} />
+            <Ionicons name="play-circle" size={28} color="#fff" style={styles.playIcon} />
+          </View>
+        ) : (
+          <Image source={{ uri: item.media_url }} style={styles.mediaImage} />
+        )}
+      </TouchableOpacity>
+    );
   };
 
   const renderUserItem = ({ item, index }) => (
@@ -488,7 +540,7 @@ const SearchScreen = () => {
           
           <TextInput
             style={styles.searchInput}
-            placeholder="Search for users..."
+            placeholder={activeTab === 'users' ? "Search for users..." : "Search for media..."}
             placeholderTextColor="#999"
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -504,6 +556,21 @@ const SearchScreen = () => {
           )}
         </LinearGradient>
       </Animated.View>
+
+      <View style={styles.tabContainer}>
+        <TouchableOpacity
+          style={[styles.tabButton, activeTab === 'users' && styles.activeTabButton]}
+          onPress={() => setActiveTab('users')}
+        >
+          <Text style={[styles.tabButtonText, activeTab === 'users' && styles.activeTabButtonText]}>Users</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tabButton, activeTab === 'media' && styles.activeTabButton]}
+          onPress={() => setActiveTab('media')}
+        >
+          <Text style={[styles.tabButtonText, activeTab === 'media' && styles.activeTabButtonText]}>Media</Text>
+        </TouchableOpacity>
+      </View>
 
       {loading ? (
         <Animated.View 
@@ -534,9 +601,11 @@ const SearchScreen = () => {
           ]}
         >
           <FlatList
-            data={searchResults}
-            renderItem={renderUserItem}
+            data={activeTab === 'users' ? searchResults : mediaResults}
+            renderItem={activeTab === 'users' ? renderUserItem : renderMediaItem}
             keyExtractor={(item) => item.id}
+            numColumns={activeTab === 'media' ? 3 : 1}
+            key={activeTab} // Re-renders the list when tab changes
             showsVerticalScrollIndicator={false}
             ListEmptyComponent={
               searchQuery.length > 0 ? (
@@ -554,7 +623,7 @@ const SearchScreen = () => {
                     style={styles.emptyGradient}
                   >
                     <Ionicons name="search" size={60} color="#ff00ff" />
-                    <Text style={styles.emptyText}>No users found</Text>
+                    <Text style={styles.emptyText}>{activeTab === 'users' ? 'No users found' : 'No media found'}</Text>
                     <Text style={styles.emptySubtext}>Try searching with different keywords</Text>
                   </LinearGradient>
                 </Animated.View>
@@ -772,6 +841,62 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     marginTop: 8,
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginVertical: 10,
+  },
+  tabButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    marginHorizontal: 5,
+    backgroundColor: '#1a1a2e',
+  },
+  activeTabButton: {
+    backgroundColor: '#ff00ff',
+  },
+  tabButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  activeTabButtonText: {
+    color: '#fff',
+  },
+  mediaItem: {
+    flex: 1,
+    aspectRatio: 1,
+    margin: 1,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#111',
+  },
+  mediaImage: {
+    width: '100%',
+    height: '100%',
+  },
+  mediaVideoWrapper: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    position: 'relative',
+  },
+  videoOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
+  },
+  playIcon: {
+    position: 'absolute',
+    top: 5,
+    right: 5,
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: {width: -1, height: 1},
+    textShadowRadius: 10
   },
 });
 
