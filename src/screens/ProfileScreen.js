@@ -191,6 +191,8 @@ const ProfileScreen = () => {
   const [followingCount, setFollowingCount] = useState(0);
   const [postsCount, setPostsCount] = useState(0);
   const [shortsCount, setShortsCount] = useState(0);
+  const [totalViews, setTotalViews] = useState(0);
+  const [totalLikes, setTotalLikes] = useState(0);
   const [activeTab, setActiveTab] = useState('Post');
   const [shorts, setShorts] = useState([]);
   const [posts, setPosts] = useState([]);
@@ -472,11 +474,11 @@ const ProfileScreen = () => {
           <View style={styles.coverStats}>
             <View style={styles.coverStatItem}>
               <MaterialIcons name="visibility" size={16} color="#ffd700" />
-              <Text style={styles.coverStatText}>2.1K</Text>
+              <Text style={styles.coverStatText}>{totalViews >= 1000 ? `${(totalViews / 1000).toFixed(1)}K` : totalViews}</Text>
             </View>
             <View style={styles.coverStatItem}>
               <MaterialIcons name="favorite" size={16} color="#ff69b4" />
-              <Text style={styles.coverStatText}>856</Text>
+              <Text style={styles.coverStatText}>{totalLikes >= 1000 ? `${(totalLikes / 1000).toFixed(1)}K` : totalLikes}</Text>
             </View>
           </View>
         </View>
@@ -796,6 +798,29 @@ const ProfileScreen = () => {
       setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+
+      // Fetch ALL posts first to calculate totals
+      const { data: allPostsData, error: allPostsError } = await supabase
+        .from('posts')
+        .select(`
+          *,
+          profiles:user_id (*),
+          likes:post_likes (count),
+          comments:post_comments (count),
+          user_likes:post_likes (user_id)
+        `)
+        .eq('user_id', user.id);
+
+      if (!allPostsError && allPostsData) {
+        // Calculate total views and likes from all posts
+        const views = allPostsData.reduce((sum, post) => sum + (post.views || 0), 0);
+        const likes = allPostsData.reduce((sum, post) => {
+          const likeCount = post.likes?.[0]?.count || 0;
+          return sum + likeCount;
+        }, 0);
+        setTotalViews(views);
+        setTotalLikes(likes);
+      }
 
       if (activeTab === 'Post') {
         const { data, error } = await supabase
