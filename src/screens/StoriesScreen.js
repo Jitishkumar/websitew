@@ -604,26 +604,82 @@ const StoriesScreen = () => {
           
           {/* Story Media */}
           <View style={styles.mediaContainer}>
-            {currentStory.type === 'video' ? (
-              <Video
-                ref={videoRef}
-                source={{ uri: currentStory.media_url }}
-                style={styles.media}
-                resizeMode="contain"
-                play={!paused && !isTouchHolding.current && !menuVisible}
-                loop={false}
-                onPlaybackStatusUpdate={(status) => {
-                  if (status.didJustFinish) {
-                    goToNextStory();
-                  }
-                }}
-              />
+            {currentStory.shared_from_user_id ? (
+              // Shared story with custom positioning and background (matches StoryCreationScreen)
+              <LinearGradient
+                colors={['#1a0f2e', '#2a1f3e', '#1a0f2e']}
+                style={styles.sharedStoryContainer}
+              >
+                <View 
+                  style={[
+                    styles.sharedContentWrapper,
+                    {
+                      left: currentStory.position_x || 0,
+                      top: currentStory.position_y || 0,
+                      transform: [{ scale: currentStory.scale || 1 }],
+                    }
+                  ]}
+                >
+                  {currentStory.type === 'video' ? (
+                    <Video
+                      ref={videoRef}
+                      source={{ uri: currentStory.media_url }}
+                      style={styles.sharedMedia}
+                      resizeMode="cover"
+                      play={!paused && !isTouchHolding.current && !menuVisible}
+                      loop={false}
+                      onPlaybackStatusUpdate={(status) => {
+                        if (status.didJustFinish) {
+                          goToNextStory();
+                        }
+                      }}
+                    />
+                  ) : (
+                    <Image
+                      source={{ uri: currentStory.media_url }}
+                      style={styles.sharedMedia}
+                      resizeMode="cover"
+                    />
+                  )}
+                  
+                  {/* Username overlay on shared content */}
+                  {currentStory.shared_from_username && (
+                    <LinearGradient
+                      colors={['transparent', 'rgba(0,0,0,0.8)']}
+                      style={styles.sharedUsernameOverlay}
+                    >
+                      <Text style={styles.sharedUsername}>
+                        @{currentStory.shared_from_username}
+                      </Text>
+                    </LinearGradient>
+                  )}
+                </View>
+              </LinearGradient>
             ) : (
-              <Image
-                source={{ uri: currentStory.media_url }}
-                style={styles.media}
-                resizeMode="contain"
-              />
+              // Regular story (full screen)
+              <>
+                {currentStory.type === 'video' ? (
+                  <Video
+                    ref={videoRef}
+                    source={{ uri: currentStory.media_url }}
+                    style={styles.media}
+                    resizeMode="contain"
+                    play={!paused && !isTouchHolding.current && !menuVisible}
+                    loop={false}
+                    onPlaybackStatusUpdate={(status) => {
+                      if (status.didJustFinish) {
+                        goToNextStory();
+                      }
+                    }}
+                  />
+                ) : (
+                  <Image
+                    source={{ uri: currentStory.media_url }}
+                    style={styles.media}
+                    resizeMode="contain"
+                  />
+                )}
+              </>
             )}
           </View>
         </TouchableOpacity>
@@ -926,6 +982,49 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     borderRadius: 10,
+  },
+  sharedStoryContainer: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sharedContentWrapper: {
+    position: 'absolute',
+    width: 200,
+    height: 300,
+    borderRadius: 15,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  sharedMedia: {
+    width: '100%',
+    height: '100%',
+  },
+  sharedUsernameOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  sharedUsername: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   shimmerOverlay: {
     position: 'absolute',

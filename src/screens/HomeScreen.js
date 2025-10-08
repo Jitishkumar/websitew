@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useVideo } from '../context/VideoContext';
 import { useNotifications } from '../context/NotificationContext';
+import { useTheme } from '../context/ThemeContext';
 import { StyleSheet, View, Text, TouchableOpacity, TextInput, Image, Modal, ActivityIndicator, FlatList, RefreshControl, Alert, Animated, ScrollView, Platform, Dimensions } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useFonts, Poppins_700Bold } from '@expo-google-fonts/poppins';
@@ -12,6 +13,7 @@ import { PostsService } from '../services/PostsService';
 import { Video } from 'expo-av';
 import { supabase } from '../lib/supabase';
 import ThemeAwarePostItem from '../components/ThemeAwarePostItem';
+import PostItemold from '../components/PostItemold';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Easing } from 'react-native';
@@ -22,6 +24,7 @@ const isSmallScreen = screenWidth < 380;
 const HomeScreen = () => {
   const navigation = useNavigation();
   const { unreadCount: notificationUnreadCount } = useNotifications();
+  const { isDarkMode } = useTheme();
   const [stories, setStories] = useState([]);
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -507,7 +510,10 @@ const HomeScreen = () => {
     <>
       <Animated.View style={{ opacity: headerAnim, transform: [{ translateY: slideAnim }] }}>
         <LinearGradient
-          colors={['rgba(10, 10, 42, 0.95)', 'rgba(15, 15, 35, 0.98)', 'rgba(8, 8, 28, 0.99)']}
+          colors={isDarkMode ?
+            ['#0a0a2a', '#1a1a4a', '#2a1a4a'] :
+            ['#ffffff', '#f8f9fa', '#e9ecef']
+          }
           start={{x: 0, y: 0}}
           end={{x: 1, y: 1}}
           style={styles.header}
@@ -817,7 +823,10 @@ const HomeScreen = () => {
       <StatusBar style="light" />
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <LinearGradient
-          colors={['#0a0a1a', '#0f0f25', '#0a0a1a']}
+          colors={isDarkMode ?
+            ['#0a0a1a', '#0f0f25', '#0a0a1a'] :
+            ['#ffffff', '#f8f9fa', '#ffffff']
+          }
           style={styles.container}
         >
           <ScrollView
@@ -852,15 +861,27 @@ const HomeScreen = () => {
                 }
                 
                 return (
-                  <ThemeAwarePostItem
-                    key={item.id}
-                    post={item}
-                    onOptionsPress={(action) => {
-                      if (action.type === 'delete') {
-                        setPosts(posts.filter(post => post.id !== action.postId));
-                      }
-                    }}
-                  />
+                  isDarkMode ? (
+                    <ThemeAwarePostItem
+                      key={item.id}
+                      post={item}
+                      onOptionsPress={(action) => {
+                        if (action.type === 'delete') {
+                          setPosts(posts.filter(post => post.id !== action.postId));
+                        }
+                      }}
+                    />
+                  ) : (
+                    <PostItemold
+                      key={item.id}
+                      post={item}
+                      onOptionsPress={(action) => {
+                        if (action.type === 'delete') {
+                          setPosts(posts.filter(post => post.id !== action.postId));
+                        }
+                      }}
+                    />
+                  )
                 );
               })
             )}

@@ -445,4 +445,86 @@ export class StoriesService {
       return null;
     }
   }
+
+  // Create a story with shared content (for resharing)
+  static async createStory(storyData) {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        return { success: false, error: 'User not authenticated' };
+      }
+
+      // Check if user has any stories in the last 24 hours
+      const now = new Date();
+      const { data: existingStories, error: fetchError } = await supabase
+        .from('stories')
+        .select('id, story_group_id')
+        .eq('user_id', user.id)
+        .gte('created_at', new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString())
+        .order('created_at', { ascending: false });
+      
+      if (fetchError) {
+        console.error('Error fetching existing stories:', fetchError);
+        return { success: false, error: fetchError.message };
+      }
+      
+      let storyGroupId;
+      let isFirstStory = true;
+      
+      if (existingStories && existingStories.length > 0) {
+        storyGroupId = existingStories[0].story_group_id;
+        isFirstStory = false;
+      } else {
+        storyGroupId = generateUUID();
+      }
+
+      // Extract cloudinary_public_id from URL or use a placeholder
+      let cloudinaryPublicId = storyData.cloudinary_public_id;
+      
+      if (!cloudinaryPublicId && storyData.media_url) {
+        // Try to extract from Cloudinary URL
+        const urlMatch = storyData.media_url.match(/\/upload\/(?:v\d+\/)?(.+?)(?:\.[^.]+)?$/);
+        if (urlMatch) {
+          cloudinaryPublicId = urlMatch[1];
+        } else {
+          // Generate a unique ID for non-Cloudinary URLs
+          cloudinaryPublicId = `shared_${generateUUID()}`;
+        }
+      }
+
+      // Prepare story insert data
+      const insertData = {
+        user_id: user.id,
+        media_url: storyData.media_url,
+        cloudinary_public_id: cloudinaryPublicId,
+        type: storyData.media_type || 'image',
+        story_group_id: storyGroupId,
+        is_first_story: isFirstStory,
+        caption: storyData.caption || null,
+        shared_from_user_id: storyData.shared_from_user_id || null,
+        shared_from_username: storyData.shared_from_username || null,
+        position_x: storyData.position_x || 0,
+        position_y: storyData.position_y || 0,
+        scale: storyData.scale || 1,
+      };
+
+      // Insert story
+      const { data, error } = await supabase
+        .from('stories')
+        .insert(insertData)
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('Error creating story:', error);
+        return { success: false, error: error.message };
+      }
+
+      return { success: true, data };
+      
+    } catch (error) {
+      console.error('Error in createStory:', error);
+      return { success: false, error: error.message };
+    }
+  }
 }

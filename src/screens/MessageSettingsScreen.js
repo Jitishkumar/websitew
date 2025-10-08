@@ -12,7 +12,7 @@ const MessageSettingsScreen = () => {
 
   const [isOnlineVisible, setIsOnlineVisible] = useState(true);
   const [isBlocked, setIsBlocked] = useState(false);
-  const [showReadReceipts, setShowReadReceipts] = useState(true);
+  const [showReadReceipts, setShowReadReceipts] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [userId, setUserId] = useState(null);
