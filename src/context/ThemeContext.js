@@ -74,6 +74,10 @@ export const ThemeProvider = ({ children }) => {
   };
 
   const toggleDarkMode = async (newValue) => {
+    // Update UI immediately for instant response
+    setIsDarkMode(newValue);
+    
+    // Save to database in background
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -90,10 +94,7 @@ export const ThemeProvider = ({ children }) => {
 
       if (error) {
         console.error('Error updating dark mode:', error);
-        return;
       }
-
-      setIsDarkMode(newValue);
     } catch (error) {
       console.error('Error in toggleDarkMode:', error);
     }

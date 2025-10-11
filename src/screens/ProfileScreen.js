@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, Alert, Modal, ActivityIndicator, FlatList, Dimensions, Animated, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, Alert, Modal, ActivityIndicator, FlatList, Dimensions, ScrollView } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Video } from 'expo-av';
@@ -204,59 +204,11 @@ const ProfileScreen = () => {
   const [loadingConnections, setLoadingConnections] = useState(false);
   const navigation = useNavigation();
   
-  // Animation values
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
-  const scaleAnim = useRef(new Animated.Value(0.8)).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-
+  // Animations disabled for instant loading
   const memoizedPosts = useMemo(() => posts, [posts]);
   const memoizedShorts = useMemo(() => shorts, [shorts]);
   const videoRefs = useRef({});
   
-  // Initialize animations
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        tension: 100,
-        friction: 8,
-        useNativeDriver: true,
-      })
-    ]).start();
-    
-    // Pulse animation for verified badge
-    const pulseAnimation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.2,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 1000,
-          useNativeDriver: true,
-        })
-      ])
-    );
-    pulseAnimation.start();
-    
-    return () => pulseAnimation.stop();
-  }, []);
-  
-  // Effect to ensure videos are properly unloaded when component unmounts
-  // Cleanup videos when screen loses focus or unmounts
   useEffect(() => {
     const unloadAllVideos = () => {
       Object.values(videoRefs.current).forEach(videoRef => {
@@ -430,15 +382,7 @@ const ProfileScreen = () => {
         </TouchableOpacity>
       </LinearGradient>
 
-      <Animated.View 
-        style={[
-          styles.profileSection,
-          {
-            opacity: fadeAnim,
-            transform: [{ translateY: slideAnim }]
-          }
-        ]}
-      >
+      <View style={styles.profileSection}>
         <View style={styles.coverPhotoContainer}>
           <LinearGradient
             colors={['rgba(255,215,0,0.3)', 'rgba(255,0,255,0.2)', 'rgba(0,0,0,0.8)']}
@@ -483,14 +427,7 @@ const ProfileScreen = () => {
           </View>
         </View>
         
-        <Animated.View 
-          style={[
-            styles.profileImageContainer,
-            {
-              transform: [{ scale: scaleAnim }]
-            }
-          ]}
-        >
+        <View style={styles.profileImageContainer}>
           <LinearGradient
             colors={['#ffd700', '#ff69b4', '#8a2be2']}
             style={styles.profileImageGradient}
@@ -515,21 +452,21 @@ const ProfileScreen = () => {
               <View style={styles.onlineDot} />
             </LinearGradient>
           </TouchableOpacity>
-        </Animated.View>
+        </View>
         
         <View style={styles.nameSection}>
           <Text style={styles.name}>{userProfile?.full_name || 'No name set'}</Text>
           <View style={styles.usernameContainer}>
             <Text style={styles.username}>@{userProfile?.username || 'username'}</Text>
             {userProfile?.isVerified && (
-              <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+              <View>
                 <LinearGradient
                   colors={['#ffd700', '#ff69b4']}
                   style={styles.verifiedBadgeGradient}
                 >
                   <MaterialIcons name="verified" size={18} color="#fff" />
                 </LinearGradient>
-              </Animated.View>
+              </View>
             )}
           </View>
           <View style={styles.userTags}>
@@ -672,7 +609,7 @@ const ProfileScreen = () => {
             </LinearGradient>
           </TouchableOpacity>
         </View>
-      </Animated.View>
+      </View>
 
       <View style={styles.tabsContainer}>
         <TouchableOpacity 
@@ -743,12 +680,17 @@ const ProfileScreen = () => {
 
   useFocusEffect(
     React.useCallback(() => {
+      // Load critical data first
       loadUserProfile();
-      fetchFollowersCount();
-      fetchFollowingCount();
-      fetchPostsCount();
-      fetchShortsCount();
       fetchUserContent();
+      
+      // Load counts in background (non-blocking)
+      setTimeout(() => {
+        fetchFollowersCount();
+        fetchFollowingCount();
+        fetchPostsCount();
+        fetchShortsCount();
+      }, 0);
     }, [activeTab])
   );
 
@@ -869,6 +811,39 @@ const ProfileScreen = () => {
     }
   };
 
+  // Background cleanup function - doesn't block UI
+  const cleanupOldFiles = async (userId, newData) => {
+    try {
+      const { data: oldData } = await supabase
+        .from('profiles')
+        .select('avatar_url, cover_url')
+        .eq('id', userId)
+        .single();
+
+      if (!oldData) return;
+
+      // Clean up old avatar
+      if (oldData?.avatar_url && oldData.avatar_url !== newData.avatar_url) {
+        let oldAvatarPath = oldData.avatar_url;
+        if (oldAvatarPath.includes('media/')) {
+          oldAvatarPath = oldAvatarPath.split('media/')[1];
+        }
+        supabase.storage.from('media').remove([oldAvatarPath]).then(() => {});
+      }
+
+      // Clean up old cover
+      if (oldData?.cover_url && oldData.cover_url !== newData.cover_url) {
+        let oldCoverPath = oldData.cover_url;
+        if (oldCoverPath.includes('media/')) {
+          oldCoverPath = oldCoverPath.split('media/')[1];
+        }
+        supabase.storage.from('media').remove([oldCoverPath]).then(() => {});
+      }
+    } catch (error) {
+      console.log('Background cleanup error:', error);
+    }
+  };
+
   const loadUserProfile = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -877,16 +852,7 @@ const ProfileScreen = () => {
         return;
       }
 
-      const { data: oldData, error: oldError } = await supabase
-        .from('profiles')
-        .select('avatar_url, cover_url')
-        .eq('id', user.id)
-        .single();
-
-      if (oldError) {
-        console.error('Error fetching old profile data:', oldError);
-      }
-
+      // Load profile data (critical)
       const { data: newData, error } = await supabase
         .from('profiles')
         .select('*')
@@ -901,41 +867,22 @@ const ProfileScreen = () => {
       
       // Check if cover URL is a video by extension if cover_is_video flag is not set
       if (newData.cover_url && newData.cover_url.endsWith('.mp4') && !newData.cover_is_video) {
-        // Update the profile with cover_is_video flag
-        await supabase
+        // Update in background - don't block UI
+        supabase
           .from('profiles')
           .update({ cover_is_video: true })
-          .eq('id', user.id);
+          .eq('id', user.id)
+          .then(() => {});
           
         // Update the local data
         newData.cover_is_video = true;
       }
 
-      if (oldData?.avatar_url && oldData.avatar_url !== newData.avatar_url) {
-        let oldAvatarPath = oldData.avatar_url;
-        if (oldAvatarPath.includes('media/')) {
-          oldAvatarPath = oldAvatarPath.split('media/')[1];
-        }
-        const { error: removeError } = await supabase.storage
-          .from('media')
-          .remove([oldAvatarPath]);
-        if (removeError) {
-          console.log('Error removing old avatar:', removeError.message);
-        }
-      }
-
-      if (oldData?.cover_url && oldData.cover_url !== newData.cover_url) {
-        let oldCoverPath = oldData.cover_url;
-        if (oldCoverPath.includes('media/')) {
-          oldCoverPath = oldCoverPath.split('media/')[1];
-        }
-        const { error: removeError } = await supabase.storage
-          .from('media')
-          .remove([oldCoverPath]);
-        if (removeError) {
-          console.log('Error removing old cover:', removeError.message);
-        }
-      }
+      // Clean up old files in background - don't block UI loading
+      // This runs asynchronously without blocking profile display
+      setTimeout(() => {
+        cleanupOldFiles(user.id, newData);
+      }, 1000);
 
       let avatarUrl = null;
       let coverUrl = null;
@@ -1281,13 +1228,22 @@ const ProfileScreen = () => {
           }
         }}
         showsVerticalScrollIndicator={false}
-        onRefresh={() => {
-          loadUserProfile();
-          fetchFollowersCount();
-          fetchFollowingCount();
-          fetchPostsCount();
-          fetchShortsCount();
-          fetchUserContent();
+        onRefresh={async () => {
+          // Load critical data first
+          setLoading(true);
+          await Promise.all([
+            loadUserProfile(),
+            fetchUserContent()
+          ]);
+          setLoading(false);
+          
+          // Load counts in background (don't wait)
+          setTimeout(() => {
+            fetchFollowersCount();
+            fetchFollowingCount();
+            fetchPostsCount();
+            fetchShortsCount();
+          }, 0);
         }}
         refreshing={loading}
         contentContainerStyle={{ paddingBottom: 80 }}

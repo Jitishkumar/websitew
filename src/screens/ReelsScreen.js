@@ -44,16 +44,16 @@ const ReelsScreen = () => {
   const [currentUser, setCurrentUser] = useState(null);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [page, setPage] = useState(0);
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const lastTap = useRef(0);
-  const doubleTapAnim = useRef(new Animated.Value(0)).current;
   const controlsTimeout = useRef(null);
   const touchTimer = useRef(null);
   const isTouchHolding = useRef(false);
   const pauseIconTimeout = useRef(null);
   const { setFullscreen } = useVideo();
   const [viewedVideos, setViewedVideos] = useState(new Set());
+  const [page, setPage] = useState(0);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const lastTap = useRef(0);
+  const doubleTapAnim = useRef(new Animated.Value(0)).current;
   
   const REELS_PER_PAGE = 10;
   
@@ -119,6 +119,7 @@ const ReelsScreen = () => {
       console.error('Error getting current user:', error);
     }
   };
+
 // Load reels with public account filtering
 const loadReels = async (isInitialLoad = false) => {
   try {
@@ -191,9 +192,6 @@ const loadReels = async (isInitialLoad = false) => {
   }
 };
 
-
-
-
   // Handle refresh
   const onRefresh = () => {
     setRefreshing(true);
@@ -242,7 +240,7 @@ const loadReels = async (isInitialLoad = false) => {
     }
   };
 
-  // Handle video press - show controls only (do not toggle play/pause)
+  // Handle video press - only double tap to like, single tap does nothing
   const handleVideoPress = (postId) => {
     const now = Date.now();
     const DOUBLE_TAP_DELAY = 300;
@@ -266,8 +264,7 @@ const loadReels = async (isInitialLoad = false) => {
       ]).start();
       lastTap.current = 0; // Reset to prevent multiple triggers
     } else {
-      // Single tap - show controls
-      showVideoControls();
+      // Single tap - do nothing (removed controls showing)
       lastTap.current = now;
     }
   };
@@ -408,7 +405,7 @@ const loadReels = async (isInitialLoad = false) => {
       const { isLiked, likesCount } = await PostsService.toggleLike(postId);
       
       // Update state with actual response from server
-      const finalReels = reels.map(reel => {
+      setReels(prevReels => prevReels.map(reel => {
         if (reel.id === postId) {
           return {
             ...reel,
@@ -417,8 +414,7 @@ const loadReels = async (isInitialLoad = false) => {
           };
         }
         return reel;
-      });
-      setReels(finalReels);
+      }));
     } catch (error) {
       console.error('Error toggling like:', error);
       Alert.alert('Error', 'Failed to update like');
@@ -781,47 +777,26 @@ const loadReels = async (isInitialLoad = false) => {
             </View>
           </View>
 
-          {/* Video controls */}
-          {showControls && index === currentIndex && (
-            <LinearGradient 
-              colors={['rgba(0,0,0,0.7)', 'transparent', 'rgba(0,0,0,0.7)']} 
-              style={styles.controlsOverlay}
-            >
-              {/* Top controls */}
-              <View style={[styles.topControls, { paddingTop: insets.top }]}>
-                <TouchableOpacity 
-                  style={styles.backButton} 
-                  onPress={() => navigation.goBack()}
-                >
-                  <Ionicons name="arrow-back" size={28} color="#fff" />
-                </TouchableOpacity>
-                <Text style={styles.reelsTitle}>Reels</Text>
-                <View style={styles.placeholder} />
-              </View>
-              
-              {/* Bottom controls */}
-              <View style={styles.bottomControls}>
-                <View style={styles.timeContainer}>
-                  <Text style={styles.timeText}>{formatTime(currentTime)}</Text>
-                  <Text style={styles.timeText}>{formatTime(duration)}</Text>
-                </View>
-                
-                <View style={styles.seekbarContainer}>
-                  <View style={styles.progressBackground} />
-                  <View style={[styles.progressBar, { width: `${progress * 100}%` }]} />
-                  <TouchableOpacity 
-                    style={styles.seekbarTouchArea}
-                    onPressIn={(event) => {
-                      const { locationX } = event.nativeEvent;
-                      const seekPosition = locationX / width;
-                      handleSeek(Math.max(0, Math.min(1, seekPosition)));
-                    }}
-                  >
-                    <View style={[styles.seekKnob, { left: `${progress * 100}%` }]} />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </LinearGradient>
+          {/* Progress bar - always visible at top */}
+          {index === currentIndex && (
+            <View style={styles.progressBarContainer} pointerEvents="none">
+              <View style={styles.progressBackground} />
+              <View style={[styles.progressBar, { width: `${progress * 100}%` }]} />
+            </View>
+          )}
+
+          {/* Back button - always visible */}
+          {index === currentIndex && (
+            <View style={[styles.topHeader, { paddingTop: insets.top }]} pointerEvents="box-none">
+              <TouchableOpacity 
+                style={styles.backButton} 
+                onPress={() => navigation.goBack()}
+              >
+                <Ionicons name="arrow-back" size={28} color="#fff" />
+              </TouchableOpacity>
+              <Text style={styles.reelsTitle}>Reels</Text>
+              <View style={styles.placeholder} />
+            </View>
           )}
           
           {/* Pause icon */}
@@ -1075,6 +1050,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 2,
   },
+  topHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    zIndex: 10,
+  },
   controlsOverlay: {
     position: 'absolute',
     top: 0,
@@ -1124,6 +1110,14 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     fontVariant: ['tabular-nums'],
     opacity: 0.9,
+  },
+  progressBarContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    zIndex: 1,
   },
   seekbarContainer: {
     height: 20,

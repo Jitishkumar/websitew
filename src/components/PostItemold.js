@@ -725,10 +725,7 @@ const PostItem = ({ post, onOptionsPress }) => {
         ]
       }}
     >
-      <LinearGradient
-        colors={['rgba(26, 26, 46, 0.95)', 'rgba(22, 33, 62, 0.9)', 'rgba(15, 52, 96, 0.85)']}
-        start={{x: 0, y: 0}}
-        end={{x: 1, y: 1}}
+      <View
         style={styles.container}
       >
         {/* Shimmer overlay effect */}
@@ -750,8 +747,7 @@ const PostItem = ({ post, onOptionsPress }) => {
           ]}
         />
         {/* Post Header */}
-        <LinearGradient
-          colors={['rgba(255, 0, 255, 0.1)', 'rgba(255, 0, 255, 0.05)', 'transparent']}
+        <View
           style={styles.header}
         >
           <TouchableOpacity onPress={handleProfilePress} style={styles.profileContainer}>
@@ -822,11 +818,11 @@ const PostItem = ({ post, onOptionsPress }) => {
                 colors={['rgba(255, 0, 255, 0.2)', 'rgba(255, 0, 255, 0.1)']}
                 style={styles.optionsButtonGradient}
               >
-                <MaterialIcons name="more-vert" size={20} color="#ff00ff" />
+                <MaterialIcons name="more-vert" size={20} color="#666666" />
               </LinearGradient>
             </TouchableOpacity>
           )}
-        </LinearGradient>
+        </View>
 
         {/* Post Caption */}
         {post.caption && (
@@ -991,7 +987,7 @@ const PostItem = ({ post, onOptionsPress }) => {
         )}
 
         {/* Post Actions */}
-        <LinearGradient colors={['rgba(26, 26, 58, 0.8)', 'rgba(13, 13, 42, 0.9)']} style={styles.actions}>
+        <View style={styles.actions}>
           <Animated.View style={{ 
             transform: [
               { scale: likeScaleAnim },
@@ -1100,7 +1096,7 @@ const PostItem = ({ post, onOptionsPress }) => {
               <Text style={styles.actionText}>{post.views || 0}</Text>
             </View>
           )}
-        </LinearGradient>
+        </View>
 
         {/* Post Stats */}
         <View style={styles.stats}>
@@ -1198,22 +1194,23 @@ const PostItem = ({ post, onOptionsPress }) => {
             </View>
           </View>
         </Modal>
-      </LinearGradient>
+      </View>
     </Animated.View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: 'transparent',
-    marginBottom: 20,
-    borderRadius: 16,
+    backgroundColor: '#ffffff',
+    marginBottom: 16,
+    marginHorizontal: 16,
+    borderRadius: 12,
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   header: {
     flexDirection: 'row',
@@ -1238,7 +1235,7 @@ const styles = StyleSheet.create({
     right: -4,
     bottom: -4,
     borderRadius: 28,
-    backgroundColor: 'rgba(255, 0, 255, 0.2)',
+    backgroundColor: 'transparent',
     zIndex: -1,
   },
   avatarBorder: {
@@ -1260,12 +1257,12 @@ const styles = StyleSheet.create({
   username: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#fff',
+    color: '#333333',
     marginBottom: 2,
   },
   timestamp: {
     fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.6)',
+    color: '#999999',
   },
   optionsButton: {
     padding: 8,
@@ -1283,15 +1280,15 @@ const styles = StyleSheet.create({
   },
   caption: {
     fontSize: 15,
-    color: '#fff',
+    color: '#333333',
     lineHeight: 20,
   },
   link: {
-    color: '#ff6b9d',
+    color: '#1E90FF',
     textDecorationLine: 'underline',
   },
   hashtag: {
-    color: '#ff00ff',
+    color: '#1E90FF',
     fontWeight: '600',
   },
   mediaContainer: {
@@ -1411,9 +1408,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderRadius: 12,
-    marginHorizontal: 16,
-    marginBottom: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
   },
   actionButton: {
     marginRight: 15,
@@ -1432,7 +1428,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   actionText: {
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: '#666666',
     fontSize: 12,
     fontWeight: '600',
     marginTop: 4,
@@ -1508,8 +1504,8 @@ const styles = StyleSheet.create({
   },
   stats: {
     flexDirection: 'row',
-    paddingHorizontal: 15,
-    paddingBottom: 15,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
     gap: 10,
   },
   statGradient: {
@@ -1524,14 +1520,14 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   likesText: {
-    color: '#ff6b6b',
-    fontSize: 12,
+    color: '#333333',
+    fontSize: 13,
     fontWeight: '600',
   },
   commentsText: {
-    color: '#667eea',
-    fontSize: 12,
-    fontWeight: '600',
+    color: '#666666',
+    fontSize: 13,
+    fontWeight: '500',
   },
   // Ultra-premium effect styles
   shimmerOverlay: {

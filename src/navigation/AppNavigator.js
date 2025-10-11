@@ -40,10 +40,10 @@ import PhotoTextViewerScreen from '../screens/PhotoTextViewerScreen';
 import MessageSettingsScreen from '../screens/MessageSettingsScreen';
 import BlockedUsersScreen from '../screens/BlockedUsersScreen';
 import ConfessionCommentScreen from '../screens/ConfessionCommentScreen';
-import ConfessionButtonScreen from '../screens/ConfessionButton'; // Import the new screen
-import ConfessionPersonScreen from '../screens/ConfessionPersonScreen'; // Import the new Person Confession screen
-import ConfessionPersonCommentScreen from '../screens/ConfessionPersonCommentScreen'; // Import the new Person Confession Comment screen
-import ReelsScreen from '../screens/ReelsScreen'; // Import the new Reels screen
+import ConfessionButtonScreen from '../screens/ConfessionButton';
+import ConfessionPersonScreen from '../screens/ConfessionPersonScreen';
+import ConfessionPersonCommentScreen from '../screens/ConfessionPersonCommentScreen';
+import ReelsScreen from '../screens/ReelsScreen';
 import ShareUserSelectionScreen from '../screens/ShareUserSelectionScreen';
 import StoryCreationScreen from '../screens/StoryCreationScreen';
 import CreateGroupScreen from '../screens/CreateGroupScreen';

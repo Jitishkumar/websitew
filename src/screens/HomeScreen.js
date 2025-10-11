@@ -84,92 +84,32 @@ const HomeScreen = () => {
   }, [navigation]);
 
   const createParticles = () => {
-    const newParticles = [];
-    const colors = ['#ff00ff', '#ff6b9d', '#c44569', '#ffcc00', '#00ffcc'];
-    
-    for (let i = 0; i < 15; i++) {
-      const angle = (i / 15) * Math.PI * 2;
-      const distance = 30 + Math.random() * 20;
-      const size = 3 + Math.random() * 5;
-      const duration = 800 + Math.random() * 1000;
-      
-      const animX = new Animated.Value(0);
-      const animY = new Animated.Value(0);
-      const rotate = new Animated.Value(0);
-      const scale = new Animated.Value(1);
-      const opacity = new Animated.Value(1);
-      
-      Animated.parallel([
-        Animated.timing(animX, {
-          toValue: Math.cos(angle) * distance,
-          duration,
-          useNativeDriver: true,
-        }),
-        Animated.timing(animY, {
-          toValue: Math.sin(angle) * distance - 20,
-          duration,
-          useNativeDriver: true,
-        }),
-        Animated.timing(rotate, {
-          toValue: (Math.random() - 0.5) * 360,
-          duration,
-          useNativeDriver: true,
-        }),
-        Animated.timing(scale, {
-          toValue: 0,
-          duration: duration * 0.7,
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacity, {
-          toValue: 0,
-          duration: duration * 0.7,
-          useNativeDriver: true,
-        })
-      ]).start();
-      
-      newParticles.push({
-        x: 60 + Math.cos(angle) * 10,
-        y: 30 + Math.sin(angle) * 10,
-        color: colors[Math.floor(Math.random() * colors.length)],
-        anim: {
-          x: animX,
-          y: animY,
-          rotate: rotate.interpolate({
-            inputRange: [0, 360],
-            outputRange: ['0deg', '360deg']
-          }),
-          scale,
-          opacity
-        }
-      });
-    }
-    
-    setParticles(newParticles);
-    
-    // Remove particles after animation
-    setTimeout(() => {
-      setParticles([]);
-    }, 1000);
+    // Disabled heavy particle animations for better performance
+    // This was creating 15 animated particles each time, causing lag
+    return;
   };
 
   const startLogoAnimations = () => {
-    // Pulsing animation
+    // Simplified animation for better performance
+    // Only keep a simple pulse animation
     Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
-          toValue: 1.1,
-          duration: 1500,
+          toValue: 1.05,
+          duration: 2000,
           useNativeDriver: true,
         }),
         Animated.timing(pulseAnim, {
-          toValue: 0.95,
-          duration: 1500,
+          toValue: 1,
+          duration: 2000,
           useNativeDriver: true,
         })
       ])
     ).start();
 
-    // Floating animation
+    // Disabled heavy floating and color animations for performance
+    /*
+    // Floating animation - DISABLED
     Animated.loop(
       Animated.sequence([
         Animated.timing(floatAnim, {
@@ -187,7 +127,7 @@ const HomeScreen = () => {
       ])
     ).start();
 
-    // Color transition animation
+    // Color transition animation - DISABLED (uses useNativeDriver: false which is slow)
     Animated.loop(
       Animated.sequence([
         Animated.timing(colorAnim, {
@@ -202,6 +142,7 @@ const HomeScreen = () => {
         })
       ])
     ).start();
+    */
   };
 
   const startAnimations = () => {
@@ -509,198 +450,29 @@ const HomeScreen = () => {
     return (
     <>
       <Animated.View style={{ opacity: headerAnim, transform: [{ translateY: slideAnim }] }}>
-        <LinearGradient
-          colors={isDarkMode ? 
-            ['rgba(10, 10, 42, 0.95)', 'rgba(15, 15, 35, 0.98)', 'rgba(8, 8, 28, 0.99)'] : 
-            ['#0a0a2a', '#1a1a4a', '#2a1a4a']}
-          start={{x: 0, y: 0}}
-          end={{x: 1, y: 1}}
-          style={styles.header}
+        <View
+          style={[styles.header, !isDarkMode && styles.headerLight]}
         >
           <View style={styles.logoWrapper}>
-            <TouchableOpacity 
-              activeOpacity={0.9}
-              onPress={() => {
-                // Bounce animation
-                Animated.sequence([
-                  Animated.spring(scaleAnim, {
-                    toValue: 0.9,
-                    useNativeDriver: true,
-                  }),
-                  Animated.spring(scaleAnim, {
-                    toValue: 1.1,
-                    friction: 3,
-                    tension: 40,
-                    useNativeDriver: true,
-                  }),
-                  Animated.spring(scaleAnim, {
-                    toValue: 1,
-                    friction: 7,
-                    tension: 40,
-                    useNativeDriver: true,
-                  })
-                ]).start();
-                
-                // Create particles
-                createParticles();
-                
-                // Refresh the feed
-                loadPosts();
-              }}
-            >
-              <Animated.View style={[
-                styles.logoGradientContainer,
-                { 
-                  transform: [
-                    { scale: Animated.multiply(scaleAnim, pulseAnim) },
-                    { translateY: floatAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [0, -5]
-                      }) 
-                    }
-                  ]
-                }
-              ]}>
-                <Animated.View style={[
-                  styles.logoGradient,
-                  {
-                    backgroundColor: colorAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: ['#ff00ff', '#ff6b9d']
-                    })
-                  }
-                ]}>
-                  <View style={styles.logoContent}>
-                    <Animated.View style={{
-                      transform: [{
-                        rotate: colorAnim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: ['0deg', '360deg']
-                        })
-                      }]
-                    }}>
-                      <MaterialIcons name="flash-on" size={22} color="#fff" style={styles.logoIcon} />
-                    </Animated.View>
-                    <Text style={styles.logo}>{isDarkMode ? 'Flexx' : 'flexx'}</Text>
-                  </View>
-                </Animated.View>
-                <Animated.View style={[
-                  styles.logoGlow,
-                  {
-                    opacity: pulseAnim.interpolate({
-                      inputRange: [0.9, 1, 1.1],
-                      outputRange: [0.6, 1, 0.6]
-                    }),
-                    transform: [{
-                      scale: pulseAnim.interpolate({
-                        inputRange: [0.9, 1.1],
-                        outputRange: [0.9, 1.1]
-                      })
-                    }]
-                  }
-                ]} />
-                <Animated.View style={[
-                  styles.logoShine,
-                  {
-                    transform: [{
-                      translateX: colorAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [-30, 100]
-                      })
-                    }]
-                  }
-                ]} />
-              </Animated.View>
-            </TouchableOpacity>
-            
-            {/* Particles */}
-            {particles.map((particle, index) => (
-              <Animated.View
-                key={index}
-                style={[
-                  styles.particle,
-                  {
-                    left: particle.x,
-                    top: particle.y,
-                    backgroundColor: particle.color,
-                    transform: [
-                      { translateX: particle.anim.x },
-                      { translateY: particle.anim.y },
-                      { rotate: particle.anim.rotate },
-                      { scale: particle.anim.scale }
-                    ],
-                    opacity: particle.anim.opacity
-                  }
-                ]}
-              />
-            ))}
+            {isDarkMode ? (
+              <Text style={styles.logoSimple}>INJOY</Text>
+            ) : (
+              <View style={styles.socialMateLogoContainer}>
+                <Text style={styles.socialMateLogo}>
+                  <Text style={styles.socialText}>SOCIAL </Text>
+                  <Text style={styles.mateText}>MATE</Text>
+                </Text>
+              </View>
+            )}
           </View>
           
           <View style={styles.headerIcons}>
             <TouchableOpacity 
               style={styles.iconButton}
-              onPress={() => navigation.navigate('Notifications')}
+              onPress={() => navigation.navigate('Settings')}
               activeOpacity={0.7}
             >
-              {isDarkMode ? (
-                <View style={styles.iconBackground}>
-                  <Ionicons name="notifications-outline" size={isSmallScreen ? 18 : 20} color="rgba(255, 255, 255, 0.8)" />
-                  {notificationUnreadCount > 0 && (
-                    <LinearGradient
-                      colors={['#ff00ff', '#ff6b9d']}
-                      style={[styles.notificationBadge, {
-                        width: notificationUnreadCount > 99 ? 20 : notificationUnreadCount > 9 ? 18 : 16,
-                      }]}
-                    >
-                      <Text style={[styles.notificationBadgeText, {
-                        fontSize: notificationUnreadCount > 99 ? 8 : 10,
-                      }]}>
-                        {notificationUnreadCount > 99 ? '99+' : notificationUnreadCount}
-                      </Text>
-                    </LinearGradient>
-                  )}
-                </View>
-              ) : (
-                <LinearGradient
-                  colors={['rgba(255, 0, 255, 0.2)', 'rgba(255, 0, 255, 0.1)']}
-                  style={styles.iconBackground}
-                >
-                  <Ionicons name="notifications-outline" size={22} color="#ff00ff" />
-                  {notificationUnreadCount > 0 && (
-                    <LinearGradient
-                      colors={['#ff00ff', '#ff6b9d']}
-                      style={[styles.notificationBadge, {
-                        width: notificationUnreadCount > 99 ? 20 : notificationUnreadCount > 9 ? 18 : 16,
-                      }]}
-                    >
-                      <Text style={[styles.notificationBadgeText, {
-                        fontSize: notificationUnreadCount > 99 ? 8 : 10,
-                      }]}>
-                        {notificationUnreadCount > 99 ? '99+' : notificationUnreadCount}
-                      </Text>
-                    </LinearGradient>
-                  )}
-                </LinearGradient>
-              )}
-            </TouchableOpacity>
-          
-            <TouchableOpacity 
-              style={styles.iconButton}
-              onPress={() => navigation.navigate('Trending')}
-              activeOpacity={0.7}
-            >
-              {isDarkMode ? (
-                <View style={styles.iconBackground}>
-                  <MaterialIcons name="trending-up" size={isSmallScreen ? 18 : 20} color="rgba(255, 255, 255, 0.8)" />
-                </View>
-              ) : (
-                <LinearGradient
-                  colors={['rgba(255, 107, 157, 0.2)', 'rgba(255, 107, 157, 0.1)']}
-                  style={styles.iconBackground}
-                >
-                  <MaterialIcons name="trending-up" size={22} color="#ff6b9d" />
-                </LinearGradient>
-              )}
+              <Ionicons name="settings-outline" size={24} color={isDarkMode ? "rgba(255, 255, 255, 0.9)" : "#333333"} />
             </TouchableOpacity>
             
             <TouchableOpacity 
@@ -708,50 +480,15 @@ const HomeScreen = () => {
               onPress={() => navigation.navigate('Search')}
               activeOpacity={0.7}
             >
-              {isDarkMode ? (
-                <View style={styles.iconBackground}>
-                  <MaterialIcons name="search" size={isSmallScreen ? 18 : 20} color="rgba(255, 255, 255, 0.8)" />
-                </View>
-              ) : (
-                <LinearGradient
-                  colors={['rgba(196, 69, 105, 0.2)', 'rgba(196, 69, 105, 0.1)']}
-                  style={styles.iconBackground}
-                >
-                  <MaterialIcons name="search" size={22} color="#c44569" />
-                </LinearGradient>
-              )}
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.iconButton}
-              onPress={() => setShowTermsModal(true)}
-              activeOpacity={0.7}
-            >
-              {isDarkMode ? (
-                <View style={styles.iconBackground}>
-                  <MaterialIcons name="videocam" size={isSmallScreen ? 18 : 20} color="rgba(255, 255, 255, 0.8)" />
-                </View>
-              ) : (
-                <LinearGradient
-                  colors={['rgba(255, 0, 255, 0.2)', 'rgba(255, 0, 255, 0.1)']}
-                  style={styles.iconBackground}
-                >
-                  <MaterialIcons name="videocam" size={22} color="#ff00ff" />
-                </LinearGradient>
-              )}
+              <MaterialIcons name="search" size={24} color={isDarkMode ? "rgba(255, 255, 255, 0.9)" : "#333333"} />
             </TouchableOpacity>
           </View>
-        </LinearGradient>
+        </View>
       </Animated.View>
 
       <Animated.View style={{ opacity: createPostAnim, transform: [{ scale: scaleAnim }] }}>
-        <LinearGradient
-          colors={isDarkMode ? 
-            ['rgba(255, 255, 255, 0.03)', 'rgba(255, 255, 255, 0.01)', 'transparent'] : 
-            ['rgba(255, 0, 255, 0.1)', 'rgba(255, 0, 255, 0.05)', 'transparent']}
-          start={{x: 0, y: 0}}
-          end={{x: 1, y: 1}}
-          style={styles.createPost}
+        <View
+          style={[styles.createPost, !isDarkMode && styles.createPostLight]}
         >
           <View style={styles.postInputContainer}>
             <View style={styles.avatarContainer}>
@@ -781,57 +518,51 @@ const HomeScreen = () => {
               onPress={handleCreatePost}
               activeOpacity={0.8}
             >
-              {isDarkMode ? (
-                <View style={styles.postInputGradient}>
-                  <MaterialIcons name="edit" size={20} color="rgba(255, 255, 255, 0.6)" />
-                  <Text style={styles.postInputPlaceholder}>Share Something</Text>
-                </View>
-              ) : (
-                <LinearGradient
-                  colors={['rgba(255, 0, 255, 0.1)', 'rgba(255, 0, 255, 0.05)']}
-                  style={styles.postInputGradient}
-                >
-                  <MaterialIcons name="edit" size={20} color="#ff00ff" />
-                  <Text style={styles.postInputPlaceholder}>Share Something</Text>
-                </LinearGradient>
-              )}
+              <View style={[styles.postInputGradient, !isDarkMode && styles.postInputLight]}>
+                <Text style={[styles.postInputPlaceholder, !isDarkMode && styles.postInputPlaceholderLight]}>What's on your head?</Text>
+              </View>
             </TouchableOpacity>
           </View>
           
-          <View style={styles.postOptions}>
-            <TouchableOpacity 
-              style={styles.postOption}
-              onPress={handleCreatePost}
-              activeOpacity={0.8}
-            >
-              {isDarkMode ? (
+          {!isDarkMode && (
+            <View style={styles.postOptionsLight}>
+              <TouchableOpacity style={styles.postOptionButtonLight} onPress={handleCreatePost}>
+                <MaterialIcons name="image" size={20} color="#1E90FF" />
+                <Text style={styles.postOptionTextLight}>Image</Text>
+              </TouchableOpacity>
+              <View style={styles.postOptionDivider} />
+              <TouchableOpacity style={styles.postOptionButtonLight} onPress={handleCreatePost}>
+                <MaterialIcons name="videocam" size={20} color="#1E90FF" />
+                <Text style={styles.postOptionTextLight}>Videos</Text>
+              </TouchableOpacity>
+              <View style={styles.postOptionDivider} />
+              <TouchableOpacity style={styles.postOptionButtonLight} onPress={handleCreatePost}>
+                <MaterialIcons name="attach-file" size={20} color="#1E90FF" />
+                <Text style={styles.postOptionTextLight}>Attach</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          {isDarkMode && (
+            <View style={styles.postOptions}>
+              <TouchableOpacity 
+                style={styles.postOption}
+                onPress={handleCreatePost}
+                activeOpacity={0.8}
+              >
                 <View style={styles.createPostButton}>
                   <MaterialIcons name="add" size={18} color="rgba(255, 255, 255, 0.9)" />
                   <Text style={styles.createPostText}>Create Post</Text>
                 </View>
-              ) : (
-                <LinearGradient
-                  colors={['#ff00ff', '#ff6b9d', '#c44569']}
-                  style={styles.createPostButton}
-                >
-                  <MaterialIcons name="add" size={18} color="#fff" />
-                  <Text style={styles.createPostText}>Create Post</Text>
-                </LinearGradient>
-              )}
-              <View style={styles.createPostGlow} />
-            </TouchableOpacity>
-          </View>
-        </LinearGradient>
+                <View style={styles.createPostGlow} />
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
       </Animated.View>
 
       <Animated.View style={{ opacity: storiesAnim, transform: [{ translateY: slideAnim }] }}>
-        <LinearGradient
-          colors={isDarkMode ? 
-            ['rgba(255, 255, 255, 0.02)', 'rgba(255, 255, 255, 0.01)', 'transparent'] : 
-            ['rgba(255, 0, 255, 0.08)', 'rgba(255, 0, 255, 0.04)', 'transparent']}
-          start={{x: 0, y: 0}}
-          end={{x: 1, y: 1}}
-          style={styles.stories}
+        <View
+          style={[styles.stories, !isDarkMode && styles.storiesLight]}
         >
           <FlatList
             horizontal
@@ -871,19 +602,16 @@ const HomeScreen = () => {
                           )}
                         </View>
                       ) : (
-                        <LinearGradient
-                          colors={['rgba(255, 0, 255, 0.15)', 'rgba(255, 0, 255, 0.1)']}
-                          style={styles.addStoryButton}
-                        >
+                        <View style={[styles.addStoryButton, styles.addStoryButtonLight]}>
                           {uploading ? (
-                            <ActivityIndicator size="small" color="#ff00ff" />
+                            <ActivityIndicator size="small" color="#1E90FF" />
                           ) : (
-                            <MaterialIcons name="add" size={24} color="#ff00ff" />
+                            <MaterialIcons name="add" size={24} color="#1E90FF" />
                           )}
-                        </LinearGradient>
+                        </View>
                       )
                     )}
-                    <Text style={styles.storyText}>Your story</Text>
+                    <Text style={[styles.storyText, !isDarkMode && styles.storyTextLight]}>Your story</Text>
                   </TouchableOpacity>
                 );
               }
@@ -895,26 +623,26 @@ const HomeScreen = () => {
                   <LinearGradient
                     colors={isDarkMode ? 
                       (item.has_unviewed ? 
-                        ['rgba(255, 255, 255, 0.4)', 'rgba(255, 255, 255, 0.3)', 'rgba(255, 255, 255, 0.2)'] : 
+                        ['#1E90FF', '#4169E1', '#1E90FF'] : 
                         ['rgba(255, 255, 255, 0.15)', 'rgba(255, 255, 255, 0.1)', 'rgba(255, 255, 255, 0.05)']) :
                       (item.has_unviewed ? 
-                        ['#ff00ff', '#ff6b9d', '#c44569'] : 
-                        ['#666666', '#888888', '#666666'])}
+                        ['#1E90FF', '#4169E1', '#1E90FF'] : 
+                        ['#d0d0d0', '#e0e0e0', '#d0d0d0'])}
                     start={{x: 0, y: 0}}
                     end={{x: 1, y: 1}}
                     style={styles.storyRing}
                   >
                     <Image
-                      style={styles.storyAvatar}
+                      style={[styles.storyAvatar, !isDarkMode && styles.storyAvatarLight]}
                       source={{ uri: item.profiles.avatar_url || 'https://via.placeholder.com/60' }}
                     />
                   </LinearGradient>
-                  <Text style={styles.storyText}>{item.profiles.username}</Text>
+                    <Text style={[styles.storyText, !isDarkMode && styles.storyTextLight]}>{item.profiles.username}</Text>
                 </TouchableOpacity>
               );
             }}
           />
-        </LinearGradient>
+        </View>
       </Animated.View>
     </>
     );
@@ -922,11 +650,10 @@ const HomeScreen = () => {
 
   return (
     <>
-      <StatusBar style="light" />
-      <SafeAreaView style={[styles.safeArea, { backgroundColor: isDarkMode ? '#0a0a1a' : '#0a0a2a' }]} edges={['top', 'left', 'right']}>
-        <LinearGradient
-          colors={isDarkMode ? ['#0a0a1a', '#0f0f25', '#0a0a1a'] : ['#0a0a2a', '#1a1a4a', '#2a1a4a']}
-          style={styles.container}
+      <StatusBar style={isDarkMode ? "light" : "dark"} />
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: isDarkMode ? '#1a1d2e' : '#f5f7fa' }]} edges={['top', 'left', 'right']}>
+        <View
+          style={[styles.container, { backgroundColor: isDarkMode ? '#1a1d2e' : '#f5f7fa' }]}
         >
           <ScrollView
             showsVerticalScrollIndicator={false}
@@ -1190,7 +917,7 @@ const HomeScreen = () => {
               </LinearGradient>
             </View>
           </Modal>
-        </LinearGradient>
+        </View>
       </SafeAreaView>
     </>
   );
@@ -1199,11 +926,11 @@ const HomeScreen = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#0a0a1a',
+    backgroundColor: '#1a1d2e',
   },
   container: {
     flex: 1,
-    backgroundColor: '#0a0a1a',
+    backgroundColor: '#1a1d2e',
   },
   loadingContainer: {
     flex: 1,
@@ -1214,12 +941,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderBottomWidth: 0.5,
-    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    backdropFilter: 'blur(10px)',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: 'transparent',
     minHeight: 60,
   },
   logoWrapper: {
@@ -1313,29 +1037,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    gap: isSmallScreen ? 4 : 6,
     flex: 0,
     minWidth: isSmallScreen ? 160 : 180,
     paddingRight: 4,
   },
   iconButton: {
-    padding: isSmallScreen ? 4 : 6,
-    borderRadius: 10,
+    padding: 4,
   },
   iconBackground: {
-    width: isSmallScreen ? 34 : 36,
-    height: isSmallScreen ? 34 : 36,
-    borderRadius: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderWidth: 0.5,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    shadowColor: 'rgba(0, 0, 0, 0.3)',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    backgroundColor: 'transparent',
   },
   notificationBadge: {
     position: 'absolute',
@@ -1456,8 +1171,7 @@ const styles = StyleSheet.create({
   stories: {
     padding: 16,
     marginBottom: 8,
-    borderBottomWidth: 0.5,
-    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: 'transparent',
   },
   storyItem: {
     alignItems: 'center',
@@ -1741,6 +1455,113 @@ const styles = StyleSheet.create({
   },
   scrollViewContent: {
     paddingBottom: 100, // Add padding to prevent bottom navigation overlap
+  },
+  // Light Mode Styles
+  headerLight: {
+    backgroundColor: '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  socialMateLogoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  socialMateLogo: {
+    fontSize: 20,
+    fontFamily: 'Poppins_700Bold',
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+  },
+  socialText: {
+    color: '#333333',
+  },
+  mateText: {
+    color: '#1E90FF',
+  },
+  createPostLight: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  postInputLight: {
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  postInputPlaceholderLight: {
+    color: '#999999',
+    fontSize: 15,
+  },
+  postOptionsLight: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    marginTop: 15,
+    paddingTop: 15,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+  },
+  postOptionButtonLight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  postOptionTextLight: {
+    color: '#1E90FF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  postOptionDivider: {
+    width: 1,
+    height: 20,
+    backgroundColor: '#e0e0e0',
+  },
+  storiesLight: {
+    backgroundColor: '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  createPostGlow: {
+    // Placeholder for glow effect
+  },
+  notificationBadgeLight: {
+    backgroundColor: '#FF4444',
+  },
+  addStoryButtonLight: {
+    backgroundColor: '#f0f0f0',
+    borderWidth: 2,
+    borderColor: '#1E90FF',
+    borderStyle: 'dashed',
+  },
+  storyTextLight: {
+    color: '#333333',
+  },
+  storyAvatarLight: {
+    borderColor: '#ffffff',
+  },
+  logoSimple: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    letterSpacing: 2,
+    fontFamily: 'Poppins_700Bold',
   },
 });
 

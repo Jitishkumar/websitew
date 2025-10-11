@@ -14,7 +14,6 @@ import {
   ScrollView,
   Linking,
   TextInput,
-  Animated,
   Vibration
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
@@ -61,16 +60,7 @@ const PostItem = ({ post, onOptionsPress }) => {
   const touchTimer = useRef(null);
   const isTouchHolding = useRef(false);
 
-  // Animation refs for ultra-premium UI
-  const postFadeAnim = useRef(new Animated.Value(0)).current;
-  const postScaleAnim = useRef(new Animated.Value(0.95)).current;
-  const likeScaleAnim = useRef(new Animated.Value(1)).current;
-  const avatarGlowAnim = useRef(new Animated.Value(0)).current;
-  const heartParticleAnim = useRef(new Animated.Value(0)).current;
-  const shimmerAnim = useRef(new Animated.Value(0)).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-  const rotateAnim = useRef(new Animated.Value(0)).current;
-  const [showHeartParticles, setShowHeartParticles] = useState(false);
+  // Animations disabled for better performance
 
   // Add this function to safely get the avatar URL
   const getAvatarUrl = () => {
@@ -99,7 +89,6 @@ const PostItem = ({ post, onOptionsPress }) => {
   const [seeking, setSeeking] = useState(false);
   const [showControls, setShowControls] = useState(false);
   const [showPauseIcon, setShowPauseIcon] = useState(false);
-  const fadeAnim = useRef(new Animated.Value(0)).current;
   const videoRef = useRef(null);
   const controlsTimeout = useRef(null);
   const pauseIconTimeout = useRef(null);
@@ -110,65 +99,7 @@ const PostItem = ({ post, onOptionsPress }) => {
   // Get video context
   const { activeVideoId, setActiveVideo, clearActiveVideo, isFullscreenMode, setFullscreen: setContextFullscreen } = useVideo();
 
-  // Start ultra-premium animations when component mounts
-  useEffect(() => {
-    const startAnimations = () => {
-      Animated.parallel([
-        // Entrance animations
-        Animated.timing(postFadeAnim, {
-          toValue: 1,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-        Animated.spring(postScaleAnim, {
-          toValue: 1,
-          tension: 120,
-          friction: 7,
-          useNativeDriver: true,
-        }),
-        // Continuous glow effects
-        Animated.loop(
-          Animated.sequence([
-            Animated.timing(avatarGlowAnim, {
-              toValue: 1,
-              duration: 1500,
-              useNativeDriver: true,
-            }),
-            Animated.timing(avatarGlowAnim, {
-              toValue: 0.3,
-              duration: 1500,
-              useNativeDriver: true,
-            }),
-          ])
-        ),
-        // Shimmer effect
-        Animated.loop(
-          Animated.timing(shimmerAnim, {
-            toValue: 1,
-            duration: 3000,
-            useNativeDriver: true,
-          })
-        ),
-        // Subtle pulse
-        Animated.loop(
-          Animated.sequence([
-            Animated.timing(pulseAnim, {
-              toValue: 1.02,
-              duration: 2000,
-              useNativeDriver: true,
-            }),
-            Animated.timing(pulseAnim, {
-              toValue: 1,
-              duration: 2000,
-              useNativeDriver: true,
-            }),
-          ])
-        ),
-      ]).start();
-    };
-    
-    startAnimations();
-  }, []);
+  // Animations disabled for better performance
 
   // Helper function to safely pause video
   const safePauseVideo = async () => {
@@ -219,30 +150,20 @@ const PostItem = ({ post, onOptionsPress }) => {
           videoRef.current.playAsync();
         }
       } else if (activeVideoId === post.id) {
-        // If we're pausing the active video, clear the active video
         clearActiveVideo();
         if (videoRef.current) {
           videoRef.current.pauseAsync();
         }
         
-        // Show pause icon with animation
+        // Show pause icon briefly
         setShowPauseIcon(true);
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 200,
-          useNativeDriver: true
-        }).start();
         
-        // Hide pause icon after a short delay
+        // Hide after 800ms
         if (pauseIconTimeout.current) {
           clearTimeout(pauseIconTimeout.current);
         }
         pauseIconTimeout.current = setTimeout(() => {
-          Animated.timing(fadeAnim, {
-            toValue: 0,
-            duration: 200,
-            useNativeDriver: true
-          }).start(() => setShowPauseIcon(false));
+          setShowPauseIcon(false);
         }, 800);
       }
     }
@@ -554,43 +475,10 @@ const PostItem = ({ post, onOptionsPress }) => {
     // Prevent double submits
     if (isLiking || !currentUser) return;
 
-    // Ultra-premium like animation with particles
-    setShowHeartParticles(true);
-    Vibration.vibrate(50); // Haptic feedback
-    
-    Animated.parallel([
-      Animated.sequence([
-        Animated.timing(likeScaleAnim, {
-          toValue: 1.4,
-          duration: 100,
-          useNativeDriver: true,
-        }),
-        Animated.spring(likeScaleAnim, {
-          toValue: 1,
-          tension: 300,
-          friction: 4,
-          useNativeDriver: true,
-        }),
-      ]),
-      // Heart particle explosion
-      Animated.timing(heartParticleAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      // Rotation effect
-      Animated.timing(rotateAnim, {
-        toValue: 1,
-        duration: 400,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setShowHeartParticles(false);
-      heartParticleAnim.setValue(0);
-      rotateAnim.setValue(0);
-    });
+    // Simple haptic feedback
+    Vibration.vibrate(30);
 
-    // Optimistic UI
+    // Optimistic UI - instant update
     const previousLiked = isLiked;
     const previousCount = likesCount;
     const optimisticLiked = !previousLiked;
@@ -716,61 +604,17 @@ const PostItem = ({ post, onOptionsPress }) => {
   };
   
   return (
-    <Animated.View 
-      style={{
-        opacity: postFadeAnim,
-        transform: [
-          { scale: Animated.multiply(postScaleAnim, pulseAnim) },
-          { perspective: 1000 }
-        ]
-      }}
-    >
-      <View style={styles.container}>
+    <View style={styles.container}>
         {/* Post Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={handleProfilePress} style={styles.profileContainer}>
             <View style={styles.avatarContainer}>
-              <Animated.View 
-                style={[
-                  styles.avatarGlow,
-                  {
-                    opacity: avatarGlowAnim,
-                    transform: [{
-                      scale: avatarGlowAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [1, 1.2]
-                      })
-                    }]
-                  }
-                ]}
-              />
-              {/* Multiple glow layers for ultra-premium effect */}
-              <Animated.View 
-                style={[
-                  styles.avatarGlowSecondary,
-                  {
-                    opacity: avatarGlowAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0, 0.6]
-                    }),
-                    transform: [{
-                      scale: avatarGlowAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [1, 1.4]
-                      })
-                    }]
-                  }
-                ]}
-              />
-              <LinearGradient
-                colors={['#ff00ff', '#ff6b9d', '#c44569']}
-                style={styles.avatarBorder}
-              >
+              <View style={styles.avatarBorder}>
                 <Image 
                   source={{ uri: getAvatarUrl() }}
                   style={styles.avatar}
                 />
-              </LinearGradient>
+              </View>
             </View>
             <View style={styles.userInfo}>
               <Text style={styles.username}>{post?.profiles?.username || 'Unknown'}</Text>
@@ -898,9 +742,9 @@ const PostItem = ({ post, onOptionsPress }) => {
                   />
                   
                   {showPauseIcon && (
-                    <Animated.View style={[styles.videoOverlay, { opacity: fadeAnim }]}>
+                    <View style={styles.videoOverlay}>
                       <Ionicons name="pause" size={60} color="#ffffff" />
-                    </Animated.View>
+                    </View>
                   )}
 
                   {showControls && (
@@ -946,7 +790,7 @@ const PostItem = ({ post, onOptionsPress }) => {
                 <Image
                   source={{ uri: post.media_url }}
                   style={styles.media}
-                  resizeMode="cover"
+                  resizeMode="contain"
                   onLoadStart={() => setImageLoaded(false)}
                   onLoad={() => setImageLoaded(true)}
                 />
@@ -963,59 +807,7 @@ const PostItem = ({ post, onOptionsPress }) => {
 
         {/* Post Actions */}
         <View style={styles.actions}>
-          <Animated.View style={{ 
-            transform: [
-              { scale: likeScaleAnim },
-              { 
-                rotate: rotateAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: ['0deg', '360deg']
-                })
-              }
-            ] 
-          }}>
-            {/* Heart particles effect */}
-            {showHeartParticles && (
-              <View style={styles.particleContainer}>
-                {[...Array(8)].map((_, i) => (
-                  <Animated.View
-                    key={i}
-                    style={[
-                      styles.heartParticle,
-                      {
-                        transform: [
-                          {
-                            translateX: heartParticleAnim.interpolate({
-                              inputRange: [0, 1],
-                              outputRange: [0, (Math.cos(i * 45 * Math.PI / 180) * 50)]
-                            })
-                          },
-                          {
-                            translateY: heartParticleAnim.interpolate({
-                              inputRange: [0, 1],
-                              outputRange: [0, (Math.sin(i * 45 * Math.PI / 180) * 50)]
-                            })
-                          },
-                          {
-                            scale: heartParticleAnim.interpolate({
-                              inputRange: [0, 0.5, 1],
-                              outputRange: [0, 1, 0]
-                            })
-                          }
-                        ],
-                        opacity: heartParticleAnim.interpolate({
-                          inputRange: [0, 0.3, 1],
-                          outputRange: [0, 1, 0]
-                        })
-                      }
-                    ]}
-                  >
-                    <Ionicons name="heart" size={8} color="#ff00ff" />
-                  </Animated.View>
-                ))}
-              </View>
-            )}
-            <TouchableOpacity 
+          <TouchableOpacity 
               style={[styles.actionButton, isLiked && styles.likedButton]} 
               onPress={handleLike}
               disabled={isLiking}
@@ -1028,51 +820,38 @@ const PostItem = ({ post, onOptionsPress }) => {
               >
                 <Ionicons 
                   name={isLiked ? "heart" : "heart-outline"} 
-                  size={20} 
-                  color={isLiked ? "#ff6b9d" : "rgba(255, 255, 255, 0.7)"} 
+                  size={26} 
+                  color={isLiked ? "#ff0050" : "#fff"} 
                   style={isLiked && styles.likedIcon}
                 />
               </View>
-              <Text style={[styles.actionText, isLiked && styles.likedActionText]}>{likesCount}</Text>
+              {likesCount > 0 && <Text style={[styles.actionText, isLiked && styles.likedActionText]}>{likesCount}</Text>}
             </TouchableOpacity>
-          </Animated.View>
 
           <TouchableOpacity style={styles.actionButton} onPress={handleComment}>
             <View style={styles.actionButtonGradient}>
-              <Ionicons name="chatbubble-outline" size={20} color="rgba(255, 255, 255, 0.7)" />
+              <Ionicons name="chatbubble-outline" size={26} color="#fff" />
             </View>
-            <Text style={styles.actionText}>{commentsCount}</Text>
+            {commentsCount > 0 && <Text style={styles.actionText}>{commentsCount}</Text>}
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.actionButton} onPress={handleShare}>
             <View style={styles.actionButtonGradient}>
-              <Ionicons name="share-outline" size={20} color="rgba(255, 255, 255, 0.7)" />
+              <Ionicons name="paper-plane-outline" size={24} color="#fff" />
             </View>
           </TouchableOpacity>
 
+          <View style={{ flex: 1 }} />
           {post.type === 'video' && (
             <View style={styles.actionButton}>
               <View style={styles.actionButtonGradient}>
-                <Ionicons name="eye-outline" size={20} color="rgba(255, 255, 255, 0.7)" />
+                <Ionicons name="bookmark-outline" size={24} color="#fff" />
               </View>
-              <Text style={styles.actionText}>{post.views || 0}</Text>
             </View>
           )}
         </View>
 
-        {/* Post Stats */}
-        <View style={styles.stats}>
-          <TouchableOpacity onPress={handleShowLikes}>
-            <View style={styles.statGradient}>
-              <Text style={styles.likesText}>{likesCount} likes</Text>
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={handleComment}>
-            <View style={styles.statGradient}>
-              <Text style={styles.commentsText}>{commentsCount} comments</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
+        {/* Post Stats - Removed for cleaner look */}
 
         {/* Likes Modal */}
         <Modal
@@ -1150,32 +929,23 @@ const PostItem = ({ post, onOptionsPress }) => {
             </View>
           </View>
         </Modal>
-      </View>
-    </Animated.View>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    backgroundColor: '#16213e',
+    marginHorizontal: 16,
     marginBottom: 16,
-    marginHorizontal: 12,
     borderRadius: 20,
     overflow: 'hidden',
-    borderWidth: 0.5,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    shadowColor: 'rgba(0, 0, 0, 0.3)',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 3,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 16,
-    paddingBottom: 12,
   },
   profileContainer: {
     flexDirection: 'row',
@@ -1197,30 +967,31 @@ const styles = StyleSheet.create({
     zIndex: -1,
   },
   avatarBorder: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    padding: 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatar: {
     width: 44,
     height: 44,
     borderRadius: 22,
+    padding: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
   },
   userInfo: {
     flex: 1,
   },
   username: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 2,
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#ffffff',
   },
   timestamp: {
     fontSize: 12,
     color: 'rgba(255, 255, 255, 0.6)',
+    marginTop: 2,
   },
   optionsButton: {
     padding: 8,
@@ -1237,8 +1008,8 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   caption: {
-    fontSize: 15,
-    color: '#fff',
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.9)',
     lineHeight: 20,
   },
   link: {
@@ -1250,23 +1021,28 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   mediaContainer: {
-    marginBottom: 12,
+    marginBottom: 0,
   },
   videoContainer: {
     position: 'relative',
-    aspectRatio: 16/9,
-    backgroundColor: '#000',
-    borderRadius: 12,
+    width: '100%',
+    minHeight: 300,
+    maxHeight: 500,
+    backgroundColor: '#0f1419',
     overflow: 'hidden',
+    borderRadius: 12,
     marginHorizontal: 16,
+    marginBottom: 12,
   },
   imageContainer: {
     position: 'relative',
-    aspectRatio: 16/9,
-    backgroundColor: '#000',
-    borderRadius: 12,
+    width: '100%',
+    aspectRatio: 1,
+    backgroundColor: '#0f1419',
     overflow: 'hidden',
+    borderRadius: 12,
     marginHorizontal: 16,
+    marginBottom: 12,
   },
   media: {
     width: '100%',
@@ -1366,34 +1142,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderRadius: 12,
-    marginHorizontal: 16,
-    marginBottom: 8,
   },
   actionButton: {
-    marginRight: 15,
+    marginRight: 18,
+    flexDirection: 'row',
     alignItems: 'center',
   },
   actionButtonGradient: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderWidth: 0.5,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    shadowColor: 'rgba(0, 0, 0, 0.2)',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
   },
   actionText: {
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontSize: 12,
+    color: '#ffffff',
+    fontSize: 15,
     fontWeight: '600',
-    marginTop: 4,
+    marginLeft: 8,
   },
   modalContainer: {
     flex: 1,

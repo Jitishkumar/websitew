@@ -213,9 +213,9 @@ const ShortsScreen = ({ route }) => {
     return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
   };
 
-  // Handle video press - show controls only (do not toggle play/pause)
+  // Handle video press - do nothing (removed controls)
   const handleVideoPress = () => {
-    showVideoControls();
+    // Single tap does nothing
   };
   
   // Add touch handlers for press-to-pause functionality
@@ -604,49 +604,21 @@ const ShortsScreen = ({ route }) => {
             </View>
           </LinearGradient>
 
-          {/* Video controls */}
-          {showControls && (
-            <LinearGradient 
-              colors={['rgba(0,0,0,0.7)', 'transparent', 'rgba(0,0,0,0.7)']} 
-              style={styles.controlsOverlay}
+          {/* Progress bar - always visible at top */}
+          <View style={styles.progressBarContainer} pointerEvents="none">
+            <View style={styles.progressBackground} />
+            <View style={[styles.progressBar, { width: `${progress * 100}%` }]} />
+          </View>
+
+          {/* Back button - always visible */}
+          <View style={[styles.topHeader, { paddingTop: insets.top }]} pointerEvents="box-none">
+            <TouchableOpacity 
+              style={styles.backButton} 
+              onPress={() => navigation.goBack()}
             >
-              {/* Top controls */}
-              <View style={[styles.topControls, { paddingTop: insets.top }]}>
-                <TouchableOpacity 
-                  style={styles.backButton} 
-                  onPress={() => navigation.goBack()}
-                >
-                  <Ionicons name="arrow-back" size={28} color="#fff" />
-                </TouchableOpacity>
-              </View>
-              
-              {/* Bottom controls */}
-              <View style={styles.bottomControls}>
-                <View style={styles.timeContainer}>
-                  <Text style={styles.timeText}>{formatTime(currentTime)}</Text>
-                  <Text style={styles.timeText}>{formatTime(duration)}</Text>
-                </View>
-                
-                <View style={styles.seekbarContainer}>
-                  <View style={styles.progressBackground} />
-                  <View style={[styles.progressBar, { width: `${progress * 100}%` }]} />
-                  <View style={styles.seekbarTouchable}>
-                    <TouchableOpacity 
-                      style={[styles.seekKnob, { left: `${progress * 100}%` }]}
-                    />
-                    <View 
-                      style={styles.seekbarTouchArea}
-                      onTouchStart={(event) => {
-                        const { locationX } = event.nativeEvent;
-                        const seekPosition = locationX / width;
-                        handleSeek(Math.max(0, Math.min(1, seekPosition)));
-                      }}
-                    />
-                  </View>
-                </View>
-              </View>
-            </LinearGradient>
-          )}
+              <Ionicons name="arrow-back" size={28} color="#fff" />
+            </TouchableOpacity>
+          </View>
           
           {/* Pause icon that appears briefly when video is paused */}
           {showPauseIcon && index === currentIndex && (
@@ -828,6 +800,17 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
   },
+  topHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    padding: 20,
+    zIndex: 10,
+  },
   controlsOverlay: {
     position: 'absolute',
     top: 0,
@@ -877,6 +860,14 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
     opacity: 0.8,
   },
+  progressBarContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    zIndex: 1,
+  },
   seekbarContainer: {
     height: 20,
     justifyContent: 'center',
@@ -885,20 +876,17 @@ const styles = StyleSheet.create({
   progressBackground: {
     position: 'absolute',
     left: 0,
+    right: 0,
     height: 3,
     backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    width: '100%',
-    borderRadius: 2,
+    borderRadius: 1.5,
   },
   progressBar: {
     position: 'absolute',
     left: 0,
     height: 3,
     backgroundColor: '#3b82f6',
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    zIndex: 1,
+    borderRadius: 1.5,
   },
   seekbarTouchable: {
     position: 'absolute',
