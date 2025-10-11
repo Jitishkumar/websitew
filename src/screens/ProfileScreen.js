@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, Alert, Modal, ActivityIndicator, FlatList, Dimensions, ScrollView } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Video } from 'expo-av';
@@ -735,11 +736,51 @@ const ProfileScreen = () => {
     }
   };
 
-  const fetchUserContent = async () => {
+  const fetchUserContent = async (isSilent = false) => {
     try {
-      setLoading(true);
+      if (!isSilent) {
+        setLoading(true);
+      }
+      
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+
+      // Try to load from cache first for instant display
+      const CONTENT_CACHE_KEY = `user_content_${user.id}_${activeTab}`;
+      const CACHE_EXPIRY_TIME = 3 * 60 * 1000; // 3 minutes for content
+      
+      try {
+        const cachedData = await AsyncStorage.getItem(CONTENT_CACHE_KEY);
+        if (cachedData && !isSilent) {
+          const { content, timestamp } = JSON.parse(cachedData);
+          const now = Date.now();
+          
+          // Show cached content immediately
+          if (content) {
+            if (activeTab === 'Post') {
+              setPosts(content.posts || []);
+            } else {
+              setShorts(content.shorts || []);
+            }
+            setTotalViews(content.totalViews || 0);
+            setTotalLikes(content.totalLikes || 0);
+            setLoading(false);
+            console.log('✅ Instant load: Showing cached content');
+            
+            // Refresh in background if cache is old
+            if (now - timestamp > CACHE_EXPIRY_TIME) {
+              setTimeout(() => {
+                fetchUserContent(true); // Silent refresh
+              }, 100);
+              return;
+            } else {
+              return; // Cache is fresh, no need to fetch
+            }
+          }
+        }
+      } catch (cacheError) {
+        console.error('Content cache error:', cacheError);
+      }
 
       // Fetch ALL posts first to calculate totals
       const { data: allPostsData, error: allPostsError } = await supabase
@@ -804,6 +845,25 @@ const ProfileScreen = () => {
         }));
         setShorts(shortsWithLikeStatus || []);
       }
+      
+      // Cache the content for instant loading next time
+      try {
+        const CONTENT_CACHE_KEY = `user_content_${user.id}_${activeTab}`;
+        const contentToCache = {
+          posts: activeTab === 'Post' ? posts : [],
+          shorts: activeTab === 'Short' ? shorts : [],
+          totalViews,
+          totalLikes
+        };
+        const cacheData = {
+          content: contentToCache,
+          timestamp: Date.now()
+        };
+        await AsyncStorage.setItem(CONTENT_CACHE_KEY, JSON.stringify(cacheData));
+        console.log('Cached user content for instant loading');
+      } catch (cacheError) {
+        console.error('Error caching content:', cacheError);
+      }
     } catch (error) {
       console.error('Error fetching user content:', error);
     } finally {
@@ -844,12 +904,42 @@ const ProfileScreen = () => {
     }
   };
 
-  const loadUserProfile = async () => {
+  const loadUserProfile = async (isSilent = false) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         console.log('No user found');
         return;
+      }
+
+      // Try to load from cache first for instant display
+      const PROFILE_CACHE_KEY = `profile_${user.id}`;
+      const CACHE_EXPIRY_TIME = 5 * 60 * 1000; // 5 minutes
+      
+      try {
+        const cachedData = await AsyncStorage.getItem(PROFILE_CACHE_KEY);
+        if (cachedData && !isSilent) {
+          const { profile: cachedProfile, timestamp } = JSON.parse(cachedData);
+          const now = Date.now();
+          
+          // Show cached profile immediately
+          if (cachedProfile) {
+            setUserProfile(cachedProfile);
+            console.log('✅ Instant load: Showing cached profile');
+            
+            // Refresh in background if cache is old
+            if (now - timestamp > CACHE_EXPIRY_TIME) {
+              setTimeout(() => {
+                loadUserProfile(true); // Silent refresh
+              }, 100);
+              return;
+            } else {
+              return; // Cache is fresh, no need to fetch
+            }
+          }
+        }
+      } catch (cacheError) {
+        console.error('Cache error:', cacheError);
       }
 
       // Load profile data (critical)
@@ -922,12 +1012,27 @@ const ProfileScreen = () => {
         .eq('id', user.id)
         .maybeSingle();
 
-      setUserProfile({
+      const finalProfile = {
         ...newData,
         avatar_url: avatarUrl,
         cover_url: coverUrl,
         isVerified: verifiedData?.verified || false
-      });
+      };
+      
+      setUserProfile(finalProfile);
+      
+      // Cache the profile for instant loading next time
+      try {
+        const PROFILE_CACHE_KEY = `profile_${user.id}`;
+        const cacheData = {
+          profile: finalProfile,
+          timestamp: Date.now()
+        };
+        await AsyncStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(cacheData));
+        console.log('Cached profile for instant loading');
+      } catch (cacheError) {
+        console.error('Error caching profile:', cacheError);
+      }
     } catch (error) {
       console.error('Error loading user profile:', error);
       setUserProfile(null);
@@ -1269,9 +1374,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 20,
     fontWeight: 'bold',
-    textShadowColor: 'rgba(255, 215, 0, 0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
   },
   headerSubtitle: {
     flexDirection: 'row',
@@ -1463,7 +1565,7 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    backgroundColor: '#0f0f23',
+    backgroundColor: '#1a1a1a',
   },
   headerIconContainer: {
     width: 36,
@@ -1771,7 +1873,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 15,
     marginTop: 20,
-    backgroundColor: '#330033',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderRadius: 10,
   },
   addAccountText: {

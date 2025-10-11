@@ -56,11 +56,11 @@ const PersonConfessionsHeader = React.memo(function PersonConfessionsHeaderCompo
           style={styles.searchInput}
           placeholder="Search for a person..."
           placeholderTextColor="#999"
-          value={String(props.searchQuery || '')}
-          onChangeText={props.setSearchQuery}
+          value={typeof props.searchQuery === 'string' ? props.searchQuery : ''}
+          onChangeText={(text) => props.setSearchQuery(text || '')}
           autoCapitalize="none"
         />
-        {String(props.searchQuery || '').length > 0 && (
+        {(props.searchQuery || '').length > 0 && (
           <TouchableOpacity onPress={() => props.setSearchQuery('')}>
             <Ionicons name="close-circle" size={20} color="#999" />
           </TouchableOpacity>
@@ -91,7 +91,7 @@ const PersonConfessionsHeader = React.memo(function PersonConfessionsHeaderCompo
 ))}
         </ScrollView>
       ) : (
-        String(props.searchQuery || '').trim().length > 0 && !props.searchLoading && (
+        (props.searchQuery || '').trim().length > 0 && !props.searchLoading && (
           <View style={styles.noResultsContainer}>
             <Text style={styles.noResultsText}>No persons found</Text>
             <TouchableOpacity 

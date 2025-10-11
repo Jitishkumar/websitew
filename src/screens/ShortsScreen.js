@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, FlatList, Dimensions, StyleSheet, TouchableOpacity, Text, ActivityIndicator, Alert, Share, Animated, Image } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { Video } from 'expo-av';
@@ -35,6 +36,10 @@ const ShortsScreen = ({ route }) => {
   const pauseIconTimeout = useRef(null);
   const { setFullscreen } = useVideo();
   const isUserSpecificView = !!userId;
+  
+  // Caching constants
+  const SHORTS_CACHE_KEY = userId ? `user_shorts_${userId}` : 'shorts_feed';
+  const CACHE_EXPIRY_TIME = 5 * 60 * 1000; // 5 minutes
   
   // Video preloading and caching states
   const [videoLoadStates, setVideoLoadStates] = useState({});

@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-//djjdjdjd
 import { 
   View, 
   Text, 
@@ -18,6 +17,7 @@ import {
   Dimensions,
   KeyboardAvoidingView
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -55,32 +55,17 @@ const ConfessionsHeader = React.memo(({
 }) => {
   return (
     <View>
-      <LinearGradient
-        colors={['rgba(26, 26, 46, 0.95)', 'rgba(22, 33, 62, 0.9)', 'rgba(15, 52, 96, 0.85)']}
-        start={{x: 0, y: 0}}
-        end={{x: 1, y: 1}}
-        style={styles.header}
-      >
+      <View style={styles.header}>
         <TouchableOpacity 
           onPress={() => navigation.goBack()}
           style={styles.backButton}
         >
-          <LinearGradient
-            colors={['rgba(102, 126, 234, 0.8)', 'rgba(156, 136, 255, 0.6)']}
-            style={styles.backButtonGradient}
-          >
-            <Ionicons name="arrow-back" size={20} color="#fff" />
-          </LinearGradient>
+          <Ionicons name="arrow-back" size={24} color="#007AFF" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>💭 Confessions</Text>
-      </LinearGradient>
+        <Text style={styles.headerTitle}>Confessions</Text>
+      </View>
 
-      <LinearGradient
-        colors={['rgba(102, 126, 234, 0.1)', 'rgba(156, 136, 255, 0.05)']}
-        start={{x: 0, y: 0}}
-        end={{x: 1, y: 1}}
-        style={styles.searchContainer}
-      >
+      <View style={styles.searchContainer}>
         <TextInput
           style={styles.searchInput}
           placeholder="🔍 Search for a place, institution, company..."
@@ -118,9 +103,9 @@ const ConfessionsHeader = React.memo(({
           style={styles.mapButton}
           onPress={() => setShowMap(!showMap)}
         >
-          <Ionicons name={showMap ? "map" : "map-outline"} size={20} color="#ff00ff" />
+          <Ionicons name={showMap ? "map" : "map-outline"} size={20} color="#007AFF" />
         </TouchableOpacity>
-      </LinearGradient>
+      </View>
 
       {searchResults.length > 0 ? (
         <ScrollView style={styles.searchResultsList} nestedScrollEnabled={true} showsVerticalScrollIndicator={false}>
@@ -130,7 +115,7 @@ const ConfessionsHeader = React.memo(({
               style={styles.searchResultItem}
               onPress={() => selectLocation(item)}
             >
-              <Ionicons name="location" size={20} color="#ff00ff" />
+              <Ionicons name="location" size={20} color="#007AFF" />
               <Text style={styles.searchResultText}>{item.display_name}</Text>
             </TouchableOpacity>
           ))}
@@ -169,7 +154,7 @@ const ConfessionsHeader = React.memo(({
             onError={(e) => console.error('WebView error:', e.nativeEvent)}
             renderLoading={() => (
               <View style={[styles.loadingContainer, StyleSheet.absoluteFill]}>
-                <ActivityIndicator size="large" color="#ff00ff" />
+                <ActivityIndicator size="large" color="#007AFF" />
               </View>
             )}
             startInLoadingState={true}
@@ -179,13 +164,13 @@ const ConfessionsHeader = React.memo(({
               style={styles.closeMapButton}
               onPress={() => setShowMap(false)}
             >
-              <Ionicons name="close-circle" size={30} color="#ff00ff" />
+              <Ionicons name="close-circle" size={30} color="#007AFF" />
             </TouchableOpacity>
             <TouchableOpacity 
               style={styles.locationButton}
               onPress={goToUserLocation}
             >
-              <Ionicons name="locate" size={24} color="#ff00ff" />
+              <Ionicons name="locate" size={24} color="#007AFF" />
             </TouchableOpacity>
           </View>
         </View>
@@ -195,7 +180,7 @@ const ConfessionsHeader = React.memo(({
 
       {searchLoading && ( // Display search-specific loading indicator
         <View style={styles.searchOverlayLoading}>
-          <ActivityIndicator size="small" color="#ff00ff" />
+          <ActivityIndicator size="small" color="#007AFF" />
           <Text style={styles.searchOverlayLoadingText}>Searching...</Text>
         </View>
       )}
@@ -1256,7 +1241,7 @@ const ConfessionScreen = () => {
               setShowLocationProfileModal(true);
             }}
           >
-            <Ionicons name="create-outline" size={20} color="#ff00ff" />
+            <Ionicons name="create-outline" size={20} color="#007AFF" />
           </TouchableOpacity>
         </View>
       </View>
@@ -1308,7 +1293,7 @@ const ConfessionScreen = () => {
                 }
               }}
             >
-              <Text style={[styles.username, { color: '#ff00ff' }]}>
+              <Text style={[styles.username, { color: '#007AFF' }]}>
                 {item.is_anonymous ? 'Anonymous' : (item.username || 'User')}
               </Text>
             </TouchableOpacity>
@@ -1353,7 +1338,7 @@ const ConfessionScreen = () => {
                 );
               }}
             >
-              <Ionicons name="ellipsis-vertical" size={20} color="#ff00ff" />
+              <Ionicons name="ellipsis-vertical" size={20} color="#007AFF" />
             </TouchableOpacity>
           )}
         </View>
@@ -1417,9 +1402,9 @@ const ConfessionScreen = () => {
         
         <View style={styles.actionBar}>
           <TouchableOpacity style={styles.actionButton} onPress={() => handleLike(item.id)}>
-            <LinearGradient colors={item.is_liked ? ['#ff00ff', '#9900ff'] : ['transparent', 'transparent']} style={item.is_liked ? styles.likedIconBackground : {}}>
-              <Ionicons name={item.is_liked ? 'heart' : 'heart-outline'} size={24} color={item.is_liked ? '#fff' : '#ff00ff'} />
-            </LinearGradient>
+            <View style={item.is_liked ? styles.likedIconBackground : {}}>
+              <Ionicons name={item.is_liked ? 'heart' : 'heart-outline'} size={24} color={item.is_liked ? '#FF3B30' : '#666'} />
+            </View>
             <Text style={[styles.actionText, item.is_liked && styles.likedText]}>{item.likes_count || 0}</Text>
           </TouchableOpacity>
           
@@ -1573,14 +1558,14 @@ const ConfessionScreen = () => {
         ListEmptyComponent={() => (
           !selectedLocation ? (
             <View style={styles.instructionContainer}>
-              <Ionicons name="search" size={60} color="#ff00ff" />
+              <Ionicons name="search" size={60} color="#666" />
               <Text style={styles.instructionText}>
                 Search for a place/Person or select a location on the map to see confessions
               </Text>
             </View>
           ) : (
             <View style={styles.emptyContainer}>
-              <Ionicons name="chatbubbles-outline" size={60} color="#ff00ff" />
+              <Ionicons name="chatbubbles-outline" size={60} color="#666" />
               <Text style={styles.emptyText}>No confessions yet. Be the first to share!</Text>
             </View>
           )
@@ -1890,7 +1875,7 @@ const ConfessionScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a0a2a',
+    backgroundColor: '#1a1a1a',
   },
   header: {
     flexDirection: 'row',
@@ -1898,32 +1883,29 @@ const styles = StyleSheet.create({
     paddingTop: 50,
     paddingHorizontal: 15,
     paddingBottom: 15,
-    backgroundColor: '#0a0a2a',
+    backgroundColor: '#1a1a1a',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 0, 255, 0.2)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
   },
   backButton: {
     padding: 8,
     borderRadius: 20,
-    backgroundColor: 'rgba(255, 0, 255, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
   headerTitle: {
     color: '#fff',
     fontSize: 22,
     fontWeight: 'bold',
     marginLeft: 15,
-    textShadowColor: 'rgba(255, 0, 255, 0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 8,
   },
   searchContainer: {
     flexDirection: 'row',
     paddingHorizontal: 15,
     paddingVertical: 12,
-    backgroundColor: '#1a1a3a',
+    backgroundColor: '#1a1a1a',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 255, 255, 0.2)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
   },
   searchInput: {
     flex: 1,
@@ -1935,23 +1917,18 @@ const styles = StyleSheet.create({
     marginRight: 12,
     fontSize: 16,
     borderWidth: 1,
-    borderColor: 'rgba(0, 255, 255, 0.3)',
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   mapButton: {
-    backgroundColor: 'rgba(0, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: 25,
     width: 50,
     height: 50,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#00ffff',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.5,
-    shadowRadius: 5,
-    elevation: 8,
   },
   searchResultsList: {
-    backgroundColor: '#1a1a3a',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     maxHeight: 200,
     borderBottomLeftRadius: 15,
     borderBottomRightRadius: 15,
@@ -1962,11 +1939,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 15,
     borderBottomWidth: 0.5,
-    borderBottomColor: 'rgba(0, 255, 255, 0.1)',
-    backgroundColor: '#2a0a3a',
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
   },
   searchResultText: {
-    color: '#e0e0ff',
+    color: '#fff',
     marginLeft: 10,
     flex: 1,
     fontSize: 15,
@@ -1974,19 +1951,19 @@ const styles = StyleSheet.create({
   noResultsContainer: {
     padding: 20,
     alignItems: 'center',
-    backgroundColor: '#1a1a3a',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderRadius: 15,
     marginHorizontal: 15,
     marginTop: 10,
   },
   noResultsText: {
-    color: '#e0e0ff',
+    color: '#fff',
     marginBottom: 15,
     fontSize: 16,
     textAlign: 'center',
   },
   addPlaceButton: {
-    backgroundColor: '#00ffff',
+    backgroundColor: '#007AFF',
     paddingHorizontal: 25,
     paddingVertical: 12,
     borderRadius: 30,
@@ -2099,20 +2076,12 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   confessionCard: {
-    backgroundColor: '#330022',
-    borderRadius: 15,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 20,
     padding: 18,
     marginBottom: 18,
-    shadowColor: "#9900ff",
-    shadowOffset: {
-      width: 0,
-      height: 6,
-    },
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    elevation: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255, 0, 255, 0.4)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   confessionHeader: {
     flexDirection: 'row',
@@ -2130,7 +2099,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   username: {
-    color: '#ff00ff',
+    color: '#007AFF',
     fontWeight: 'bold',
     fontSize: 15,
     marginBottom: 2,
@@ -2253,7 +2222,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   actionText: {
-    color: '#ff00ff',
+    color: '#666',
     marginLeft: 5,
   },
   taggedInCommentBadge: {
@@ -2284,7 +2253,7 @@ const styles = StyleSheet.create({
     marginLeft: 5,
   },
   likedText: {
-    color: '#ff00ff',
+    color: '#FF3B30',
   },
   likedIconBackground: {
     padding: 8,
@@ -2326,7 +2295,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyText: {
-    color: '#ff00ff',
+    color: '#666',
     textAlign: 'center',
     marginTop: 10,
     fontSize: 16,
@@ -2337,7 +2306,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   instructionText: {
-    color: '#ff00ff',
+    color: '#666',
     textAlign: 'center',
     marginTop: 10,
     fontSize: 16,
