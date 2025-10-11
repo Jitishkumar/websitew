@@ -12,6 +12,7 @@ import {
   RefreshControl,
   Alert
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,14 +21,63 @@ import { supabase } from '../config/supabase';
 const ConfessionButtonScreen = () => {
   const navigation = useNavigation();
   const [randomConfessions, setRandomConfessions] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
+  
+  const CONFESSIONS_CACHE_KEY = 'confessions_cache';
+  const CACHE_EXPIRY_TIME = 5 * 60 * 1000; // 5 minutes
 
   useEffect(() => {
     fetchCurrentUser();
-    fetchRandomConfessions();
+    loadCachedConfessions();
   }, []);
+
+  // Load cached confessions first for instant display
+  const loadCachedConfessions = async () => {
+    try {
+      const cachedData = await AsyncStorage.getItem(CONFESSIONS_CACHE_KEY);
+      if (cachedData) {
+        const { confessions, timestamp } = JSON.parse(cachedData);
+        const now = Date.now();
+        
+        // Show cached confessions immediately
+        if (confessions && confessions.length > 0) {
+          setRandomConfessions(confessions);
+          setLoading(false);
+          console.log('✅ Instant load: Showing cached confessions');
+          
+          // Refresh in background if cache is old
+          if (now - timestamp > CACHE_EXPIRY_TIME) {
+            setTimeout(() => {
+              fetchRandomConfessions(true); // Silent refresh
+            }, 100);
+          }
+        } else {
+          fetchRandomConfessions();
+        }
+      } else {
+        fetchRandomConfessions();
+      }
+    } catch (error) {
+      console.error('Error loading cached confessions:', error);
+      fetchRandomConfessions();
+    }
+  };
+
+  // Save confessions to cache
+  const cacheConfessions = async (confessionsData) => {
+    try {
+      const cacheData = {
+        confessions: confessionsData,
+        timestamp: Date.now()
+      };
+      await AsyncStorage.setItem(CONFESSIONS_CACHE_KEY, JSON.stringify(cacheData));
+      console.log('Cached confessions for instant loading');
+    } catch (error) {
+      console.error('Error caching confessions:', error);
+    }
+  };
 
   const fetchCurrentUser = async () => {
     try {
@@ -38,9 +88,11 @@ const ConfessionButtonScreen = () => {
     }
   };
 
-  const fetchRandomConfessions = async () => {
+  const fetchRandomConfessions = async (isSilent = false) => {
     try {
-      setLoading(true);
+      if (!isSilent) {
+        setLoading(true);
+      }
       
       // Fetch random confessions from both tables
       const { data: placeConfessions, error: placeError } = await supabase
@@ -104,7 +156,11 @@ const ConfessionButtonScreen = () => {
       }
 
       // Limit to 4 confessions
-      setRandomConfessions(allConfessions.slice(0, 4));
+      const limitedConfessions = allConfessions.slice(0, 4);
+      setRandomConfessions(limitedConfessions);
+      
+      // Cache for instant loading next time
+      cacheConfessions(limitedConfessions);
     } catch (error) {
       console.error('Error fetching random confessions:', error);
       Alert.alert('Error', 'Failed to load confessions');
@@ -283,20 +339,15 @@ const ConfessionButtonScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <LinearGradient
-        colors={['#0a0a2a', '#1a1a4a']}
-        start={{x: 0, y: 0}}
-        end={{x: 1, y: 1}}
-        style={styles.header}
-      >
+      <View style={styles.header}>
         <TouchableOpacity 
           onPress={() => navigation.goBack()}
           style={styles.backButton}
         >
-          <Ionicons name="arrow-back" size={24} color="#ff00ff" />
+          <Ionicons name="arrow-back" size={24} color="#007AFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Post a Confession</Text>
-      </LinearGradient>
+      </View>
 
       <FlatList
         data={randomConfessions}
@@ -307,28 +358,18 @@ const ConfessionButtonScreen = () => {
         }
         ListHeaderComponent={() => (
           <View style={styles.buttonContainer}>
-            <TouchableOpacity style={styles.button} onPress={handlePersonConfession}>
-              <LinearGradient
-                colors={['#FF6B81', '#FF4757']}
-                start={{x: 0, y: 0}}
-                end={{x: 1, y: 1}}
-                style={styles.gradientButton}
-              >
+            <TouchableOpacity style={[styles.button, styles.personButton]} onPress={handlePersonConfession}>
+              <View style={styles.simpleButton}>
                 <Ionicons name="person" size={42} color="#fff" />
                 <Text style={styles.buttonText}>Person</Text>
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.button} onPress={handlePlaceConfession}>
-              <LinearGradient
-                colors={['#4CAF50', '#8BC44A']}
-                start={{x: 0, y: 0}}
-                end={{x: 1, y: 1}}
-                style={styles.gradientButton}
-              >
+            <TouchableOpacity style={[styles.button, styles.placeButton]} onPress={handlePlaceConfession}>
+              <View style={styles.simpleButton}>
                 <Ionicons name="business" size={42} color="#fff" />
                 <Text style={styles.buttonText}>Colleges/Offices/Places</Text>
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
             
             <View style={styles.sectionHeader}>
@@ -362,7 +403,7 @@ const ConfessionButtonScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a0a2a',
+    backgroundColor: '#1a1a1a',
   },
   header: {
     flexDirection: 'row',
@@ -370,23 +411,20 @@ const styles = StyleSheet.create({
     paddingTop: 50,
     paddingHorizontal: 15,
     paddingBottom: 15,
-    backgroundColor: '#0a0a2a',
+    backgroundColor: '#1a1a1a',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 0, 255, 0.2)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
   },
   backButton: {
     padding: 8,
     borderRadius: 20,
-    backgroundColor: 'rgba(255, 0, 255, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
   headerTitle: {
     color: '#fff',
     fontSize: 22,
     fontWeight: 'bold',
     marginLeft: 15,
-    textShadowColor: 'rgba(255, 0, 255, 0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 8,
   },
   listContainer: {
     paddingBottom: 20,
@@ -399,14 +437,15 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 100,
     borderRadius: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 10,
     overflow: 'hidden',
   },
-  gradientButton: {
+  personButton: {
+    backgroundColor: '#FF6B81',
+  },
+  placeButton: {
+    backgroundColor: '#4CAF50',
+  },
+  simpleButton: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
@@ -418,9 +457,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginTop: 8,
     textAlign: 'center',
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 4,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -433,31 +469,20 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
-    textShadowColor: 'rgba(255, 0, 255, 0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 6,
   },
   refreshButton: {
     padding: 8,
-    backgroundColor: 'rgba(255, 0, 255, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: 15,
   },
   confessionCard: {
-    backgroundColor: '#1a1a4a',
-    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 20,
     padding: 15,
     marginHorizontal: 20,
     marginBottom: 12,
-    shadowColor: "#9900ff",
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
-    elevation: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 0, 255, 0.2)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   confessionHeader: {
     flexDirection: 'row',

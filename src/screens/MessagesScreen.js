@@ -36,83 +36,12 @@ const MessagesScreen = () => {
   const CONVERSATIONS_CACHE_KEY = 'conversations_cache';
   const CONVERSATIONS_METADATA_KEY = 'conversations_metadata';
   
-  // Animation refs
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
-  const scaleAnim = useRef(new Animated.Value(0.8)).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-  const searchBarAnim = useRef(new Animated.Value(0)).current;
-  const shimmerAnim = useRef(new Animated.Value(0)).current;
-  const glowAnim = useRef(new Animated.Value(0)).current;
-  
-  // Animation functions
-  const startAnimations = () => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      Animated.timing(scaleAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      Animated.timing(searchBarAnim, {
-        toValue: 1,
-        duration: 1000,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  };
-
-  const startContinuousAnimations = () => {
-    // Pulse animation
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.05,
-          duration: 2000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 2000,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
-
-    // Shimmer animation
-    Animated.loop(
-      Animated.timing(shimmerAnim, {
-        toValue: 1,
-        duration: 2000,
-        useNativeDriver: true,
-      })
-    ).start();
-
-    // Glow animation
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(glowAnim, {
-          toValue: 1,
-          duration: 1500,
-          useNativeDriver: true,
-        }),
-        Animated.timing(glowAnim, {
-          toValue: 0,
-          duration: 1500,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
-  };
+  // Removed heavy animations for better performance
+  // Animation values set to final state immediately
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const searchBarAnim = useRef(new Animated.Value(1)).current;
   
   // Function to mark a conversation as read
   const handleMarkAsRead = async (conversation) => {
@@ -224,11 +153,7 @@ const MessagesScreen = () => {
     }
   };
   
-  // Initialize animations
-  useEffect(() => {
-    startAnimations();
-    startContinuousAnimations();
-  }, []);
+  // Removed animation initialization for better performance
   
   // Get current user and set up subscriptions
   useEffect(() => {
@@ -979,80 +904,33 @@ const MessagesScreen = () => {
   );
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: activeTab === 'communities' ? '#000' : undefined }]}>
-      {activeTab !== 'communities' && (
-        <LinearGradient colors={['#1a1a2e', '#16213e', '#0f3460']} style={StyleSheet.absoluteFillObject} />
-      )}
-      <LinearGradient
-        colors={['rgba(102, 126, 234, 0.3)', 'rgba(156, 136, 255, 0.2)', 'transparent']}
-        style={styles.header}
-      >
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <LinearGradient
-            colors={['rgba(102, 126, 234, 0.8)', 'rgba(156, 136, 255, 0.6)']}
-            style={styles.backButtonGradient}
-          >
-            <Ionicons name="arrow-back" size={20} color="#fff" />
-          </LinearGradient>
+    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: '#1a1a1a' }]}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>💬 Messages</Text>
+        <Text style={styles.headerTitle}>Messages</Text>
         <TouchableOpacity 
           style={styles.refreshButton}
           onPress={handleRefresh}
           disabled={refreshing}
         >
-          <LinearGradient
-            colors={['rgba(255, 107, 107, 0.8)', 'rgba(255, 82, 82, 0.6)']}
-            style={styles.headerIconGradient}
-          >
-            <Ionicons 
-              name={refreshing ? "refresh" : "refresh-outline"} 
-              size={20} 
-              color="#fff" 
-              style={refreshing ? { transform: [{ rotate: '180deg' }] } : {}}
-            />
-          </LinearGradient>
+          <Ionicons 
+            name={refreshing ? "refresh" : "refresh-outline"} 
+            size={24} 
+            color="#007AFF" 
+          />
         </TouchableOpacity>
-      </LinearGradient>
+      </View>
 
-      {/* Enhanced Search Container */}
-      <Animated.View
-        style={[
-          styles.searchContainer,
-          {
-            opacity: searchBarAnim,
-            transform: [
-              { scale: scaleAnim },
-              { translateY: slideAnim }
-            ]
-          }
-        ]}
-      >
-        {/* Search container glow */}
-        <Animated.View
-          style={[
-            styles.searchGlow,
-            {
-              opacity: glowAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0.2, 0.6]
-              })
-            }
-          ]}
-        />
-        
-        <LinearGradient
-          colors={['rgba(26, 26, 46, 0.9)', 'rgba(22, 33, 62, 0.8)']}
-          style={styles.searchInputContainer}
-        >
-          <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-            <Ionicons name="search" size={20} color="#ff00ff" style={styles.searchIcon} />
-          </Animated.View>
-          
+      {/* Search Container */}
+      <View style={styles.searchContainer}>
+        <View style={styles.searchInputContainer}>
+          <Ionicons name="search" size={20} color="#007AFF" style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
             placeholder={activeTab === 'communities' ? "Search groups..." : "Search conversations..."}
-            placeholderTextColor="rgba(255,255,255,0.4)"
+            placeholderTextColor="rgba(255,255,255,0.5)"
             value={searchQuery}
             onChangeText={(text) => {
               setSearchQuery(text);
@@ -1061,38 +939,11 @@ const MessagesScreen = () => {
               }
             }}
           />
-          
           {searchLoading && (
-            <ActivityIndicator size="small" color="#667eea" style={styles.searchLoader} />
+            <ActivityIndicator size="small" color="#007AFF" style={styles.searchLoader} />
           )}
-        </LinearGradient>
-        
-        {/* Shimmer effect */}
-        <Animated.View
-          style={[
-            styles.shimmerOverlay,
-            {
-              opacity: shimmerAnim.interpolate({
-                inputRange: [0, 0.5, 1],
-                outputRange: [0, 0.3, 0]
-              }),
-              transform: [{
-                translateX: shimmerAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [-100, 100]
-                })
-              }]
-            }
-          ]}
-        >
-          <LinearGradient
-            colors={['transparent', 'rgba(255, 0, 255, 0.4)', 'rgba(0, 255, 255, 0.4)', 'transparent']}
-            start={{x: 0, y: 0}}
-            end={{x: 1, y: 0}}
-            style={styles.shimmerGradient}
-          />
-        </Animated.View>
-      </Animated.View>
+        </View>
+      </View>
 
         {/* Tab Navigation */}
         <View style={styles.tabContainer}>
@@ -1100,27 +951,17 @@ const MessagesScreen = () => {
             style={[styles.tab, activeTab === 'inbox' && styles.activeTab]}
             onPress={() => setActiveTab('inbox')}
           >
-            <LinearGradient
-              colors={activeTab === 'inbox' ? 
-                ['rgba(102, 126, 234, 0.3)', 'rgba(156, 136, 255, 0.2)'] : 
-                ['transparent', 'transparent']}
-              style={styles.tabGradient}
-            >
+            <View style={[styles.tabButton, activeTab === 'inbox' && styles.activeTabButton]}>
               <Text style={[styles.tabText, activeTab === 'inbox' && styles.activeTabText]}>Inbox</Text>
-            </LinearGradient>
+            </View>
           </TouchableOpacity>
           <TouchableOpacity 
             style={[styles.tab, activeTab === 'communities' && styles.activeTab]}
             onPress={() => setActiveTab('communities')}
           >
-            <LinearGradient
-              colors={activeTab === 'communities' ? 
-                ['rgba(102, 126, 234, 0.3)', 'rgba(156, 136, 255, 0.2)'] : 
-                ['transparent', 'transparent']}
-              style={styles.tabGradient}
-            >
+            <View style={[styles.tabButton, activeTab === 'communities' && styles.activeTabButton]}>
               <Text style={[styles.tabText, activeTab === 'communities' && styles.activeTabText]}>Communities</Text>
-            </LinearGradient>
+            </View>
           </TouchableOpacity>
         </View>
 
@@ -1520,30 +1361,22 @@ const MessagesScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  gradient: {
-    flex: 1,
+    backgroundColor: '#1a1a1a',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 15,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(102, 126, 234, 0.3)',
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: '#1a1a1a',
   },
-  backButtonGradient: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#667eea',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
+  backButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.1)',
   },
   headerIconGradient: {
     width: 36,
@@ -1556,27 +1389,24 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 5,
-  },
-  backButton: {
     padding: 5,
+    flex: 1,
   },
   headerTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#fff',
     textAlign: 'center',
-    textShadowColor: 'rgba(0, 0, 0, 0.75)',
-    textShadowOffset: { width: -1, height: 1 },
-    textShadowRadius: 10,
     flex: 1,
   },
   refreshButton: {
-    padding: 5,
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.1)',
   },
   searchContainer: {
     margin: 16,
     marginTop: 8,
-    position: 'relative',
   },
   searchGlow: {
     position: 'absolute',
@@ -1625,74 +1455,80 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   messageItem: {
-    marginHorizontal: 10,
-    marginVertical: 2,
-    borderRadius: 12,
+    marginHorizontal: 12,
+    marginVertical: 6,
+    borderRadius: 20,
     overflow: 'hidden',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
   },
   messageItemGradient: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingVertical: 18,
-    marginHorizontal: 16,
-    marginVertical: 6,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 6,
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 20,
+  },
+  searchInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    borderRadius: 25,
+    backgroundColor: 'rgba(255,255,255,0.1)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  tabButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
+  activeTabButton: {
+    backgroundColor: 'rgba(0, 122, 255, 0.2)',
   },
   avatarContainer: {
-    width: 56,
-    height: 56,
-    marginRight: 18,
+    width: 45,
+    height: 45,
+    marginRight: 12,
     position: 'relative',
   },
   avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
   },
   groupAvatarImage: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    borderWidth: 2,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
     borderColor: 'rgba(156, 136, 255, 0.3)',
   },
   groupAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
+    borderWidth: 1,
     borderColor: 'rgba(156, 136, 255, 0.3)',
   },
   groupAvatarText: {
     color: '#fff',
-    fontSize: 22,
+    fontSize: 16,
     fontWeight: '700',
-    textShadowColor: 'rgba(0,0,0,0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
   },
   onlineIndicator: {
     position: 'absolute',
     bottom: 0,
-    right: 15,
-    width: 15,
-    height: 15,
-    borderRadius: 10,
+    right: 8,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
     backgroundColor: '#00ff88',
     borderWidth: 2,
-    borderColor: '#fff',
-    shadowColor: '#00ff88',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
+    borderColor: '#1a1a1a',
     shadowRadius: 3,
     elevation: 3,
   },

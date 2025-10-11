@@ -13,6 +13,7 @@ import {
   RefreshControl,
   Image
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect, CommonActions, useRoute } from '@react-navigation/native';
 import { Video } from 'expo-av';
@@ -24,6 +25,12 @@ import { supabase } from '../lib/supabase';
 import { PostsService } from '../services/PostsService';
 
 const { width, height } = Dimensions.get('window');
+
+// Define viewabilityConfig outside component to prevent recreation
+const VIEWABILITY_CONFIG = {
+  itemVisiblePercentThreshold: 80,
+  minimumViewTime: 100
+};
 
 const ReelsScreen = () => {
   const navigation = useNavigation();
@@ -56,6 +63,9 @@ const ReelsScreen = () => {
   const doubleTapAnim = useRef(new Animated.Value(0)).current;
   
   const REELS_PER_PAGE = 10;
+  const REELS_CACHE_KEY = 'reels_cache';
+  const CACHE_EXPIRY_TIME = 5 * 60 * 1000; // 5 minutes
+  const [videosLoaded, setVideosLoaded] = useState(new Set());
   
   // Set fullscreen mode when component mounts and focused
   useFocusEffect(
@@ -77,11 +87,58 @@ const ReelsScreen = () => {
     }, [currentIndex, isPlaying])
   );
   
-  // Load initial reels and current user
+  // Load initial reels and current user with cache
   useEffect(() => {
     getCurrentUser();
-    loadReels(true);
+    loadCachedReels();
   }, []);
+
+  // Load cached reels first for instant display
+  const loadCachedReels = async () => {
+    try {
+      const cachedData = await AsyncStorage.getItem(REELS_CACHE_KEY);
+      if (cachedData) {
+        const { reels: cachedReels, timestamp } = JSON.parse(cachedData);
+        const now = Date.now();
+        
+        // Show cached reels immediately - NEVER wait for network
+        if (cachedReels && cachedReels.length > 0) {
+          setReels(cachedReels);
+          setLoading(false);
+          console.log('✅ Instant load: Showing cached reels');
+          
+          // Always refresh in background silently (no loading indicator)
+          // This keeps content fresh without making users wait
+          setTimeout(() => {
+            loadReels(true, true); // true for initial, true for silent
+          }, 100);
+        } else {
+          // No cache, load fresh but show immediately when data arrives
+          loadReels(true);
+        }
+      } else {
+        // No cache, load fresh
+        loadReels(true);
+      }
+    } catch (error) {
+      console.error('Error loading cached reels:', error);
+      loadReels(true);
+    }
+  };
+
+  // Save reels to cache
+  const cacheReels = async (reelsData) => {
+    try {
+      const cacheData = {
+        reels: reelsData,
+        timestamp: Date.now()
+      };
+      await AsyncStorage.setItem(REELS_CACHE_KEY, JSON.stringify(cacheData));
+      console.log('Cached reels for instant loading');
+    } catch (error) {
+      console.error('Error caching reels:', error);
+    }
+  };
 
   // Handle navigation parameters from MessageScreen
   useEffect(() => {
@@ -121,14 +178,15 @@ const ReelsScreen = () => {
   };
 
 // Load reels with public account filtering
-const loadReels = async (isInitialLoad = false) => {
+const loadReels = async (isInitialLoad = false, isSilent = false) => {
   try {
-    if (isInitialLoad) {
+    if (isInitialLoad && !isSilent) {
       setLoading(true);
       setPage(0);
-    } else {
+    } else if (!isInitialLoad) {
       setLoadingMore(true);
     }
+    // If isSilent is true, don't show any loading indicators
 
     const currentPage = isInitialLoad ? 0 : page;
     const offset = currentPage * REELS_PER_PAGE;
@@ -166,6 +224,8 @@ const loadReels = async (isInitialLoad = false) => {
       if (isInitialLoad) {
         setReels(processedReels);
         setPage(1);
+        // Cache for instant loading next time
+        cacheReels(processedReels);
       } else {
         setReels(prevReels => {
           // Filter out any duplicates that might occur due to random ordering
@@ -347,6 +407,35 @@ const loadReels = async (isInitialLoad = false) => {
     }
   };
 
+  // Preload adjacent videos for seamless playback
+  const preloadAdjacentVideos = (index) => {
+    // Preload next video
+    const nextIndex = index + 1;
+    if (nextIndex < reels.length && videoRefs.current[nextIndex]) {
+      const nextVideo = videoRefs.current[nextIndex];
+      if (nextVideo) {
+        nextVideo.loadAsync(
+          { uri: reels[nextIndex]?.media_url },
+          {},
+          false // Don't download, just buffer
+        ).catch(err => console.log('Preload next failed:', err));
+      }
+    }
+    
+    // Preload previous video
+    const prevIndex = index - 1;
+    if (prevIndex >= 0 && videoRefs.current[prevIndex]) {
+      const prevVideo = videoRefs.current[prevIndex];
+      if (prevVideo) {
+        prevVideo.loadAsync(
+          { uri: reels[prevIndex]?.media_url },
+          {},
+          false // Don't download, just buffer
+        ).catch(err => console.log('Preload prev failed:', err));
+      }
+    }
+  };
+
   // Handle viewable items changed
   const onViewableItemsChanged = useRef(({ viewableItems }) => {
     if (viewableItems.length > 0) {
@@ -362,6 +451,11 @@ const loadReels = async (isInitialLoad = false) => {
       if (videoRefs.current[newIndex]) {
         videoRefs.current[newIndex].playAsync();
         setIsPlaying(true);
+        
+        // Preload next and previous videos for instant playback
+        setTimeout(() => {
+          preloadAdjacentVideos(newIndex);
+        }, 500); // Wait 500ms to let current video stabilize
       }
       
       // Track view when scrolling to a new video
@@ -664,13 +758,17 @@ const loadReels = async (isInitialLoad = false) => {
           </Animated.View>
           <Video
             ref={ref => { videoRefs.current[index] = ref }}
-            source={{ uri: item.media_url }}
+            source={{ 
+              uri: item.media_url,
+              overrideFileExtensionAndroid: 'mp4',
+            }}
             style={styles.video}
             resizeMode="contain"
             shouldPlay={isPlaying && index === currentIndex && !isTouchHolding.current}
             isLooping={true}
             onPlaybackStatusUpdate={index === currentIndex ? onPlaybackStatusUpdate : undefined}
             onLoad={(status) => {
+              setVideosLoaded(prev => new Set([...prev, index]));
               // Track view when video starts playing
               if (index === currentIndex && !viewedVideos.has(item.id)) {
                 console.log('Incrementing views for loaded reel:', item.id);
@@ -678,8 +776,21 @@ const loadReels = async (isInitialLoad = false) => {
                 setViewedVideos(prev => new Set([...prev, item.id]));
               }
             }}
+            onReadyForDisplay={() => {
+              // Preload adjacent videos when current video is ready
+              if (index === currentIndex) {
+                preloadAdjacentVideos(index);
+              }
+            }}
             useNativeControls={false}
             rate={1.0}
+            progressUpdateIntervalMillis={500}
+            positionMillis={0}
+            volume={1.0}
+            isMuted={false}
+            // Aggressive buffering settings for instant playback
+            androidImplementation="MediaPlayer"
+            useLegacyImplementation={false}
           />
           
           {/* User info overlay */}
@@ -860,24 +971,29 @@ const loadReels = async (isInitialLoad = false) => {
         renderItem={renderItem}
         pagingEnabled
         showsVerticalScrollIndicator={false}
-        windowSize={3}
-        maxToRenderPerBatch={3}
-        initialNumToRender={3}
+        windowSize={2}
+        maxToRenderPerBatch={2}
+        initialNumToRender={2}
+        removeClippedSubviews={true}
+        updateCellsBatchingPeriod={50}
         onViewableItemsChanged={onViewableItemsChanged}
-        viewabilityConfig={{
-          itemVisiblePercentThreshold: 50
-        }}
+        viewabilityConfig={VIEWABILITY_CONFIG}
         onEndReached={onLoadMore}
-        onEndReachedThreshold={0.5}
+        onEndReachedThreshold={0.8}
         ListFooterComponent={renderFooter}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={['#ff1744']}
-            tintColor="#ff1744"
+            colors={['#007AFF']}
+            tintColor="#007AFF"
           />
         }
+        getItemLayout={(data, index) => ({
+          length: height,
+          offset: height * index,
+          index,
+        })}
         vertical
       />
     </View>

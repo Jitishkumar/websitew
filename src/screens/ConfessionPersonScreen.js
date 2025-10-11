@@ -17,6 +17,7 @@ import {
   Dimensions,
   KeyboardAvoidingView
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -39,27 +40,17 @@ const PersonConfessionsHeader = React.memo(function PersonConfessionsHeaderCompo
 
   return (
     <View>
-      <LinearGradient
-        colors={['#0a0a2a', '#1a1a3a']}
-        start={{x: 0, y: 0}}
-        end={{x: 1, y: 1}}
-        style={styles.header}
-      >
+      <View style={styles.header}>
         <TouchableOpacity 
           onPress={() => props.navigation.goBack()}
           style={styles.backButton}
         >
-          <Ionicons name="arrow-back" size={24} color="#ff00ff" />
+          <Ionicons name="arrow-back" size={24} color="#007AFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Person Confessions</Text>
-      </LinearGradient>
+      </View>
 
-      <LinearGradient
-        colors={['#1a1a3a', '#0d0d2a']}
-        start={{x: 0, y: 0}}
-        end={{x: 1, y: 1}}
-        style={styles.searchContainer}
-      >
+      <View style={styles.searchContainer}>
         <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
@@ -74,7 +65,7 @@ const PersonConfessionsHeader = React.memo(function PersonConfessionsHeaderCompo
             <Ionicons name="close-circle" size={20} color="#999" />
           </TouchableOpacity>
         )}
-      </LinearGradient>
+      </View>
 
       {props.searchResults.length > 0 ? (
         <ScrollView style={styles.searchResultsList} nestedScrollEnabled={true} showsVerticalScrollIndicator={false}>
@@ -92,7 +83,7 @@ const PersonConfessionsHeader = React.memo(function PersonConfessionsHeaderCompo
       <View style={styles.searchUsernameContainer}>
         <Text style={styles.searchResultText}>{item.name}</Text>
         {item.isVerified && (
-          <Ionicons name="checkmark-circle" size={16} color="#ff0000" style={styles.verifiedBadge} />
+          <Ionicons name="checkmark-circle" size={16} color="#007AFF" style={styles.verifiedBadge} />
         )}
       </View>
     </View>
@@ -127,7 +118,7 @@ const PersonConfessionsHeader = React.memo(function PersonConfessionsHeaderCompo
 
       {props.searchLoading && (
         <View style={styles.searchOverlayLoading}>
-          <ActivityIndicator size="small" color="#ff00ff" />
+          <ActivityIndicator size="small" color="#007AFF" />
           <Text style={styles.searchOverlayLoadingText}>Searching...</Text>
         </View>
       )}
@@ -668,8 +659,41 @@ const ConfessionPersonScreen = () => {
 
 
 
-  const loadPersonConfessions = React.useCallback(async (personIdentifier) => { // Removed useNameForConfessions, use ID
-    setLoading(true);
+  const loadPersonConfessions = React.useCallback(async (personIdentifier, isSilent = false) => { // Removed useNameForConfessions, use ID
+    if (!isSilent) {
+      setLoading(true);
+    }
+    
+    // Try to load from cache first
+    try {
+      const cacheKey = `person_confessions_${personIdentifier}`;
+      const cachedData = await AsyncStorage.getItem(cacheKey);
+      if (cachedData && !isSilent) {
+        const { confessions: cachedConfessions, timestamp } = JSON.parse(cachedData);
+        const now = Date.now();
+        const CACHE_EXPIRY = 5 * 60 * 1000; // 5 minutes
+        
+        // Show cached data immediately
+        if (cachedConfessions && cachedConfessions.length > 0) {
+          setConfessions(cachedConfessions);
+          setLoading(false);
+          console.log('✅ Instant load: Showing cached person confessions');
+          
+          // Refresh in background if cache is old
+          if (now - timestamp > CACHE_EXPIRY) {
+            setTimeout(() => {
+              loadPersonConfessions(personIdentifier, true);
+            }, 100);
+            return;
+          } else {
+            return; // Cache is fresh, no need to fetch
+          }
+        }
+      }
+    } catch (cacheError) {
+      console.error('Cache error:', cacheError);
+    }
+    
     try {
       if (!personIdentifier) {
         Alert.alert('Error', 'Invalid person. Please select a person and try again.');
@@ -771,6 +795,19 @@ const ConfessionPersonScreen = () => {
       }));
 
       setConfessions(processedConfessions);
+      
+      // Cache the confessions for instant loading next time
+      try {
+        const cacheKey = `person_confessions_${personIdentifier}`;
+        const cacheData = {
+          confessions: processedConfessions,
+          timestamp: Date.now()
+        };
+        await AsyncStorage.setItem(cacheKey, JSON.stringify(cacheData));
+        console.log('Cached person confessions for instant loading');
+      } catch (cacheError) {
+        console.error('Error caching confessions:', cacheError);
+      }
       
       // Load reactions and verifications for person confessions
       await loadReactionsAndVerifications(processedConfessions.map(c => c.id));
@@ -1260,7 +1297,7 @@ const ConfessionPersonScreen = () => {
               setShowPersonProfileModal(true);
             }}
           >
-            <Ionicons name="create-outline" size={20} color="#ff00ff" />
+            <Ionicons name="create-outline" size={20} color="#007AFF" />
           </TouchableOpacity>
         </View>
       </View>
@@ -1312,7 +1349,7 @@ const ConfessionPersonScreen = () => {
                 }
               }}
             >
-              <Text style={[styles.username, { color: '#ff00ff' }]}>
+              <Text style={[styles.username, { color: '#007AFF' }]}>
                 {item.is_anonymous ? 'Anonymous' : (item.username || 'User')}
               </Text>
             </TouchableOpacity>
@@ -1367,7 +1404,7 @@ const ConfessionPersonScreen = () => {
                 );
               }}
             >
-              <Ionicons name="ellipsis-vertical" size={20} color="#ff00ff" />
+              <Ionicons name="ellipsis-vertical" size={20} color="#007AFF" />
             </TouchableOpacity>
           )}
         </View>
@@ -1431,9 +1468,9 @@ const ConfessionPersonScreen = () => {
         
         <View style={styles.actionBar}>
           <TouchableOpacity style={styles.actionButton} onPress={() => handleLike(item.id)}>
-            <LinearGradient colors={item.is_liked ? ['#ff00ff', '#9900ff'] : ['transparent', 'transparent']} style={item.is_liked ? styles.likedIconBackground : {}}>
-              <Ionicons name={item.is_liked ? 'heart' : 'heart-outline'} size={24} color={item.is_liked ? '#fff' : '#ff00ff'} />
-            </LinearGradient>
+            <View style={item.is_liked ? styles.likedIconBackground : {}}>
+              <Ionicons name={item.is_liked ? 'heart' : 'heart-outline'} size={24} color={item.is_liked ? '#FF3B30' : '#666'} />
+            </View>
             <Text style={[styles.actionText, item.is_liked && styles.likedText]}>{item.likes_count || 0}</Text>
           </TouchableOpacity>
           
@@ -1510,7 +1547,7 @@ const ConfessionPersonScreen = () => {
               <Ionicons 
                 name="close-circle" 
                 size={20} 
-                color={verifications.userVote === false ? "#fff" : "#ff0000"} 
+                color={verifications.userVote === false ? "#fff" : "#FF3B30"} 
               />
               <Text style={[
                 styles.verificationText,
@@ -1562,14 +1599,14 @@ const ConfessionPersonScreen = () => {
         ListEmptyComponent={() => (
           !selectedPerson ? (
             <View style={styles.instructionContainer}>
-              <Ionicons name="search" size={60} color="#ff00ff" />
+              <Ionicons name="search" size={60} color="#666" />
               <Text style={styles.instructionText}>
                 Search for a person or add a new one to see confessions
               </Text>
             </View>
           ) : (
             <View style={styles.emptyContainer}>
-              <Ionicons name="chatbubbles-outline" size={60} color="#ff00ff" />
+              <Ionicons name="chatbubbles-outline" size={60} color="#666" />
               <Text style={styles.emptyText}>No confessions yet. Be the first to share!</Text>
             </View>
           )
@@ -1782,7 +1819,7 @@ const ConfessionPersonScreen = () => {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>New Confession</Text>
               <TouchableOpacity onPress={() => setShowNewConfessionModal(false)}>
-                <Ionicons name="close" size={24} color="#ff00ff" />
+                <Ionicons name="close" size={24} color="#007AFF" />
               </TouchableOpacity>
             </View>
             
@@ -1804,7 +1841,7 @@ const ConfessionPersonScreen = () => {
                       style={styles.removeMediaButton}
                       onPress={() => setMedia(media.filter((_, i) => i !== index))}
                     >
-                      <Ionicons name="close-circle" size={20} color="#ff00ff" />
+                      <Ionicons name="close-circle" size={20} color="#007AFF" />
                     </TouchableOpacity>
                   </View>
                 ))}
@@ -1813,7 +1850,7 @@ const ConfessionPersonScreen = () => {
             
             <View style={styles.mediaButtons}>
               <TouchableOpacity style={styles.mediaButton} onPress={() => pickImage(false)}>
-                <Ionicons name="image" size={24} color="#ff00ff" />
+                <Ionicons name="image" size={24} color="#007AFF" />
                 <Text style={styles.mediaButtonText}>Add Image</Text>
               </TouchableOpacity>
             </View>
@@ -1823,7 +1860,7 @@ const ConfessionPersonScreen = () => {
               <Switch
                 value={remainAnonymous}
                 onValueChange={setRemainAnonymous}
-                trackColor={{ false: "#767577", true: "#ff00ff" }}
+                trackColor={{ false: "#767577", true: "#007AFF" }}
                 thumbColor={remainAnonymous ? "#f4f3f4" : "#f4f3f4"}
               />
             </View>
@@ -1894,7 +1931,7 @@ const ConfessionPersonScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a0a2a',
+    backgroundColor: '#1a1a1a',
   },
   header: {
     flexDirection: 'row',
@@ -1902,32 +1939,29 @@ const styles = StyleSheet.create({
     paddingTop: 50,
     paddingHorizontal: 15,
     paddingBottom: 15,
-    backgroundColor: '#0a0a2a',
+    backgroundColor: '#1a1a1a',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 0, 255, 0.2)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
   },
   backButton: {
     padding: 8,
     borderRadius: 20,
-    backgroundColor: 'rgba(255, 0, 255, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
   headerTitle: {
     color: '#fff',
     fontSize: 22,
     fontWeight: 'bold',
     marginLeft: 15,
-    textShadowColor: 'rgba(255, 0, 255, 0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 8,
   },
   searchContainer: {
     flexDirection: 'row',
     paddingHorizontal: 15,
     paddingVertical: 12,
-    backgroundColor: '#1a1a3a',
+    backgroundColor: '#1a1a1a',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 255, 255, 0.2)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
   },
   searchInput: {
     flex: 1,
@@ -1939,7 +1973,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
     fontSize: 16,
     borderWidth: 1,
-    borderColor: 'rgba(0, 255, 255, 0.3)',
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   // Removed mapButton styles
   // mapButton: {
@@ -1956,7 +1990,7 @@ const styles = StyleSheet.create({
   //   elevation: 8,
   // },
   searchResultsList: {
-    backgroundColor: '#1a1a3a',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     maxHeight: 200,
     borderBottomLeftRadius: 15,
     borderBottomRightRadius: 15,
@@ -1967,11 +2001,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 15,
     borderBottomWidth: 0.5,
-    borderBottomColor: 'rgba(0, 255, 255, 0.1)',
-    backgroundColor: '#2a0a3a',
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
   },
   searchResultText: {
-    color: '#e0e0ff',
+    color: '#fff',
     marginLeft: 10,
     flex: 1,
     fontSize: 15,
@@ -1979,42 +2013,39 @@ const styles = StyleSheet.create({
   noResultsContainer: {
     padding: 20,
     alignItems: 'center',
-    backgroundColor: '#1a1a3a',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderRadius: 15,
     marginHorizontal: 15,
     marginTop: 10,
   },
   noResultsText: {
-    color: '#e0e0ff',
+    color: '#fff',
     marginBottom: 15,
     fontSize: 16,
     textAlign: 'center',
   },
-  addPlaceButton: { // Retained name for now
-    backgroundColor: '#00ffff',
+  addPlaceButton: {
+    backgroundColor: '#007AFF',
     paddingHorizontal: 25,
     paddingVertical: 12,
     borderRadius: 30,
-    shadowColor: '#00ffff',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.5,
-    shadowRadius: 5,
-    elevation: 8,
   },
-  addPlaceButtonText: { // Retained name for now
-    color: '#0a0a2a',
+  addPlaceButtonText: {
+    color: '#fff',
     fontWeight: 'bold',
     fontSize: 16,
   },
   errorContainer: {
     padding: 15,
-    backgroundColor: '#ff3333',
+    backgroundColor: 'rgba(255, 59, 48, 0.1)',
     borderRadius: 10,
     marginHorizontal: 15,
     marginTop: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 59, 48, 0.3)',
   },
   errorText: {
-    color: '#fff',
+    color: '#FF3B30',
     textAlign: 'center',
     fontWeight: 'bold',
   },
@@ -2096,9 +2127,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 5,
-    textShadowColor: 'rgba(255, 0, 255, 0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 8,
   },
   locationProfileBio: { // Keep name for now
     color: '#e0e0ff',
@@ -2107,13 +2135,8 @@ const styles = StyleSheet.create({
   },
   editProfileButton: {
     padding: 10,
-    backgroundColor: 'rgba(0, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: 25,
-    shadowColor: '#00ffff',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.5,
-    shadowRadius: 5,
-    elevation: 8,
   },
   loadingContainer: {
     flex: 1,
@@ -2124,20 +2147,12 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   confessionCard: {
-    backgroundColor: '#330022',
-    borderRadius: 15,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 20,
     padding: 18,
     marginBottom: 18,
-    shadowColor: "#9900ff",
-    shadowOffset: {
-      width: 0,
-      height: 6,
-    },
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    elevation: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255, 0, 255, 0.4)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   confessionHeader: {
     flexDirection: 'row',
@@ -2155,37 +2170,31 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   username: {
-    color: '#ff00ff',
+    color: '#007AFF',
     fontWeight: 'bold',
     fontSize: 15,
     marginBottom: 2,
-    textShadowColor: 'rgba(255, 0, 255, 0.7)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 6,
   },
   dateAndTagContainer: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   dateText: {
-    color: '#b0b0ff',
+    color: '#999',
     fontSize: 11,
     marginRight: 10,
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
-    textShadowOffset: { width: -1, height: 1 },
-    textShadowRadius: 3,
   },
   taggedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#00ffff',
+    backgroundColor: '#007AFF',
     borderRadius: 10,
     paddingHorizontal: 6,
     paddingVertical: 3,
     marginLeft: 10,
   },
   taggedText: {
-    color: '#0a0a2a',
+    color: '#fff',
     fontSize: 10,
     fontWeight: 'bold',
     marginLeft: 3,
@@ -2667,25 +2676,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  reactionModalContent: {
-    backgroundColor: '#1a0a2a',
-    borderRadius: 25,
-    padding: 30,
-    alignItems: 'center',
-    minWidth: 320,
-    shadowColor: "#ff00ff",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.7,
-    shadowRadius: 15,
-    elevation: 25,
+  locationProfileContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 20,
+    padding: 20,
+    marginHorizontal: 10,
+    marginBottom: 15,
     borderWidth: 1,
-    borderColor: 'rgba(255, 0, 255, 0.7)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   reactionModalTitle: {
     color: '#00ffff',
     fontSize: 22,
     fontWeight: 'bold',
-    marginBottom: 25,
     textShadowColor: 'rgba(0, 255, 255, 0.7)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 8,
