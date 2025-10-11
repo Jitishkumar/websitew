@@ -69,70 +69,56 @@ const ShortsScreen = ({ route }) => {
     }
   }, [posts, currentIndex]);
 
-  // Preload adjacent videos (Instagram/YouTube strategy)
+  // Preload adjacent videos (Instagram/TikTok strategy: 1 previous + 2 next)
   const preloadAdjacentVideos = () => {
-    if (!videoCache || typeof videoCache.preloadAdjacentVideos !== 'function') {
-      console.warn('VideoCache not available, using fallback preloading');
-      // Fallback preloading logic
-      const preloadIndices = [];
-      for (let i = Math.max(0, currentIndex - 1); i <= Math.min(posts.length - 1, currentIndex + 2); i++) {
-        preloadIndices.push(i);
+    const preloadIndices = [];
+    
+    // Add previous video (1 behind current)
+    if (currentIndex > 0) {
+      preloadIndices.push(currentIndex - 1);
+    }
+    
+    // Add next 2 videos
+    for (let i = 1; i <= 2; i++) {
+      const nextIndex = currentIndex + i;
+      if (nextIndex < posts.length) {
+        preloadIndices.push(nextIndex);
       }
-      
-      preloadIndices.forEach(index => {
-        const post = posts[index];
-        if (post && !preloadedVideos.has(post.id)) {
-          preloadVideo(post, index);
-        }
-      });
+    }
+    
+    console.log(`Preloading videos at indices: [${preloadIndices.join(', ')}] for current index: ${currentIndex}`);
+    
+    preloadIndices.forEach(index => {
+      const post = posts[index];
+      if (post && !preloadedVideos.has(post.id)) {
+        preloadVideo(post, index);
+      }
+    });
+  };
+
+  // Enhanced video preloading function
+  const preloadVideo = async (post, index) => {
+    if (!post.media_url || preloadedVideos.has(post.id)) {
       return;
     }
 
-    // Use the video cache utility for smart preloading
-    videoCache.preloadAdjacentVideos(posts, currentIndex, 2)
-      .then(results => {
-        console.log('Preload results:', results);
-        // Update preloaded videos state
-        const newPreloaded = new Set(preloadedVideos);
-        results.forEach((result, index) => {
-          if (result.status === 'fulfilled') {
-            const videoIndex = currentIndex + index - 1; // Adjust for range
-            if (posts[videoIndex]) {
-              newPreloaded.add(posts[videoIndex].id);
-            }
-          }
-        });
-        setPreloadedVideos(newPreloaded);
-      })
-      .catch(error => {
-        console.error('Preload error:', error);
-      });
-  };
-
-  // Preload video function
-  const preloadVideo = async (post, index) => {
     try {
+      console.log(`🎬 Preloading video ${index}: ${post.id}`);
+      
+      // Mark as preloaded to avoid duplicate preloading
+      setPreloadedVideos(prev => new Set([...prev, post.id]));
+      
+      // Update video load state
       setVideoLoadStates(prev => ({
         ...prev,
-        [post.id]: 'loading'
+        [post.id]: 'preloading'
       }));
 
-      // Create a hidden video element to preload
-      const videoRef = videoRefs.current[index];
-      if (videoRef) {
-        // Set up the video source
-        await videoRef.loadAsync({ uri: post.media_url }, {}, false);
-        
-        setPreloadedVideos(prev => new Set([...prev, post.id]));
-        setVideoLoadStates(prev => ({
-          ...prev,
-          [post.id]: 'loaded'
-        }));
-        
-        console.log(`Preloaded video ${index}:`, post.media_url);
-      }
+      // The actual preloading will happen when the Video component mounts
+      // We just need to ensure the video is ready to play instantly
+      
     } catch (error) {
-      console.error(`Failed to preload video ${index}:`, error);
+      console.error(`Error preloading video ${index}:`, error);
       setVideoLoadStates(prev => ({
         ...prev,
         [post.id]: 'error'
@@ -166,9 +152,40 @@ const ShortsScreen = ({ route }) => {
   };
 
   // Load user shorts
-  const loadUserShorts = async () => {
+  const loadUserShorts = async (isSilent = false) => {
     try {
-      setLoading(true);
+      if (!isSilent) {
+        setLoading(true);
+      }
+      
+      // Try to load from cache first for instant display
+      try {
+        const cachedData = await AsyncStorage.getItem(SHORTS_CACHE_KEY);
+        if (cachedData && !isSilent) {
+          const { shorts: cachedShorts, timestamp } = JSON.parse(cachedData);
+          const now = Date.now();
+          
+          // Show cached shorts immediately
+          if (cachedShorts && cachedShorts.length > 0) {
+            setPosts(cachedShorts);
+            setLoading(false);
+            console.log('✅ Instant load: Showing cached shorts');
+            
+            // Refresh in background if cache is old
+            if (now - timestamp > CACHE_EXPIRY_TIME) {
+              setTimeout(() => {
+                loadUserShorts(true); // Silent refresh
+              }, 100);
+              return;
+            } else {
+              return; // Cache is fresh, no need to fetch
+            }
+          }
+        }
+      } catch (cacheError) {
+        console.error('Cache error:', cacheError);
+      }
+      
       // Get video posts for specific user
       const { data, error } = await supabase
         .from('posts')
@@ -193,6 +210,18 @@ const ShortsScreen = ({ route }) => {
       }));
       
       setPosts(shortsWithLikeStatus);
+      
+      // Cache the shorts for instant loading next time
+      try {
+        const cacheData = {
+          shorts: shortsWithLikeStatus,
+          timestamp: Date.now()
+        };
+        await AsyncStorage.setItem(SHORTS_CACHE_KEY, JSON.stringify(cacheData));
+        console.log('Cached shorts for instant loading');
+      } catch (cacheError) {
+        console.error('Error caching shorts:', cacheError);
+      }
     } catch (error) {
       console.error('Error loading user shorts:', error);
     } finally {

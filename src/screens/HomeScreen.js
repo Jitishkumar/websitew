@@ -366,8 +366,8 @@ const HomeScreen = () => {
             ) : (
               <View style={styles.socialMateLogoContainer}>
                 <Text style={styles.socialMateLogo}>
-                  <Text style={styles.socialText}>SOCIAL </Text>
-                  <Text style={styles.mateText}>MATE</Text>
+                  <Text style={styles.socialText}>FLEXX </Text>
+                  <Text style={styles.mateText}>Flexx</Text>
                 </Text>
               </View>
             )}
