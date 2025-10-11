@@ -54,8 +54,8 @@ import NearbyPeopleScreen from '../screens/NearbyPeople';
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-// Custom Premium Tab Bar Component
-const PremiumTabBar = ({ state, descriptors, navigation }) => {
+// Optimized Tab Bar Component
+const OptimizedTabBar = ({ state, descriptors, navigation }) => {
   const insets = useSafeAreaInsets();
   const { unreadCount: messageUnreadCount, fetchUnreadCount } = useMessages();
   
@@ -68,68 +68,6 @@ const PremiumTabBar = ({ state, descriptors, navigation }) => {
   // Fetch unread count when component mounts
   useEffect(() => {
     fetchUnreadCount();
-  }, []);
-  
-  // Animation refs for ultra-premium effects
-  const glowAnim = useRef(new Animated.Value(0)).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-  const shimmerAnim = useRef(new Animated.Value(0)).current;
-  const floatAnim = useRef(new Animated.Value(0)).current;
-  
-  useEffect(() => {
-    // Start continuous animations
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(glowAnim, {
-          toValue: 1,
-          duration: 2000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(glowAnim, {
-          toValue: 0,
-          duration: 2000,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
-    
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.05,
-          duration: 1500,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 1500,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
-    
-    Animated.loop(
-      Animated.timing(shimmerAnim, {
-        toValue: 1,
-        duration: 3000,
-        useNativeDriver: true,
-      })
-    ).start();
-    
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(floatAnim, {
-          toValue: -3,
-          duration: 2500,
-          useNativeDriver: true,
-        }),
-        Animated.timing(floatAnim, {
-          toValue: 3,
-          duration: 2500,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
   }, []);
   
   const getTabIcon = (routeName, focused, color) => {
@@ -164,82 +102,10 @@ const PremiumTabBar = ({ state, descriptors, navigation }) => {
       right: 0,
       height: 80 + (insets.bottom > 0 ? insets.bottom : 10),
       paddingBottom: insets.bottom > 0 ? insets.bottom : 10,
+      backgroundColor: '#1a1a1a',
+      borderTopWidth: 1,
+      borderTopColor: 'rgba(255, 255, 255, 0.1)',
     }}>
-      {/* Background with multiple gradient layers */}
-      <LinearGradient
-        colors={['rgba(5, 5, 32, 0.98)', 'rgba(15, 15, 45, 0.95)', 'rgba(25, 25, 60, 0.92)']}
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          borderTopLeftRadius: 25,
-          borderTopRightRadius: 25,
-        }}
-      />
-      
-      {/* Animated shimmer overlay */}
-      <Animated.View
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          borderTopLeftRadius: 25,
-          borderTopRightRadius: 25,
-          opacity: shimmerAnim.interpolate({
-            inputRange: [0, 0.5, 1],
-            outputRange: [0, 0.3, 0]
-          }),
-          transform: [{
-            translateX: shimmerAnim.interpolate({
-              inputRange: [0, 1],
-              outputRange: [-Dimensions.get('window').width, Dimensions.get('window').width]
-            })
-          }]
-        }}
-      >
-        <LinearGradient
-          colors={['transparent', 'rgba(255, 0, 255, 0.4)', 'rgba(0, 255, 255, 0.4)', 'transparent']}
-          start={{x: 0, y: 0}}
-          end={{x: 1, y: 0}}
-          style={{
-            flex: 1,
-            width: 200,
-            transform: [{ skewX: '-20deg' }]
-          }}
-        />
-      </Animated.View>
-      
-      {/* Glow effect border */}
-      <Animated.View
-        style={{
-          position: 'absolute',
-          top: -2,
-          left: -2,
-          right: -2,
-          height: 4,
-          borderTopLeftRadius: 27,
-          borderTopRightRadius: 27,
-          opacity: glowAnim.interpolate({
-            inputRange: [0, 1],
-            outputRange: [0.3, 1]
-          }),
-        }}
-      >
-        <LinearGradient
-          colors={['#ff00ff', '#ff6b9d', '#00ffff', '#ff00ff']}
-          start={{x: 0, y: 0}}
-          end={{x: 1, y: 0}}
-          style={{
-            flex: 1,
-            borderTopLeftRadius: 27,
-            borderTopRightRadius: 27,
-          }}
-        />
-      </Animated.View>
       
       {/* Tab buttons container */}
       <View style={{
@@ -277,159 +143,69 @@ const PremiumTabBar = ({ state, descriptors, navigation }) => {
                 flex: 1,
                 alignItems: 'center',
                 paddingVertical: 8,
-                paddingHorizontal: 4, // Add horizontal padding to prevent clipping
+                paddingHorizontal: 4,
               }}
             >
-              <Animated.View
-                style={{
-                  alignItems: 'center',
-                  transform: [
-                    { scale: isFocused ? pulseAnim : 1 },
-                    { translateY: isFocused ? floatAnim : 0 }
-                  ],
-                }}
-              >
-                {/* Icon glow background */}
-                {isFocused && (
-                  <Animated.View
-                    style={{
-                      position: 'absolute',
-                      width: 50,
-                      height: 50,
-                      borderRadius: 25,
-                      opacity: glowAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [0.3, 0.8]
-                      }),
-                      transform: [{
-                        scale: glowAnim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [1, 1.2]
-                        })
-                      }]
-                    }}
-                  >
-                    <LinearGradient
-                      colors={['rgba(255, 0, 255, 0.4)', 'rgba(255, 107, 157, 0.3)', 'rgba(0, 255, 255, 0.2)']}
-                      style={{
-                        flex: 1,
-                        borderRadius: 25,
-                      }}
-                    />
-                  </Animated.View>
-                )}
-                
-                {/* Icon container with gradient background */}
+              <View style={{ alignItems: 'center' }}>
+                {/* Icon container */}
                 <View style={{
                   width: 40,
                   height: 40,
                   borderRadius: 20,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  overflow: 'visible', // Allow badge to show outside container
+                  backgroundColor: isFocused ? 'rgba(0, 122, 255, 0.15)' : 'transparent',
+                  overflow: 'visible',
                 }}>
-                  {isFocused && (
-                    <LinearGradient
-                      colors={['rgba(255, 0, 255, 0.2)', 'rgba(0, 255, 255, 0.1)']}
-                      style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        borderRadius: 20,
-                      }}
-                    />
-                  )}
                   
                   {/* Message badge for Messages tab */}
                   {route.name === 'Messages' && messageUnreadCount > 0 && (
-                    <Animated.View
+                    <View
                       style={{
                         position: 'absolute',
                         right: -8,
                         top: -8,
                         zIndex: 10,
-                        transform: [{ scale: pulseAnim }]
+                        backgroundColor: '#FF3B30',
+                        borderRadius: 10,
+                        minWidth: messageUnreadCount > 99 ? 22 : messageUnreadCount > 9 ? 20 : 18,
+                        height: 18,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        paddingHorizontal: 4,
+                        borderWidth: 2,
+                        borderColor: '#1a1a1a',
                       }}
                     >
-                      {/* Glow effect for badge */}
-                      <Animated.View
-                        style={{
-                          position: 'absolute',
-                          top: -2,
-                          left: -2,
-                          right: -2,
-                          bottom: -2,
-                          borderRadius: 12,
-                          opacity: glowAnim.interpolate({
-                            inputRange: [0, 1],
-                            outputRange: [0.5, 1]
-                          }),
-                        }}
-                      >
-                        <LinearGradient
-                          colors={['rgba(255, 0, 255, 0.8)', 'rgba(255, 107, 157, 0.6)']}
-                          style={{
-                            flex: 1,
-                            borderRadius: 12,
-                          }}
-                        />
-                      </Animated.View>
-                      
-                      <LinearGradient
-                        colors={['#ff00ff', '#ff6b9d']}
-                        style={{
-                          borderRadius: 10,
-                          minWidth: messageUnreadCount > 99 ? 22 : messageUnreadCount > 9 ? 20 : 18,
-                          height: 18,
-                          justifyContent: 'center',
-                          alignItems: 'center',
-                          paddingHorizontal: 4,
-                          borderWidth: 2,
-                          borderColor: '#fff',
-                        }}
-                      >
-                        <Text style={{
-                          color: 'white',
-                          fontSize: messageUnreadCount > 99 ? 9 : 11,
-                          fontWeight: 'bold',
-                          textShadowColor: 'rgba(0, 0, 0, 0.5)',
-                          textShadowOffset: { width: 0, height: 1 },
-                          textShadowRadius: 2,
-                        }}>
-                          {messageUnreadCount > 99 ? '99+' : messageUnreadCount}
-                        </Text>
-                      </LinearGradient>
-                    </Animated.View>
+                      <Text style={{
+                        color: 'white',
+                        fontSize: messageUnreadCount > 99 ? 9 : 11,
+                        fontWeight: 'bold',
+                      }}>
+                        {messageUnreadCount > 99 ? '99+' : messageUnreadCount}
+                      </Text>
+                    </View>
                   )}
                   
                   <Ionicons
-                    name={getTabIcon(route.name, isFocused, isFocused ? '#ff00ff' : '#666')}
+                    name={getTabIcon(route.name, isFocused, isFocused ? '#007AFF' : '#666')}
                     size={24}
-                    color={isFocused ? '#ff00ff' : '#666'}
+                    color={isFocused ? '#007AFF' : '#666'}
                   />
                 </View>
                 
-                {/* Label with glow effect */}
-                <Animated.Text
+                {/* Label */}
+                <Text
                   style={{
-                    color: isFocused ? '#ff00ff' : '#888',
+                    color: isFocused ? '#007AFF' : '#888',
                     fontSize: 11,
-                    fontWeight: isFocused ? 'bold' : 'normal',
+                    fontWeight: isFocused ? '600' : 'normal',
                     marginTop: 4,
-                    textShadowColor: isFocused ? 'rgba(255, 0, 255, 0.5)' : 'transparent',
-                    textShadowOffset: { width: 0, height: 0 },
-                    textShadowRadius: isFocused ? 8 : 0,
-                    opacity: isFocused ? glowAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0.8, 1]
-                    }) : 0.7,
                   }}
                 >
                   {label}
-                </Animated.Text>
-              </Animated.View>
+                </Text>
+              </View>
             </TouchableOpacity>
           );
         })}
@@ -445,7 +221,7 @@ const TabNavigator = () => {
   
   return (
   <Tab.Navigator
-    tabBar={(props) => <PremiumTabBar {...props} />}
+    tabBar={(props) => <OptimizedTabBar {...props} />}
     screenOptions={{
       headerShown: false,
       tabBarHideOnKeyboard: true,

@@ -65,9 +65,6 @@ const HomeScreen = () => {
     startAnimations();
     startLogoAnimations();
 
-    // Add a test post for debugging
-    addTestPost();
-
     const unsubscribe = navigation.addListener('focus', () => {
       const params = navigation.getState().routes.find(route => route.name === 'Home')?.params;
       if (params?.refresh) {
@@ -90,120 +87,34 @@ const HomeScreen = () => {
   };
 
   const startLogoAnimations = () => {
-    // Simplified animation for better performance
-    // Only keep a simple pulse animation
+    // Minimal animation for better performance
     Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
-          toValue: 1.05,
-          duration: 2000,
+          toValue: 1.02,
+          duration: 3000,
           useNativeDriver: true,
         }),
         Animated.timing(pulseAnim, {
           toValue: 1,
-          duration: 2000,
-          useNativeDriver: true,
-        })
-      ])
-    ).start();
-
-    // Disabled heavy floating and color animations for performance
-    /*
-    // Floating animation - DISABLED
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(floatAnim, {
-          toValue: 1,
           duration: 3000,
           useNativeDriver: true,
-          easing: Easing.inOut(Easing.ease)
-        }),
-        Animated.timing(floatAnim, {
-          toValue: 0,
-          duration: 3000,
-          useNativeDriver: true,
-          easing: Easing.inOut(Easing.ease)
         })
       ])
     ).start();
-
-    // Color transition animation - DISABLED (uses useNativeDriver: false which is slow)
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(colorAnim, {
-          toValue: 1,
-          duration: 5000,
-          useNativeDriver: false,
-        }),
-        Animated.timing(colorAnim, {
-          toValue: 0,
-          duration: 5000,
-          useNativeDriver: false,
-        })
-      ])
-    ).start();
-    */
   };
 
   const startAnimations = () => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        tension: 50,
-        friction: 8,
-        useNativeDriver: true,
-      }),
-      Animated.timing(headerAnim, {
-        toValue: 1,
-        duration: 1000,
-        useNativeDriver: true,
-      }),
-      Animated.timing(createPostAnim, {
-        toValue: 1,
-        duration: 800,
-        delay: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(storiesAnim, {
-        toValue: 1,
-        duration: 1000,
-        delay: 400,
-        useNativeDriver: true,
-      })
-    ]).start();
+    // Removed heavy animations for better performance
+    // Set all animation values to final state immediately
+    fadeAnim.setValue(1);
+    slideAnim.setValue(0);
+    scaleAnim.setValue(1);
+    headerAnim.setValue(1);
+    createPostAnim.setValue(1);
+    storiesAnim.setValue(1);
   };
   
-  // Function to add a test post for debugging
-  const addTestPost = () => {
-    const testPost = {
-      id: 'test-post-' + Date.now(),
-      user_id: 'test-user',
-      type: 'image',
-      media_url: 'https://res.cloudinary.com/demo/image/upload/v1312461204/sample.jpg',
-      caption: 'This is a test post to verify rendering',
-      created_at: new Date().toISOString(),
-      profiles: {
-        id: 'test-user',
-        username: 'testuser',
-        avatar_url: 'https://res.cloudinary.com/demo/image/upload/v1312461204/sample.jpg'
-      },
-      likes: [{ count: 5 }],
-      comments: [{ count: 2 }],
-      is_liked: false
-    };
-    
-    setPosts(prevPosts => [testPost, ...prevPosts]);
-  };
   
   // Set up video context for auto-playing videos
   const { setActiveVideo, clearActiveVideo } = useVideo();
@@ -263,8 +174,8 @@ const HomeScreen = () => {
   
   // Create a ref for the viewability configuration
   const viewabilityConfig = useRef({
-    itemVisiblePercentThreshold: 40, // Consider an item visible when 40% is visible
-    minimumViewTime: 500, // Wait 500ms before considering an item as viewable
+    itemVisiblePercentThreshold: 50, // Consider an item visible when 50% is visible
+    minimumViewTime: 300, // Reduced wait time for better responsiveness
     waitForInteraction: false // Don't require user interaction before considering items viewable
   });
   
@@ -295,41 +206,37 @@ const HomeScreen = () => {
     try {
       const data = await PostsService.getAllPosts();
       
-      // Debug: Log the first post to see its structure
-      if (data && data.length > 0) {
-        console.log('First post structure:', JSON.stringify(data[0], null, 2));
-      } else {
-        console.log('No posts returned from Supabase');
+      if (!data || data.length === 0) {
+        setPosts([]);
+        setRefreshing(false);
+        setLoading(false);
+        return;
       }
       
-      // Filter out any null or invalid posts
-      const validPosts = data.filter(post => post && post.id);
-      
-      if (validPosts.length !== data.length) {
-        console.warn(`Filtered out ${data.length - validPosts.length} invalid posts`);
-      }
-      
-      // Ensure all posts have the required fields
-      const normalizedPosts = validPosts.map(post => ({
-        ...post,
-        type: post.type || 'text',
-        media_url: post.media_url || '',
-        caption: post.caption || '',
-        profiles: post.profiles || { username: 'Unknown', avatar_url: '' },
-        likes: post.likes || [{ count: 0 }],
-        comments: post.comments || [{ count: 0 }],
-        is_liked: post.is_liked || false
-      }));
+      // Filter and normalize posts in one pass for better performance
+      const normalizedPosts = data
+        .filter(post => post && post.id)
+        .map(post => ({
+          id: post.id,
+          type: post.type || 'text',
+          media_url: post.media_url || '',
+          caption: post.caption || '',
+          created_at: post.created_at,
+          user_id: post.user_id,
+          profiles: post.profiles || { username: 'Unknown', avatar_url: '' },
+          likes: post.likes || [{ count: 0 }],
+          comments: post.comments || [{ count: 0 }],
+          is_liked: post.is_liked || false
+        }));
       
       setPosts(normalizedPosts);
       setRefreshing(false);
       
-      // Store video posts separately for the ShortsScreen
+      // Store video posts for ShortsScreen (only if needed)
       const videoPosts = normalizedPosts.filter(post => post.type === 'video');
-      // Make this data available to the navigation context
-      navigation.setParams({
-        videoPosts: videoPosts
-      });
+      if (videoPosts.length > 0) {
+        navigation.setParams({ videoPosts });
+      }
     } catch (error) {
       console.error('Error loading posts:', error);
       Alert.alert('Error', 'Failed to load posts');
@@ -455,7 +362,7 @@ const HomeScreen = () => {
         >
           <View style={styles.logoWrapper}>
             {isDarkMode ? (
-              <Text style={styles.logoSimple}>INJOY</Text>
+              <Text style={styles.logoSimple}>FLEXX</Text>
             ) : (
               <View style={styles.socialMateLogoContainer}>
                 <Text style={styles.socialMateLogo}>
@@ -665,8 +572,39 @@ const HomeScreen = () => {
         <View
           style={[styles.container, { backgroundColor: isDarkMode ? '#1a1d2e' : '#f5f7fa' }]}
         >
-          <ScrollView
-            showsVerticalScrollIndicator={false}
+          <FlatList
+            data={posts}
+            keyExtractor={(item) => item?.id?.toString() || Math.random().toString()}
+            renderItem={({ item }) => {
+              if (!item || !item.id) {
+                return null;
+              }
+              
+              const PostComponent = isDarkMode ? PostItem : PostItemOld;
+              
+              return (
+                <PostComponent
+                  post={item}
+                  onOptionsPress={(action) => {
+                    if (action.type === 'delete') {
+                      setPosts(posts.filter(post => post.id !== action.postId));
+                    }
+                  }}
+                />
+              );
+            }}
+            ListHeaderComponent={renderHeader}
+            ListEmptyComponent={() => (
+              loading ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color="#ff00ff" />
+                </View>
+              ) : (
+                <View style={styles.emptyContainer}>
+                  <Text style={styles.emptyText}>No posts available</Text>
+                </View>
+              )
+            )}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
@@ -678,40 +616,19 @@ const HomeScreen = () => {
                 tintColor="#ff00ff"
               />
             }
-            contentContainerStyle={styles.scrollViewContent}
-          >
-            {renderHeader()}
-            
-            {loading ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#ff00ff" />
-              </View>
-            ) : posts.length === 0 ? (
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>No posts available</Text>
-              </View>
-            ) : (
-              posts.map((item) => {
-                if (!item || !item.id) {
-                  return null;
-                }
-                
-                const PostComponent = isDarkMode ? PostItem : PostItemOld;
-                
-                return (
-                  <PostComponent
-                    key={item.id}
-                    post={item}
-                    onOptionsPress={(action) => {
-                      if (action.type === 'delete') {
-                        setPosts(posts.filter(post => post.id !== action.postId));
-                      }
-                    }}
-                  />
-                );
-              })
-            )}
-          </ScrollView>
+            showsVerticalScrollIndicator={false}
+            removeClippedSubviews={true}
+            maxToRenderPerBatch={5}
+            updateCellsBatchingPeriod={50}
+            initialNumToRender={3}
+            windowSize={10}
+            getItemLayout={(data, index) => ({
+              length: 400, // Approximate height of each post
+              offset: 400 * index,
+              index,
+            })}
+            viewabilityConfigCallbackPairs={viewabilityConfigCallbackPairs.current}
+          />
 
           <Modal
             visible={showPostInput}
@@ -1089,14 +1006,22 @@ const styles = StyleSheet.create({
   createPostDark: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
     marginHorizontal: 15,
     marginVertical: 10,
     paddingHorizontal: 15,
     paddingVertical: 12,
-    borderRadius: 30,
+    borderRadius: 25,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
   createPostAvatarDark: {
     width: 40,

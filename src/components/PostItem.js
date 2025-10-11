@@ -935,12 +935,22 @@ const PostItem = ({ post, onOptionsPress }) => {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: 'transparent',
-    marginHorizontal: 0,
-    marginBottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    marginHorizontal: 15,
+    marginBottom: 15,
     paddingBottom: 16,
-    borderRadius: 0,
-    overflow: 'visible',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    overflow: 'hidden',
   },
   header: {
     flexDirection: 'row',
