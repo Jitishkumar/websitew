@@ -935,11 +935,12 @@ const PostItem = ({ post, onOptionsPress }) => {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#16213e',
-    marginHorizontal: 16,
-    marginBottom: 16,
-    borderRadius: 20,
-    overflow: 'hidden',
+    backgroundColor: 'transparent',
+    marginHorizontal: 0,
+    marginBottom: 0,
+    paddingBottom: 16,
+    borderRadius: 0,
+    overflow: 'visible',
   },
   header: {
     flexDirection: 'row',
@@ -985,7 +986,7 @@ const styles = StyleSheet.create({
   },
   username: {
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#ffffff',
   },
   timestamp: {
@@ -1009,7 +1010,7 @@ const styles = StyleSheet.create({
   },
   caption: {
     fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.9)',
+    color: 'rgba(255, 255, 255, 0.7)',
     lineHeight: 20,
   },
   link: {
@@ -1025,23 +1026,23 @@ const styles = StyleSheet.create({
   },
   videoContainer: {
     position: 'relative',
-    width: '100%',
+    width: '92%',
     minHeight: 300,
     maxHeight: 500,
-    backgroundColor: '#0f1419',
+    backgroundColor: '#2a2d3a',
     overflow: 'hidden',
-    borderRadius: 12,
-    marginHorizontal: 16,
+    borderRadius: 20,
+    marginHorizontal: '4%',
     marginBottom: 12,
   },
   imageContainer: {
     position: 'relative',
-    width: '100%',
+    width: '92%',
     aspectRatio: 1,
-    backgroundColor: '#0f1419',
+    backgroundColor: '#2a2d3a',
     overflow: 'hidden',
-    borderRadius: 12,
-    marginHorizontal: 16,
+    borderRadius: 20,
+    marginHorizontal: '4%',
     marginBottom: 12,
   },
   media: {

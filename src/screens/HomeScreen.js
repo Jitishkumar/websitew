@@ -467,12 +467,33 @@ const HomeScreen = () => {
           </View>
           
           <View style={styles.headerIcons}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.iconButton}
-              onPress={() => navigation.navigate('Settings')}
+              onPress={() => navigation.navigate('Trending')}
               activeOpacity={0.7}
             >
-              <Ionicons name="settings-outline" size={24} color={isDarkMode ? "rgba(255, 255, 255, 0.9)" : "#333333"} />
+              <MaterialIcons name="whatshot" size={24} color={isDarkMode ? "rgba(255, 255, 255, 0.9)" : "#333333"} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.iconButton}
+              onPress={() => setShowTermsModal(true)}
+              activeOpacity={0.7}
+            >
+              <MaterialIcons name="duo" size={24} color={isDarkMode ? "rgba(255, 255, 255, 0.9)" : "#333333"} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.iconButton}
+              onPress={() => navigation.navigate('Notifications')}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="notifications-outline" size={24} color={isDarkMode ? "rgba(255, 255, 255, 0.9)" : "#333333"} />
+              {notificationUnreadCount > 0 && (
+                <View style={styles.notificationBadge}>
+                  <Text style={styles.notificationBadgeText}>{notificationUnreadCount}</Text>
+                </View>
+              )}
             </TouchableOpacity>
             
             <TouchableOpacity 
@@ -486,45 +507,49 @@ const HomeScreen = () => {
         </View>
       </Animated.View>
 
-      <Animated.View style={{ opacity: createPostAnim, transform: [{ scale: scaleAnim }] }}>
-        <View
-          style={[styles.createPost, !isDarkMode && styles.createPostLight]}
-        >
-          <View style={styles.postInputContainer}>
-            <View style={styles.avatarContainer}>
-              {isDarkMode ? (
-                <View style={styles.avatarBorder}>
-                  <Image
-                    style={styles.userAvatar}
-                    source={{ uri: 'https://via.placeholder.com/40' }}
-                  />
-                </View>
-              ) : (
+      {isDarkMode && (
+        <Animated.View style={{ opacity: createPostAnim, transform: [{ scale: scaleAnim }] }}>
+          <TouchableOpacity onPress={handleCreatePost} style={styles.createPostDark} activeOpacity={0.8}>
+            <Image 
+              source={{ uri: currentUser?.avatar_url || 'https://via.placeholder.com/40' }}
+              style={styles.createPostAvatarDark}
+            />
+            <Text style={styles.createPostPlaceholderDark}>What's on your mind?</Text>
+            <MaterialIcons name="add-photo-alternate" size={24} color="rgba(255, 255, 255, 0.6)" />
+          </TouchableOpacity>
+        </Animated.View>
+      )}
+
+      {!isDarkMode && (
+        <Animated.View style={{ opacity: createPostAnim, transform: [{ scale: scaleAnim }] }}>
+          <View
+            style={[styles.createPost, styles.createPostLight]}
+          >
+            <View style={styles.postInputContainer}>
+              <View style={styles.avatarContainer}>
                 <LinearGradient
                   colors={['#ff00ff', '#ff6b9d', '#c44569']}
                   style={styles.avatarBorder}
                 >
                   <Image
                     style={styles.userAvatar}
-                    source={{ uri: 'https://via.placeholder.com/40' }}
+                    source={{ uri: currentUser?.avatar_url || 'https://via.placeholder.com/40' }}
                   />
                 </LinearGradient>
-              )}
-              <View style={styles.avatarGlow} />
+                <View style={styles.avatarGlow} />
+              </View>
+              
+              <TouchableOpacity 
+                style={styles.postInputButton}
+                onPress={handleCreatePost}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.postInputGradient, styles.postInputLight]}>
+                  <Text style={[styles.postInputPlaceholder, styles.postInputPlaceholderLight]}>What's on your head?</Text>
+                </View>
+              </TouchableOpacity>
             </View>
             
-            <TouchableOpacity 
-              style={styles.postInputButton}
-              onPress={handleCreatePost}
-              activeOpacity={0.8}
-            >
-              <View style={[styles.postInputGradient, !isDarkMode && styles.postInputLight]}>
-                <Text style={[styles.postInputPlaceholder, !isDarkMode && styles.postInputPlaceholderLight]}>What's on your head?</Text>
-              </View>
-            </TouchableOpacity>
-          </View>
-          
-          {!isDarkMode && (
             <View style={styles.postOptionsLight}>
               <TouchableOpacity style={styles.postOptionButtonLight} onPress={handleCreatePost}>
                 <MaterialIcons name="image" size={20} color="#1E90FF" />
@@ -541,24 +566,9 @@ const HomeScreen = () => {
                 <Text style={styles.postOptionTextLight}>Attach</Text>
               </TouchableOpacity>
             </View>
-          )}
-          {isDarkMode && (
-            <View style={styles.postOptions}>
-              <TouchableOpacity 
-                style={styles.postOption}
-                onPress={handleCreatePost}
-                activeOpacity={0.8}
-              >
-                <View style={styles.createPostButton}>
-                  <MaterialIcons name="add" size={18} color="rgba(255, 255, 255, 0.9)" />
-                  <Text style={styles.createPostText}>Create Post</Text>
-                </View>
-                <View style={styles.createPostGlow} />
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-      </Animated.View>
+          </View>
+        </Animated.View>
+      )}
 
       <Animated.View style={{ opacity: storiesAnim, transform: [{ translateY: slideAnim }] }}>
         <View
@@ -1042,6 +1052,7 @@ const styles = StyleSheet.create({
     paddingRight: 4,
   },
   iconButton: {
+    marginHorizontal: isSmallScreen ? 2 : 6,
     padding: 4,
   },
   iconBackground: {
@@ -1054,31 +1065,51 @@ const styles = StyleSheet.create({
   },
   notificationBadge: {
     position: 'absolute',
-    top: -3,
-    right: -6,
-    borderRadius: 10,
-    height: 16,
+    right: -4,
+    top: 0,
+    backgroundColor: '#FF3B30',
+    borderRadius: 9,
+    width: 18,
+    height: 18,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#fff',
+    borderWidth: 1.5,
+    borderColor: '#1a1d2e',
   },
   notificationBadgeText: {
-    color: 'white',
+    color: '#fff',
+    fontSize: 10,
     fontWeight: 'bold',
   },
   createPost: {
     margin: 15,
     borderRadius: 20,
     padding: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    borderWidth: 0.5,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    shadowColor: 'rgba(0, 0, 0, 0.3)',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 3,
+  },
+  createPostDark: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    marginHorizontal: 15,
+    marginVertical: 10,
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    borderRadius: 30,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  createPostAvatarDark: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  createPostPlaceholderDark: {
+    flex: 1,
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.6)',
   },
   postInputContainer: {
     flexDirection: 'row',
