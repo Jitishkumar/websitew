@@ -73,12 +73,43 @@ const NotificationsScreen = () => {
     },
   ];
 
+  // Function to delete notifications older than 7 days
+  const deleteOldNotifications = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (user) {
+        // Calculate date 7 days ago
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        
+        // Delete notifications older than 7 days
+        const { error } = await supabase
+          .from('notifications')
+          .delete()
+          .lt('created_at', sevenDaysAgo.toISOString())
+          .eq('recipient_id', user.id);
+        
+        if (error) {
+          console.error('Error deleting old notifications:', error);
+        } else {
+          console.log('Successfully deleted notifications older than 7 days');
+        }
+      }
+    } catch (error) {
+      console.error('Error in deleteOldNotifications:', error);
+    }
+  };
+
   useEffect(() => {
     // Fetch real notifications from the database
     fetchNotifications();
     
     // Mark all notifications as read when screen opens
     markAllNotificationsAsRead();
+    
+    // Delete notifications older than 7 days
+    deleteOldNotifications();
     
     // Set up real-time subscription for new notifications
     const notificationsSubscription = supabase
@@ -120,10 +151,12 @@ const NotificationsScreen = () => {
               .from('profiles')
               .select('id, username, avatar_url')
               .eq('id', notification.sender_id)
-              .single();
+              .maybeSingle();
               
-            if (senderError) {
-              console.error('Error fetching sender profile:', senderError);
+            if (senderError || !senderData) {
+              if (senderError) {
+                console.error('Error fetching sender profile:', senderError);
+              }
               return {
                 ...notification,
                 sender: {

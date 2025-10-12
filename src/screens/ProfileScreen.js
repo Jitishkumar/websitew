@@ -659,6 +659,7 @@ const ProfileScreen = () => {
     }
 
     const data = activeTab === 'Post' ? memoizedPosts : memoizedShorts;
+    console.log(`Rendering ${data.length} items for ${activeTab} tab`);
     return data.length > 0 ? (
       <FlatList
         data={data}
@@ -666,9 +667,9 @@ const ProfileScreen = () => {
         numColumns={3}
         keyExtractor={item => item.id.toString()}
         columnWrapperStyle={styles.gridRow}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={true}
         contentContainerStyle={styles.gridContainer}
-        scrollEnabled={false}
+        scrollEnabled={true}
       />
     ) : (
       <View style={styles.emptyContainer}>
@@ -681,6 +682,7 @@ const ProfileScreen = () => {
 
   useFocusEffect(
     React.useCallback(() => {
+      console.log('ProfileScreen focused - Loading data for tab:', activeTab);
       // Load critical data first
       loadUserProfile();
       fetchUserContent();
@@ -692,6 +694,10 @@ const ProfileScreen = () => {
         fetchPostsCount();
         fetchShortsCount();
       }, 0);
+
+      return () => {
+        console.log('ProfileScreen unfocused');
+      };
     }, [activeTab])
   );
 
@@ -751,15 +757,27 @@ const ProfileScreen = () => {
       
       try {
         const cachedData = await AsyncStorage.getItem(CONTENT_CACHE_KEY);
+        console.log('Checking cache for:', CONTENT_CACHE_KEY, cachedData ? 'Found' : 'Not found');
         if (cachedData && !isSilent) {
           const { content, timestamp } = JSON.parse(cachedData);
           const now = Date.now();
+          const cacheAge = now - timestamp;
+          console.log('Cache age:', Math.round(cacheAge / 1000), 'seconds');
           
           // Show cached content immediately
           if (content) {
+            console.log('Cache content:', {
+              postsCount: content.posts?.length || 0,
+              shortsCount: content.shorts?.length || 0,
+              totalViews: content.totalViews,
+              totalLikes: content.totalLikes
+            });
+            
             if (activeTab === 'Post') {
+              console.log('Setting posts from cache:', content.posts?.length || 0);
               setPosts(content.posts || []);
             } else {
+              console.log('Setting shorts from cache:', content.shorts?.length || 0);
               setShorts(content.shorts || []);
             }
             setTotalViews(content.totalViews || 0);
@@ -769,11 +787,13 @@ const ProfileScreen = () => {
             
             // Refresh in background if cache is old
             if (now - timestamp > CACHE_EXPIRY_TIME) {
+              console.log('Cache expired, refreshing in background');
               setTimeout(() => {
                 fetchUserContent(true); // Silent refresh
               }, 100);
               return;
             } else {
+              console.log('Cache is fresh, using cached data');
               return; // Cache is fresh, no need to fetch
             }
           }
@@ -819,10 +839,12 @@ const ProfileScreen = () => {
           .order('created_at', { ascending: false });
 
         if (error) throw error;
+        console.log(`Fetched ${data?.length || 0} posts from Supabase`);
         const postsWithLikeStatus = data.map(post => ({
           ...post,
           is_liked: post.user_likes?.some(like => like.user_id === user.id) || false
         }));
+        console.log('Setting posts state with data:', postsWithLikeStatus?.length || 0);
         setPosts(postsWithLikeStatus || []);
       } else if (activeTab === 'Short') {
         const { data, error } = await supabase
@@ -839,16 +861,19 @@ const ProfileScreen = () => {
           .order('created_at', { ascending: false });
 
         if (error) throw error;
+        console.log(`Fetched ${data?.length || 0} shorts from Supabase`);
         const shortsWithLikeStatus = data.map(post => ({
           ...post,
           is_liked: post.user_likes?.some(like => like.user_id === user.id) || false
         }));
+        console.log('Setting shorts state with data:', shortsWithLikeStatus?.length || 0);
         setShorts(shortsWithLikeStatus || []);
       }
       
       // Cache the content for instant loading next time
       try {
         const CONTENT_CACHE_KEY = `user_content_${user.id}_${activeTab}`;
+        // Use the current state for caching which will have the most up-to-date data
         const contentToCache = {
           posts: activeTab === 'Post' ? posts : [],
           shorts: activeTab === 'Short' ? shorts : [],

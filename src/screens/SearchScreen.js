@@ -6,6 +6,8 @@ import { supabase } from '../lib/supabase';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme } from '../context/ThemeContext';
+import { useVideo } from '../context/VideoContext';
 
 const { width, height } = Dimensions.get('window');
 
@@ -17,8 +19,8 @@ const SearchScreen = () => {
   const [loading, setLoading] = useState(false);
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-
-  // Animations removed for instant performance
+  const { isDarkMode } = useTheme();
+  const { setActiveVideo } = useVideo();
 
   // Search for users when query changes
   useEffect(() => {
@@ -224,12 +226,22 @@ const SearchScreen = () => {
     }
   };
 
-  const renderMediaItem = ({ item }) => {
+  const renderMediaItem = ({ item, index }) => {
     const isVideo = (item?.type || item?.media_type) === 'video';
     return (
       <TouchableOpacity 
         style={styles.mediaItem}
-        onPress={() => navigation.navigate('Comment', { postId: item.id })}
+        onPress={() => {
+          // If it's a video post, set the active video ID before navigating
+          if (isVideo) {
+            setActiveVideo(item.id);
+          }
+          // Pass all media results to enable scrolling through posts
+          navigation.navigate('PostViewer', {
+            posts: mediaResults,
+            initialIndex: index
+          });
+        }}
         activeOpacity={0.85}
       >
         {isVideo ? (
@@ -252,48 +264,16 @@ const SearchScreen = () => {
     );
   };
 
-  const renderUserItem = ({ item, index }) => (
-    <Animated.View
-      style={[
-        {
-          opacity: fadeAnim,
-          transform: [
-            { 
-              translateY: slideAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0, 0]
-              })
-            },
-            { scale: scaleAnim }
-          ]
-        }
-      ]}
-    >
+  const renderUserItem = ({ item }) => (
+    <View>
       <TouchableOpacity 
-        style={styles.userItem}
+        style={[styles.userItem, !isDarkMode && styles.userItemLight]}
         onPress={() => handleUserPress(item.id)}
         activeOpacity={0.8}
       >
-        {/* User item glow effect */}
-        <Animated.View
-          style={[
-            styles.userItemGlow,
-            {
-              opacity: glowAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0, 0.3]
-              })
-            }
-          ]}
-        />
+        <View style={styles.userItemGlow} />
         
-        {/* Avatar with pulse animation */}
-        <Animated.View 
-          style={[
-            styles.avatarContainer,
-            { transform: [{ scale: pulseAnim }] }
-          ]}
-        >
+        <View style={styles.avatarContainer}>
           <LinearGradient
             colors={['#ff00ff', '#ff6b9d', '#00ffff']}
             style={styles.avatarBorder}
@@ -305,186 +285,83 @@ const SearchScreen = () => {
           </LinearGradient>
           
           {item.isVerified && (
-            <Animated.View 
-              style={[
-                styles.verifiedBadgeContainer,
-                { transform: [{ scale: pulseAnim }] }
-              ]}
-            >
+            <View style={styles.verifiedBadgeContainer}>
               <LinearGradient
                 colors={['#ff00ff', '#00ffff']}
                 style={styles.verifiedBadgeGradient}
               >
                 <Ionicons name="checkmark" size={12} color="#fff" />
               </LinearGradient>
-            </Animated.View>
+            </View>
           )}
-        </Animated.View>
+        </View>
         
         <View style={styles.userInfo}>
           <View style={styles.usernameContainer}>
-            <Text style={styles.username}>{item.username}</Text>
+            <Text style={[styles.username, !isDarkMode && styles.usernameLight]}>{item.username}</Text>
           </View>
-          <Text style={styles.fullName}>{item.full_name || ''}</Text>
+          <Text style={[styles.fullName, !isDarkMode && styles.fullNameLight]}>{item.full_name || ''}</Text>
         </View>
-        
-        {/* Shimmer effect */}
-        <Animated.View
-          style={[
-            styles.shimmerOverlay,
-            {
-              opacity: shimmerAnim.interpolate({
-                inputRange: [0, 0.5, 1],
-                outputRange: [0, 0.3, 0]
-              }),
-              transform: [{
-                translateX: shimmerAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [-100, 100]
-                })
-              }]
-            }
-          ]}
-        >
-          <LinearGradient
-            colors={['transparent', 'rgba(255, 0, 255, 0.4)', 'rgba(0, 255, 255, 0.4)', 'transparent']}
-            start={{x: 0, y: 0}}
-            end={{x: 1, y: 0}}
-            style={styles.shimmerGradient}
-          />
-        </Animated.View>
       </TouchableOpacity>
-    </Animated.View>
+    </View>
   );
 
   return (
-    <View style={styles.container}>
-      {/* Enhanced Header with animations */}
-      <Animated.View
-        style={[
-          {
-            opacity: fadeAnim,
-            transform: [{ translateY: slideAnim }]
-          }
-        ]}
-      >
+    <View style={[styles.container, !isDarkMode && styles.containerLight]}>
+      <View>
         <LinearGradient
-          colors={['#1a1a2e', '#16213e', '#0f3460']}
+          colors={isDarkMode ? ['#1a1a2e', '#16213e', '#0f3460'] : ['#f0f0f5', '#e6e6f0', '#d9d9e6']}
           start={{x: 0, y: 0}}
           end={{x: 1, y: 1}}
           style={[styles.header, { paddingTop: insets.top > 0 ? insets.top : 50 }]}
         >
-          {/* Header glow effect */}
-          <Animated.View
-            style={[
-              styles.headerGlow,
-              {
-                opacity: glowAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0.3, 0.8]
-                })
-              }
-            ]}
-          />
+          <View style={styles.headerGlow} />
           
-          <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-            <TouchableOpacity onPress={() => navigation.goBack()}>
-              <Ionicons name="arrow-back" size={24} color="#ff00ff" />
-            </TouchableOpacity>
-          </Animated.View>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={24} color={isDarkMode ? "#ff00ff" : "#6200ee"} />
+          </TouchableOpacity>
           
-          <Text style={styles.headerTitle}>Search</Text>
-          
-          {/* Header shimmer effect */}
-          <Animated.View
-            style={[
-              styles.headerShimmer,
-              {
-                opacity: shimmerAnim.interpolate({
-                  inputRange: [0, 0.5, 1],
-                  outputRange: [0, 0.4, 0]
-                }),
-                transform: [{
-                  translateX: shimmerAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [-width, width]
-                  })
-                }]
-              }
-            ]}
-          >
-            <LinearGradient
-              colors={['transparent', 'rgba(255, 0, 255, 0.6)', 'rgba(0, 255, 255, 0.6)', 'transparent']}
-              start={{x: 0, y: 0}}
-              end={{x: 1, y: 0}}
-              style={styles.shimmerGradient}
-            />
-          </Animated.View>
+          <Text style={[styles.headerTitle, !isDarkMode && styles.headerTitleLight]}>Search</Text>
         </LinearGradient>
-      </Animated.View>
+      </View>
       
-      {/* Enhanced Search Container */}
-      <Animated.View
-        style={[
-          styles.searchContainer,
-          {
-            opacity: searchBarAnim,
-            transform: [
-              { scale: scaleAnim },
-              { translateY: slideAnim }
-            ]
-          }
-        ]}
-      >
-        {/* Search container glow */}
-        <Animated.View
-          style={[
-            styles.searchGlow,
-            {
-              opacity: glowAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0.2, 0.6]
-              })
-            }
-          ]}
-        />
+      <View style={styles.searchContainer}>
+        <View style={styles.searchGlow} />
         
         <LinearGradient
-          colors={['rgba(26, 26, 46, 0.9)', 'rgba(22, 33, 62, 0.8)']}
+          colors={isDarkMode ? 
+            ['rgba(26, 26, 46, 0.9)', 'rgba(22, 33, 62, 0.8)'] : 
+            ['rgba(240, 240, 245, 0.9)', 'rgba(230, 230, 240, 0.8)']}
           style={styles.searchInputContainer}
         >
-          <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-            <Ionicons name="search" size={20} color="#ff00ff" style={styles.searchIcon} />
-          </Animated.View>
+          <Ionicons name="search" size={20} color={isDarkMode ? "#ff00ff" : "#6200ee"} style={styles.searchIcon} />
           
           <TextInput
-            style={styles.searchInput}
+            style={[styles.searchInput, !isDarkMode && styles.searchInputLight]}
             placeholder={activeTab === 'users' ? "Search for users..." : "Search for media..."}
-            placeholderTextColor="#999"
+            placeholderTextColor={isDarkMode ? "#999" : "#666"}
             value={searchQuery}
             onChangeText={setSearchQuery}
             autoCapitalize="none"
           />
           
           {searchQuery.length > 0 && (
-            <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-              <TouchableOpacity onPress={() => setSearchQuery('')}>
-                <Ionicons name="close-circle" size={20} color="#ff00ff" />
-              </TouchableOpacity>
-            </Animated.View>
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Ionicons name="close-circle" size={20} color={isDarkMode ? "#ff00ff" : "#6200ee"} />
+            </TouchableOpacity>
           )}
         </LinearGradient>
-      </Animated.View>
+      </View>
 
       <View style={styles.tabContainer}>
         <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'users' && styles.activeTabButton]}
+          style={[styles.tabButton, activeTab === 'users' && (isDarkMode ? styles.activeTabButton : styles.activeTabButtonLight)]}
           onPress={() => setActiveTab('users')}
         >
           <Text style={[styles.tabButtonText, activeTab === 'users' && styles.activeTabButtonText]}>Users</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'media' && styles.activeTabButton]}
+          style={[styles.tabButton, activeTab === 'media' && (isDarkMode ? styles.activeTabButton : styles.activeTabButtonLight)]}
           onPress={() => setActiveTab('media')}
         >
           <Text style={[styles.tabButtonText, activeTab === 'media' && styles.activeTabButtonText]}>Media</Text>
@@ -492,33 +369,19 @@ const SearchScreen = () => {
       </View>
 
       {loading ? (
-        <Animated.View 
-          style={[
-            styles.loadingContainer,
-            {
-              opacity: fadeAnim,
-              transform: [{ scale: pulseAnim }]
-            }
-          ]}
-        >
+        <View style={styles.loadingContainer}>
           <LinearGradient
-            colors={['rgba(255, 0, 255, 0.2)', 'rgba(0, 255, 255, 0.1)']}
+            colors={isDarkMode ? 
+              ['rgba(255, 0, 255, 0.2)', 'rgba(0, 255, 255, 0.1)'] : 
+              ['rgba(98, 0, 238, 0.2)', 'rgba(0, 150, 255, 0.1)']}
             style={styles.loadingGradient}
           >
-            <ActivityIndicator size="large" color="#ff00ff" />
-            <Text style={styles.loadingText}>Searching...</Text>
+            <ActivityIndicator size="large" color={isDarkMode ? "#ff00ff" : "#6200ee"} />
+            <Text style={[styles.loadingText, !isDarkMode && styles.loadingTextLight]}>Searching...</Text>
           </LinearGradient>
-        </Animated.View>
+        </View>
       ) : (
-        <Animated.View
-          style={[
-            { flex: 1 },
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }]
-            }
-          ]}
-        >
+        <View style={{ flex: 1 }}>
           <FlatList
             data={activeTab === 'users' ? searchResults : mediaResults}
             renderItem={activeTab === 'users' ? renderUserItem : renderMediaItem}
@@ -528,29 +391,23 @@ const SearchScreen = () => {
             showsVerticalScrollIndicator={false}
             ListEmptyComponent={
               searchQuery.length > 0 ? (
-                <Animated.View
-                  style={[
-                    styles.emptyContainer,
-                    {
-                      opacity: fadeAnim,
-                      transform: [{ scale: scaleAnim }]
-                    }
-                  ]}
-                >
+                <View style={styles.emptyContainer}>
                   <LinearGradient
-                    colors={['rgba(255, 0, 255, 0.1)', 'rgba(0, 255, 255, 0.05)']}
+                    colors={isDarkMode ? 
+                      ['rgba(255, 0, 255, 0.1)', 'rgba(0, 255, 255, 0.05)'] : 
+                      ['rgba(98, 0, 238, 0.1)', 'rgba(0, 150, 255, 0.05)']}
                     style={styles.emptyGradient}
                   >
-                    <Ionicons name="search" size={60} color="#ff00ff" />
-                    <Text style={styles.emptyText}>{activeTab === 'users' ? 'No users found' : 'No media found'}</Text>
-                    <Text style={styles.emptySubtext}>Try searching with different keywords</Text>
+                    <Ionicons name="search" size={60} color={isDarkMode ? "#ff00ff" : "#6200ee"} />
+                    <Text style={[styles.emptyText, !isDarkMode && styles.emptyTextLight]}>{activeTab === 'users' ? 'No users found' : 'No media found'}</Text>
+                    <Text style={[styles.emptySubtext, !isDarkMode && styles.emptySubtextLight]}>Try searching with different keywords</Text>
                   </LinearGradient>
-                </Animated.View>
+                </View>
               ) : null
             }
             contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
           />
-        </Animated.View>
+        </View>
       )}
     </View>
   );
@@ -560,6 +417,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000',
+  },
+  containerLight: {
+    backgroundColor: '#f5f5f5',
   },
   header: {
     flexDirection: 'row',
@@ -577,14 +437,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: 'rgba(255, 0, 255, 0.1)',
   },
-  headerShimmer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    width: 200,
-  },
   headerTitle: {
     color: '#fff',
     fontSize: 24,
@@ -593,6 +445,10 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(255, 0, 255, 0.5)',
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 10,
+  },
+  headerTitleLight: {
+    color: '#333',
+    textShadowColor: 'rgba(98, 0, 238, 0.3)',
   },
   searchContainer: {
     margin: 16,
@@ -626,6 +482,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
   },
+  searchInputLight: {
+    color: '#333',
+  },
   userItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -638,6 +497,10 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 0, 255, 0.2)',
     position: 'relative',
     overflow: 'hidden',
+  },
+  userItemLight: {
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderColor: 'rgba(98, 0, 238, 0.2)',
   },
   userItemGlow: {
     position: 'absolute',
@@ -692,10 +555,17 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
   },
+  usernameLight: {
+    color: '#333',
+    textShadowColor: 'rgba(98, 0, 238, 0.2)',
+  },
   fullName: {
     color: '#ccc',
     fontSize: 14,
     marginTop: 2,
+  },
+  fullNameLight: {
+    color: '#666',
   },
   shimmerOverlay: {
     position: 'absolute',
@@ -731,6 +601,10 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
   },
+  loadingTextLight: {
+    color: '#333',
+    textShadowColor: 'rgba(98, 0, 238, 0.3)',
+  },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -755,11 +629,18 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
   },
+  emptyTextLight: {
+    color: '#333',
+    textShadowColor: 'rgba(98, 0, 238, 0.3)',
+  },
   emptySubtext: {
     color: '#ccc',
     fontSize: 14,
     textAlign: 'center',
     marginTop: 8,
+  },
+  emptySubtextLight: {
+    color: '#666',
   },
   tabContainer: {
     flexDirection: 'row',
@@ -775,6 +656,9 @@ const styles = StyleSheet.create({
   },
   activeTabButton: {
     backgroundColor: '#ff00ff',
+  },
+  activeTabButtonLight: {
+    backgroundColor: '#6200ee',
   },
   tabButtonText: {
     color: '#fff',

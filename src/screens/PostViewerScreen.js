@@ -9,8 +9,9 @@ import { useVideo } from '../context/VideoContext';
 const { width: windowWidth } = Dimensions.get('window');
 
 const viewabilityConfig = {
-  itemVisiblePercentThreshold: 50,
-  minimumViewTime: 300,
+  itemVisiblePercentThreshold: 70, // Increased threshold for better visibility detection
+  minimumViewTime: 500, // Increased minimum time to be considered viewable
+  waitForInteraction: true, // Wait for user interaction before considering items viewable
 };
 
 const PostViewerScreen = ({ route }) => {
@@ -48,21 +49,24 @@ const PostViewerScreen = ({ route }) => {
   
   // Handle viewable items changed to manage video playback
   const onViewableItemsChanged = useCallback(({ viewableItems }) => {
+    if (viewableItems.length === 0) return;
+    
     // First clear any active videos to stop any currently playing videos
     clearActiveVideo();
     
-    // Small delay to ensure previous videos are fully stopped
+    // Increased delay to ensure previous videos are fully stopped
     setTimeout(() => {
       if (viewableItems.length > 0) {
         // The first viewable item is the one we want to play
         const viewablePost = viewableItems[0].item;
         
         // If it's a video post, set it as the active video in the context
-        if (viewablePost.type === 'video' || viewablePost.mediaType === 'video') {
+        if (viewablePost && (viewablePost.type === 'video' || viewablePost.mediaType === 'video')) {
+          console.log('Setting active video:', viewablePost.id);
           setActiveVideo(viewablePost.id);
         }
       }
-    }, 300); // Increased delay to prevent audio overlap
+    }, 600); // Significantly increased delay to prevent playback issues
   }, [setActiveVideo, clearActiveVideo]);
   
   // Handle navigation events to ensure videos are properly cleaned up
