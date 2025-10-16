@@ -751,55 +751,54 @@ const ProfileScreen = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Try to load from cache first for instant display
+      // For 'Short' tab, we can still use cache
       const CONTENT_CACHE_KEY = `user_content_${user.id}_${activeTab}`;
       const CACHE_EXPIRY_TIME = 3 * 60 * 1000; // 3 minutes for content
       
-      try {
-        const cachedData = await AsyncStorage.getItem(CONTENT_CACHE_KEY);
-        console.log('Checking cache for:', CONTENT_CACHE_KEY, cachedData ? 'Found' : 'Not found');
-        if (cachedData && !isSilent) {
-          const { content, timestamp } = JSON.parse(cachedData);
-          const now = Date.now();
-          const cacheAge = now - timestamp;
-          console.log('Cache age:', Math.round(cacheAge / 1000), 'seconds');
-          
-          // Show cached content immediately
-          if (content) {
-            console.log('Cache content:', {
-              postsCount: content.posts?.length || 0,
-              shortsCount: content.shorts?.length || 0,
-              totalViews: content.totalViews,
-              totalLikes: content.totalLikes
-            });
+      // Only use cache for Shorts, not for Posts
+      if (activeTab === 'Short') {
+        try {
+          const cachedData = await AsyncStorage.getItem(CONTENT_CACHE_KEY);
+          console.log('Checking cache for:', CONTENT_CACHE_KEY, cachedData ? 'Found' : 'Not found');
+          if (cachedData && !isSilent) {
+            const { content, timestamp } = JSON.parse(cachedData);
+            const now = Date.now();
+            const cacheAge = now - timestamp;
+            console.log('Cache age:', Math.round(cacheAge / 1000), 'seconds');
             
-            if (activeTab === 'Post') {
-              console.log('Setting posts from cache:', content.posts?.length || 0);
-              setPosts(content.posts || []);
-            } else {
+            // Show cached content immediately for Shorts only
+            if (content && content.shorts && content.shorts.length > 0) {
+              console.log('Cache content:', {
+                shortsCount: content.shorts?.length || 0,
+                totalViews: content.totalViews,
+                totalLikes: content.totalLikes
+              });
+              
               console.log('Setting shorts from cache:', content.shorts?.length || 0);
               setShorts(content.shorts || []);
-            }
-            setTotalViews(content.totalViews || 0);
-            setTotalLikes(content.totalLikes || 0);
-            setLoading(false);
-            console.log('✅ Instant load: Showing cached content');
-            
-            // Refresh in background if cache is old
-            if (now - timestamp > CACHE_EXPIRY_TIME) {
-              console.log('Cache expired, refreshing in background');
-              setTimeout(() => {
-                fetchUserContent(true); // Silent refresh
-              }, 100);
-              return;
-            } else {
-              console.log('Cache is fresh, using cached data');
-              return; // Cache is fresh, no need to fetch
+              setTotalViews(content.totalViews || 0);
+              setTotalLikes(content.totalLikes || 0);
+              setLoading(false);
+              console.log('✅ Instant load: Showing cached content');
+              
+              // Refresh in background if cache is old
+              if (now - timestamp > CACHE_EXPIRY_TIME) {
+                console.log('Cache expired, refreshing in background');
+                setTimeout(() => {
+                  fetchUserContent(true); // Silent refresh
+                }, 100);
+                return;
+              } else {
+                console.log('Cache is fresh, using cached data');
+                return; // Cache is fresh, no need to fetch
+              }
             }
           }
+        } catch (cacheError) {
+          console.error('Content cache error:', cacheError);
         }
-      } catch (cacheError) {
-        console.error('Content cache error:', cacheError);
+      } else {
+        console.log('Post tab selected - bypassing cache and loading fresh data');
       }
 
       // Fetch ALL posts first to calculate totals
@@ -870,22 +869,26 @@ const ProfileScreen = () => {
         setShorts(shortsWithLikeStatus || []);
       }
       
-      // Cache the content for instant loading next time
+      // Only cache shorts content, not posts
       try {
-        const CONTENT_CACHE_KEY = `user_content_${user.id}_${activeTab}`;
-        // Use the current state for caching which will have the most up-to-date data
-        const contentToCache = {
-          posts: activeTab === 'Post' ? posts : [],
-          shorts: activeTab === 'Short' ? shorts : [],
-          totalViews,
-          totalLikes
-        };
-        const cacheData = {
-          content: contentToCache,
-          timestamp: Date.now()
-        };
-        await AsyncStorage.setItem(CONTENT_CACHE_KEY, JSON.stringify(cacheData));
-        console.log('Cached user content for instant loading');
+        // Only cache if it's the Shorts tab
+        if (activeTab === 'Short' && typeof shortsWithLikeStatus !== 'undefined') {
+          const CONTENT_CACHE_KEY = `user_content_${user.id}_${activeTab}`;
+          // Only cache shorts data
+          const contentToCache = {
+            shorts: shortsWithLikeStatus || [],
+            totalViews,
+            totalLikes
+          };
+          const cacheData = {
+            content: contentToCache,
+            timestamp: Date.now()
+          };
+          await AsyncStorage.setItem(CONTENT_CACHE_KEY, JSON.stringify(cacheData));
+          console.log('Cached shorts content for instant loading');
+        } else {
+          console.log('Post tab - skipping cache to ensure fresh data');
+        }
       } catch (cacheError) {
         console.error('Error caching content:', cacheError);
       }
