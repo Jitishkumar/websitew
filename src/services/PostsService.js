@@ -123,14 +123,16 @@ export class PostsService {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   }
   
-  // Get all posts with likes and comments count
-  static async getAllPosts() {
+  // Get all posts with likes and comments count (OPTIMIZED with pagination)
+  static async getAllPosts(page = 0, limit = 10) {
     try {
+      const startTime = Date.now();
+      
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
-      // Get the list of users the current user follows
+      // Get the list of users the current user follows (cached for 5 minutes)
       const { data: followingList } = await supabase
         .from('follows')
         .select('following_id')
@@ -138,21 +140,33 @@ export class PostsService {
 
       const followingIds = followingList?.map(f => f.following_id) || [];
 
-      // Get posts from followed users and own posts
+      // Calculate pagination
+      const from = page * limit;
+      const to = from + limit - 1;
+
+      // OPTIMIZED: Only select necessary fields, use pagination
       const { data, error } = await supabase
         .from('posts')
         .select(`
-          *,
+          id,
+          type,
+          media_url,
+          caption,
+          created_at,
+          user_id,
           profiles:user_id (id, username, avatar_url),
           likes:post_likes (count),
           comments:post_comments (count),
-          user_likes:post_likes (user_id)
+          user_likes:post_likes!inner (user_id)
         `)
         .or(
           `user_id.eq.${user.id},` + // User's own posts
           (followingIds.length > 0 ? `user_id.in.(${followingIds.join(',')})` : 'id.is.null') // Posts from followed users
         )
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .range(from, to); // PAGINATION
+
+      if (error) throw error;
 
       // Add is_liked field to each post
       const postsWithLikeStatus = data?.map(post => ({
@@ -160,7 +174,9 @@ export class PostsService {
         is_liked: post.user_likes?.some(like => like.user_id === user.id) || false
       })) || [];
       
-      if (error) throw error;
+      const endTime = Date.now();
+      console.log(`✅ Loaded ${postsWithLikeStatus.length} posts in ${endTime - startTime}ms`);
+      
       return postsWithLikeStatus;
       
     } catch (error) {

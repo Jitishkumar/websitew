@@ -10,9 +10,11 @@ const generateUUID = () => {
 };
 
 export class StoriesService {
-  // Get all active stories grouped by user
+  // Get all active stories grouped by user (OPTIMIZED)
   static async getActiveStories() {
     try {
+      const startTime = Date.now();
+      
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
@@ -21,50 +23,54 @@ export class StoriesService {
       const now = new Date();
       const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
 
-      // First get the list of users you follow
-      const { data: followingList } = await supabase
-        .from('follows')  // Changed from 'follows' to 'followers'
-        .select('following_id')
-        .eq('follower_id', user.id);
+      // OPTIMIZED: Run all queries in parallel
+      const [followingList, rank1Profiles, viewedStories] = await Promise.all([
+        // Get following list
+        supabase
+          .from('follows')
+          .select('following_id')
+          .eq('follower_id', user.id),
+        
+        // Get rank 1 profiles
+        supabase
+          .from('profiles')
+          .select('id')
+          .eq('rank', 1),
+        
+        // Get viewed stories
+        supabase
+          .from('story_views')
+          .select('story_id')
+          .eq('user_id', user.id)
+      ]);
 
-      const followingIds = followingList?.map(f => f.following_id) || [];
-
-      // Get all users with rank = 1 (global stories visible to everyone)
-      const { data: rank1Profiles } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('rank', 1);
-      const rank1Ids = (rank1Profiles || []).map(p => p.id);
+      const followingIds = followingList.data?.map(f => f.following_id) || [];
+      const rank1Ids = (rank1Profiles.data || []).map(p => p.id);
 
       // Get all stories with proper visibility rules (own + following + rank1)
       const allowedUserIds = Array.from(new Set([user.id, ...followingIds, ...rank1Ids]));
+      
+      // OPTIMIZED: Only select necessary fields
       const { data, error } = await supabase
         .from('stories')
-        .select('*')
+        .select('id, user_id, media_url, type, created_at, story_group_id')
         .gte('created_at', twentyFourHoursAgo)
         .in('user_id', allowedUserIds)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(50); // Limit to 50 most recent stories
 
       if (error) throw error;
 
-      // Fetch user profiles for the returned stories (avoid embedded join which may be blocked by RLS)
+      // Fetch user profiles for the returned stories
       const uniqueUserIds = Array.from(new Set((data || []).map(s => s.user_id)));
       const { data: usersMapRows } = await supabase
         .from('profiles')
         .select('id, username, avatar_url')
         .in('id', uniqueUserIds);
       const usersMap = new Map((usersMapRows || []).map(u => [u.id, u]));
-
-      // Get viewed stories for the current user
-      const { data: viewedStories, error: viewedError } = await supabase
-        .from('story_views')
-        .select('story_id')
-        .eq('user_id', user.id);
-      
-      if (viewedError) throw viewedError;
       
       // Create a set of viewed story IDs for faster lookup
-      const viewedStoryIds = new Set(viewedStories?.map(view => view.story_id) || []);
+      const viewedStoryIds = new Set(viewedStories.data?.map(view => view.story_id) || []);
       
       // Add viewed status to each story
       const storiesWithViewedStatus = data.map(story => ({
@@ -96,6 +102,9 @@ export class StoriesService {
         
         return groups;
       }, []);
+      
+      const endTime = Date.now();
+      console.log(`✅ Loaded ${groupedStories.length} story groups in ${endTime - startTime}ms`);
       
       return groupedStories;
       

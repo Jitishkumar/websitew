@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useVideo } from '../context/VideoContext';
 import { Video } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
+import { CacheManager, CACHE_KEYS, CACHE_TTL } from '../utils/cache';
 
 const UserProfileScreen = () => {
   const [userProfile, setUserProfile] = useState(null);
@@ -95,13 +96,8 @@ const UserProfileScreen = () => {
   const { userId } = route.params;
 
   useEffect(() => {
-    loadUserProfile();
-    loadViewerGender();
-    checkFollowStatus();
-    fetchFollowersCount();
-    fetchFollowingCount();
-    fetchPostsCount();
-    fetchShortsCount();
+    // OPTIMIZED: Load all data in parallel with caching
+    loadUserProfileWithCache();
     
     // Set up realtime subscription for follows
     const followsSubscription = supabase
@@ -252,8 +248,45 @@ const UserProfileScreen = () => {
     return <Text style={styles.bioText}>{parts}</Text>;
   };
 
-  const loadUserProfile = async () => {
+  // OPTIMIZED: Load profile with caching
+  const loadUserProfileWithCache = async (forceRefresh = false) => {
     try {
+      const startTime = Date.now();
+      const cacheKey = `${CACHE_KEYS.USER_PROFILE}_${userId}`;
+      
+      // Try cache first
+      if (!forceRefresh) {
+        const cached = await CacheManager.get(cacheKey);
+        if (cached) {
+          console.log('📦 Loaded user profile from cache');
+          setUserProfile(cached.profile);
+          setFollowersCount(cached.followersCount);
+          setFollowingCount(cached.followingCount);
+          setPostsCount(cached.postsCount);
+          setShortsCount(cached.shortsCount);
+          setIsFollowing(cached.isFollowing);
+          setHasPrivateAccount(cached.hasPrivateAccount);
+          setCanViewPrivateContent(cached.canViewPrivateContent);
+          setLoading(false);
+          
+          // Load fresh data in background
+          loadUserProfileFresh();
+          return;
+        }
+      }
+      
+      // No cache - load fresh
+      await loadUserProfileFresh();
+      
+    } catch (error) {
+      console.error('Error in loadUserProfileWithCache:', error);
+      setLoading(false);
+    }
+  };
+
+  const loadUserProfileFresh = async () => {
+    try {
+      const startTime = Date.now();
       setLoading(true);
       
       // Get current user for recording visit
@@ -275,58 +308,56 @@ const UserProfileScreen = () => {
           return;
         }
 
-        // Record profile visit if not blocked
-        const { error: visitError } = await supabase
+        // Record profile visit if not blocked (non-blocking)
+        supabase
           .from('profile_visits')
           .insert({
             profile_id: userId,
             visitor_id: currentUser.id
-          });
-        
-        if (visitError) {
-          console.error('Error recording profile visit:', visitError);
-        }
+          })
+          .then(() => {})
+          .catch(error => console.error('Error recording profile visit:', error));
       }
 
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-        
-      // Check if user has private account
-      const { data: settingsData, error: settingsError } = await supabase
-        .from('user_settings')
-        .select('private_account')
-        .eq('user_id', userId)
-        .maybeSingle();
-        
-      // Check if user is verified
-      const { data: verifiedData } = await supabase
-        .from('verified_accounts')
-        .select('verified')
-        .eq('id', userId)
-        .maybeSingle();
+      // OPTIMIZED: Load all data in parallel
+      const [profileResult, settingsResult, verifiedResult, followersResult, followingResult, postsResult, shortsResult, followStatusResult, viewerGenderResult] = await Promise.all([
+        supabase.from('profiles').select('*').eq('id', userId).single(),
+        supabase.from('user_settings').select('private_account').eq('user_id', userId).maybeSingle(),
+        supabase.from('verified_accounts').select('verified').eq('id', userId).maybeSingle(),
+        supabase.from('follows').select('id', { count: 'exact', head: true }).eq('following_id', userId),
+        supabase.from('follows').select('id', { count: 'exact', head: true }).eq('follower_id', userId),
+        supabase.from('posts').select('id', { count: 'exact', head: true }).eq('user_id', userId),
+        supabase.from('posts').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('type', 'video'),
+        currentUser ? supabase.from('follows').select('*').eq('follower_id', currentUser.id).eq('following_id', userId).maybeSingle() : Promise.resolve({ data: null }),
+        currentUser ? supabase.from('profiles').select('gender').eq('id', currentUser.id).single() : Promise.resolve({ data: null })
+      ]);
+
+      const { data, error } = profileResult;
+      const { data: settingsData } = settingsResult;
+      const { data: verifiedData } = verifiedResult;
         
       const isPrivate = settingsData?.private_account ?? false;
       setHasPrivateAccount(isPrivate);
+      
+      // Set counts from parallel queries
+      setFollowersCount(followersResult.count || 0);
+      setFollowingCount(followingResult.count || 0);
+      setPostsCount(postsResult.count || 0);
+      setShortsCount(shortsResult.count || 0);
+      setIsFollowing(!!followStatusResult.data);
+      
+      // Set viewer gender
+      if (viewerGenderResult.data) {
+        setViewerGender(viewerGenderResult.data.gender);
+      }
       
       // User can view private content if they are the profile owner or if they follow the user
       if (currentUser) {
         if (currentUser.id === userId) {
           setCanViewPrivateContent(true);
         } else if (isPrivate) {
-          // Check if current user follows this profile
-          const { data: followData } = await supabase
-            .from('follows')
-            .select('*')
-            .eq('follower_id', currentUser.id)
-            .eq('following_id', userId)
-            .single();
-            
-          setCanViewPrivateContent(!!followData);
+          setCanViewPrivateContent(!!followStatusResult.data);
         } else {
-          // If account is not private, anyone can view content
           setCanViewPrivateContent(true);
         }
       }
@@ -406,6 +437,23 @@ const UserProfileScreen = () => {
           }
         }
       }
+      
+      // Cache the profile data
+      const cacheKey = `${CACHE_KEYS.USER_PROFILE}_${userId}`;
+      await CacheManager.set(cacheKey, {
+        profile,
+        followersCount: followersResult.count || 0,
+        followingCount: followingResult.count || 0,
+        postsCount: postsResult.count || 0,
+        shortsCount: shortsResult.count || 0,
+        isFollowing: !!followStatusResult.data,
+        hasPrivateAccount: isPrivate,
+        canViewPrivateContent: currentUser?.id === userId || (isPrivate ? !!followStatusResult.data : true)
+      }, CACHE_TTL.MEDIUM);
+      
+      const endTime = Date.now();
+      console.log(`⚡ User profile loaded in ${endTime - startTime}ms`);
+      
     } catch (error) {
       console.error('Error loading user profile:', error);
       setUserProfile(null);

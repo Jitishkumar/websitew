@@ -17,6 +17,8 @@ import PostItemOld from '../components/PostItemold';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Easing } from 'react-native';
+import { CacheManager, CACHE_KEYS, CACHE_TTL } from '../utils/cache';
+import { ScreenManager, useScreenManager } from '../utils/screenManager';
 
 const { width: screenWidth } = Dimensions.get('window');
 const isSmallScreen = screenWidth < 380;
@@ -38,6 +40,14 @@ const HomeScreen = () => {
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [userHasStory, setUserHasStory] = useState(false);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(0);
+  const [hasMorePosts, setHasMorePosts] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  
+  // Screen manager
+  const screenManager = useScreenManager('Home');
 
   // Animation refs for premium UI
   const fadeAnim = useRef(new Animated.Value(1)).current;
@@ -59,9 +69,8 @@ const HomeScreen = () => {
   });
 
   useEffect(() => {
-    loadCurrentUser();
-    loadStories();
-    loadPosts();
+    // OPTIMIZED: Load data with caching
+    loadDataWithCache();
     startAnimations();
     startLogoAnimations();
 
@@ -70,8 +79,10 @@ const HomeScreen = () => {
       if (params?.refresh) {
         if (params.updatedPosts) {
           setPosts(params.updatedPosts);
+          // Update cache
+          CacheManager.set(CACHE_KEYS.POSTS, params.updatedPosts, CACHE_TTL.MEDIUM);
         } else {
-          loadPosts();
+          loadDataWithCache(true); // Force refresh
         }
         navigation.setParams({ refresh: undefined, updatedPosts: undefined });
       }
@@ -184,104 +195,194 @@ const HomeScreen = () => {
     { viewabilityConfig: viewabilityConfig.current, onViewableItemsChanged }
   ]);
 
+  // OPTIMIZED: Load data with caching and parallel requests
+  const loadDataWithCache = async (forceRefresh = false) => {
+    try {
+      const startTime = Date.now();
+      
+      // Try to load from cache first (instant load)
+      if (!forceRefresh) {
+        const [cachedPosts, cachedStories] = await Promise.all([
+          CacheManager.get(CACHE_KEYS.POSTS),
+          CacheManager.get(CACHE_KEYS.STORIES)
+        ]);
+
+        if (cachedPosts) {
+          console.log('📦 Loaded posts from cache');
+          setPosts(cachedPosts);
+        }
+
+        if (cachedStories) {
+          console.log('📦 Loaded stories from cache');
+          setStories(cachedStories.stories);
+          setUserHasStory(cachedStories.userHasStory);
+          setCurrentUser(cachedStories.currentUser);
+        }
+
+        // If we have cached data, show it immediately and update in background
+        if (cachedPosts || cachedStories) {
+          setLoading(false);
+          const cacheTime = Date.now() - startTime;
+          console.log(`⚡ Cache load time: ${cacheTime}ms`);
+          
+          // Load fresh data in background
+          loadFreshData();
+          return;
+        }
+      }
+
+      // No cache or force refresh - load fresh data
+      await loadFreshData();
+      
+    } catch (error) {
+      console.error('Error in loadDataWithCache:', error);
+      setLoading(false);
+    }
+  };
+
+  // Load fresh data from API
+  const loadFreshData = async () => {
+    try {
+      const startTime = Date.now();
+      
+      // OPTIMIZED: Load all data in parallel - Only 10 posts initially
+      const [userData, storiesData, postsData] = await Promise.all([
+        loadCurrentUser(),
+        StoriesService.getActiveStories(),
+        PostsService.getAllPosts(0, 10) // Load first 10 posts only
+      ]);
+      
+      // Check if there are more posts
+      setHasMorePosts(postsData && postsData.length === 10);
+      setCurrentPage(0);
+
+      // Process posts
+      if (postsData && postsData.length > 0) {
+        const normalizedPosts = postsData
+          .filter(post => post && post.id)
+          .map(post => ({
+            id: post.id,
+            type: post.type || 'text',
+            media_url: post.media_url || '',
+            caption: post.caption || '',
+            created_at: post.created_at,
+            user_id: post.user_id,
+            profiles: post.profiles || { username: 'Unknown', avatar_url: '' },
+            likes: post.likes || [{ count: 0 }],
+            comments: post.comments || [{ count: 0 }],
+            is_liked: post.is_liked || false
+          }));
+        
+        setPosts(normalizedPosts);
+        
+        // Cache posts
+        await CacheManager.set(CACHE_KEYS.POSTS, normalizedPosts, CACHE_TTL.MEDIUM);
+      }
+
+      // Process stories
+      if (storiesData && storiesData.length > 0) {
+        const formattedStories = storiesData.map(group => ({
+          ...group.stories[0],
+          profiles: group.user,
+          groupedStories: group.stories,
+          story_group_id: group.stories[0].story_group_id,
+          has_unviewed: group.has_unviewed
+        }));
+
+        const currentUserId = userData?.id;
+        const userStory = formattedStories.find(story => story.user_id === currentUserId);
+        setUserHasStory(!!userStory);
+
+        // Sort stories
+        const sortedStories = formattedStories.sort((a, b) => {
+          if (a.user_id === currentUserId && b.user_id !== currentUserId) return -1;
+          if (b.user_id === currentUserId && a.user_id !== currentUserId) return 1;
+          return new Date(b.created_at) - new Date(a.created_at);
+        });
+
+        setStories(sortedStories);
+        
+        // Cache stories
+        await CacheManager.set(CACHE_KEYS.STORIES, {
+          stories: sortedStories,
+          userHasStory: !!userStory,
+          currentUser: userData
+        }, CACHE_TTL.SHORT);
+      }
+
+      const endTime = Date.now();
+      console.log(`⚡ Fresh data load time: ${endTime - startTime}ms`);
+      
+      setLoading(false);
+      setRefreshing(false);
+      
+    } catch (error) {
+      console.error('Error loading fresh data:', error);
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
   const loadCurrentUser = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        // Get user profile
         const { data: profile } = await supabase
           .from('profiles')
-          .select('*')
+          .select('id, username, avatar_url')
           .eq('id', user.id)
           .single();
         
         setCurrentUser(profile);
+        return profile;
       }
+      return null;
     } catch (error) {
       console.error('Error loading current user:', error);
+      return null;
     }
   };
 
-  const loadPosts = async () => {
+  // Load more posts (infinite scroll)
+  const loadMorePosts = async () => {
+    if (loadingMore || !hasMorePosts) return;
+    
     try {
-      const data = await PostsService.getAllPosts();
+      setLoadingMore(true);
+      const nextPage = currentPage + 1;
       
-      if (!data || data.length === 0) {
-        setPosts([]);
-        setRefreshing(false);
-        setLoading(false);
-        return;
-      }
+      console.log(`📄 Loading page ${nextPage}...`);
+      const newPosts = await PostsService.getAllPosts(nextPage, 10);
       
-      // Filter and normalize posts in one pass for better performance
-      const normalizedPosts = data
-        .filter(post => post && post.id)
-        .map(post => ({
-          id: post.id,
-          type: post.type || 'text',
-          media_url: post.media_url || '',
-          caption: post.caption || '',
-          created_at: post.created_at,
-          user_id: post.user_id,
-          profiles: post.profiles || { username: 'Unknown', avatar_url: '' },
-          likes: post.likes || [{ count: 0 }],
-          comments: post.comments || [{ count: 0 }],
-          is_liked: post.is_liked || false
-        }));
-      
-      setPosts(normalizedPosts);
-      setRefreshing(false);
-      
-      // Store video posts for ShortsScreen (only if needed)
-      const videoPosts = normalizedPosts.filter(post => post.type === 'video');
-      if (videoPosts.length > 0) {
-        navigation.setParams({ videoPosts });
+      if (newPosts && newPosts.length > 0) {
+        const normalizedPosts = newPosts
+          .filter(post => post && post.id)
+          .map(post => ({
+            id: post.id,
+            type: post.type || 'text',
+            media_url: post.media_url || '',
+            caption: post.caption || '',
+            created_at: post.created_at,
+            user_id: post.user_id,
+            profiles: post.profiles || { username: 'Unknown', avatar_url: '' },
+            likes: post.likes || [{ count: 0 }],
+            comments: post.comments || [{ count: 0 }],
+            is_liked: post.is_liked || false
+          }));
+        
+        setPosts(prevPosts => [...prevPosts, ...normalizedPosts]);
+        setCurrentPage(nextPage);
+        setHasMorePosts(newPosts.length === 10);
+        
+        console.log(`✅ Loaded ${newPosts.length} more posts`);
+      } else {
+        setHasMorePosts(false);
+        console.log('📭 No more posts to load');
       }
     } catch (error) {
-      console.error('Error loading posts:', error);
-      Alert.alert('Error', 'Failed to load posts');
+      console.error('Error loading more posts:', error);
     } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadStories = async () => {
-    try {
-      // Get current user ID
-      const { data: { user } } = await supabase.auth.getUser();
-      const currentUserId = user?.id;
-
-      const data = await StoriesService.getActiveStories();
-      const formattedStories = data.map(group => ({
-        ...group.stories[0],
-        profiles: group.user,
-        groupedStories: group.stories,
-        story_group_id: group.stories[0].story_group_id,
-        has_unviewed: group.has_unviewed
-      }));
-
-      // Check if current user has a story
-      const userStory = formattedStories.find(story => story.user_id === currentUserId);
-      setUserHasStory(!!userStory);
-
-      // Sort stories: Current user's stories first, then others by newest
-      const sortedStories = formattedStories.sort((a, b) => {
-        // If current user's stories, put them first
-        if (a.user_id === currentUserId && b.user_id !== currentUserId) {
-          return -1; // a comes first
-        }
-        if (b.user_id === currentUserId && a.user_id !== currentUserId) {
-          return 1; // b comes first
-        }
-        // If both are yours or both are not yours, sort by newest
-        return new Date(b.created_at) - new Date(a.created_at);
-      });
-
-      setStories(sortedStories);
-    } catch (error) {
-      console.error('Error loading stories:', error);
-    } finally {
-      setLoading(false);
+      setLoadingMore(false);
     }
   };
 
@@ -610,18 +711,34 @@ const HomeScreen = () => {
                 refreshing={refreshing}
                 onRefresh={() => {
                   setRefreshing(true);
-                  loadPosts();
+                  setCurrentPage(0);
+                  setHasMorePosts(true);
+                  loadDataWithCache(true); // Force refresh
                 }}
-                colors={['#ff00ff']}
+                colors={['#ff00ff', '#00ffff']}
                 tintColor="#ff00ff"
               />
             }
+            onEndReached={loadMorePosts}
+            onEndReachedThreshold={0.5}
+            ListFooterComponent={() => (
+              loadingMore ? (
+                <View style={styles.loadingMoreContainer}>
+                  <ActivityIndicator size="small" color="#ff00ff" />
+                  <Text style={styles.loadingMoreText}>Loading more posts...</Text>
+                </View>
+              ) : !hasMorePosts && posts.length > 0 ? (
+                <View style={styles.endContainer}>
+                  <Text style={styles.endText}>You're all caught up! 🎉</Text>
+                </View>
+              ) : null
+            )}
             showsVerticalScrollIndicator={false}
             removeClippedSubviews={true}
-            maxToRenderPerBatch={5}
-            updateCellsBatchingPeriod={50}
+            maxToRenderPerBatch={3}
+            updateCellsBatchingPeriod={100}
             initialNumToRender={3}
-            windowSize={10}
+            windowSize={5}
             getItemLayout={(data, index) => ({
               length: 400, // Approximate height of each post
               offset: 400 * index,
@@ -1505,6 +1622,26 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#1E90FF',
     borderStyle: 'dashed',
+  },
+  loadingMoreContainer: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingMoreText: {
+    color: '#ff00ff',
+    marginTop: 10,
+    fontSize: 14,
+  },
+  endContainer: {
+    padding: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  endText: {
+    color: '#888',
+    fontSize: 16,
+    fontWeight: '600',
   },
   storyTextLight: {
     color: '#333333',
