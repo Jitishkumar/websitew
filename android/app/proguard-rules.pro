@@ -1,52 +1,102 @@
 # Add project specific ProGuard rules here.
 # By default, the flags in this file are appended to flags specified
 # in /usr/local/Cellar/android-sdk/24.3.3/tools/proguard/proguard-android.txt
-# You can edit the include path and order by changing the proguardFiles
-# directive in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
 
-# react-native-reanimated
--keep class com.swmansion.reanimated.** { *; }
--keep class com.facebook.react.turbomodule.** { *; }
-
-# Add any project specific keep options here:
-
-# React Native
--keep class com.facebook.react.** { *; }
--keep class com.facebook.hermes.** { *; }
-
-# Keep native methods
--keepclassmembers class * {
-    native <methods>;
-}
+# Optimization settings
+-optimizations !code/simplification/arithmetic,!code/simplification/cast,!field/*,!class/merging/*
+-optimizationpasses 5
+-allowaccessmodification
+-dontpreverify
 
 # Remove debug logs in release
 -assumenosideeffects class android.util.Log {
     public static *** d(...);
     public static *** v(...);
     public static *** i(...);
+    public static *** w(...);
 }
 
-# Supabase
--keep class io.supabase.** { *; }
+# Keep native methods
+-keepclassmembers class * {
+    native <methods>;
+}
 
-# Expo
--keep class expo.** { *; }
+# React Native - Keep only essentials
+-keep,allowobfuscation @interface com.facebook.proguard.annotations.DoNotStrip
+-keep,allowobfuscation @interface com.facebook.proguard.annotations.KeepGettersAndSetters
+-keep @com.facebook.proguard.annotations.DoNotStrip class *
+-keepclassmembers class * {
+    @com.facebook.proguard.annotations.DoNotStrip *;
+}
 
-# Razorpay and Google Pay Integration
--keep class com.razorpay.** { *; }
--keepclassmembers class com.razorpay.** { *; }
--keep class com.google.android.apps.nbu.paisa.inapp.client.api.** { *; }
+# Hermes
+-keep class com.facebook.hermes.unicode.** { *; }
+-keep class com.facebook.jni.** { *; }
+
+# react-native-reanimated
+-keep class com.swmansion.reanimated.** { *; }
+-keep class com.facebook.react.turbomodule.** { *; }
+
+# Razorpay - Keep only necessary classes
+-keepclassmembers class com.razorpay.** {
+    public *;
+}
 -keepattributes *Annotation*
 -dontwarn com.razorpay.**
--dontwarn com.google.android.apps.nbu.paisa.inapp.client.api.**
 
-# Add missing ProGuard annotations
--dontwarn proguard.annotation.**
--keep class proguard.annotation.** { *; }
+# Zego Cloud - Keep all classes (required for video calling)
+-keep class **.zego.** { *; }
+-keep class im.zego.** { *; }
+-keep class com.zegocloud.** { *; }
+-keep class com.itgsa.** { *; }
+-keepclassmembers class **.zego.** { *; }
+-keepclassmembers class im.zego.** { *; }
+-keepclassmembers class com.zegocloud.** { *; }
+-keepclassmembers class com.itgsa.** { *; }
+-dontwarn im.zego.**
+-dontwarn com.zegocloud.**
+-dontwarn com.itgsa.**
 
-# Remove unused code
--optimizations !code/simplification/arithmetic,!code/simplification/cast,!field/*,!class/merging/*
--optimizationpasses 5
+# Supabase - Minimal keep
+-keepclassmembers class io.supabase.** {
+    public *;
+}
+
+# Expo - Keep only necessary
+-keepclassmembers class expo.modules.** {
+    public *;
+}
+
+# Remove unused resources
+-dontwarn org.conscrypt.**
+-dontwarn org.bouncycastle.**
+-dontwarn org.openjsse.**
+
+# Additional Zego dependencies
+-keep class org.webrtc.** { *; }
+-keepclassmembers class org.webrtc.** { *; }
+-dontwarn org.webrtc.**
+
+# Keep all native libraries
+-keepclasseswithmembernames class * {
+    native <methods>;
+}
+
+# Keep serializable classes
+-keepclassmembers class * implements java.io.Serializable {
+    static final long serialVersionUID;
+    private static final java.io.ObjectStreamField[] serialPersistentFields;
+    private void writeObject(java.io.ObjectOutputStream);
+    private void readObject(java.io.ObjectInputStream);
+    java.lang.Object writeReplace();
+    java.lang.Object readResolve();
+}
+
+# Keep Parcelable classes
+-keep class * implements android.os.Parcelable {
+    public static final android.os.Parcelable$Creator *;
+}
+
+# React Native WebRTC (used by Zego)
+-keep class com.oney.WebRTCModule.** { *; }
+-dontwarn com.oney.WebRTCModule.**

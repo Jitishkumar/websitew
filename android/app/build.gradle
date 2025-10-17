@@ -112,10 +112,15 @@ android {
             // Caution! In production, you need to generate your own keystore file.
             // see https://reactnative.dev/docs/signed-apk-android.
             signingConfig signingConfigs.debug
-            shrinkResources (findProperty('android.enableShrinkResourcesInReleaseBuilds')?.toBoolean() ?: false)
+            shrinkResources true
             minifyEnabled enableProguardInReleaseBuilds
-            proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
-            crunchPngs (findProperty('android.enablePngCrunchInReleaseBuilds')?.toBoolean() ?: true)
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+            crunchPngs true
+            
+            // Additional size optimizations
+            ndk {
+                debugSymbolLevel 'NONE'
+            }
         }
     }
     packagingOptions {
@@ -132,8 +137,8 @@ android {
         abi {
             enable true
             reset()
-            include "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
-            universalApk false
+            include "armeabi-v7a", "arm64-v8a"
+            universalApk true
         }
     }
     
