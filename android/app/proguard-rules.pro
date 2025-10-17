@@ -12,3 +12,41 @@
 -keep class com.facebook.react.turbomodule.** { *; }
 
 # Add any project specific keep options here:
+
+# React Native
+-keep class com.facebook.react.** { *; }
+-keep class com.facebook.hermes.** { *; }
+
+# Keep native methods
+-keepclassmembers class * {
+    native <methods>;
+}
+
+# Remove debug logs in release
+-assumenosideeffects class android.util.Log {
+    public static *** d(...);
+    public static *** v(...);
+    public static *** i(...);
+}
+
+# Supabase
+-keep class io.supabase.** { *; }
+
+# Expo
+-keep class expo.** { *; }
+
+# Razorpay and Google Pay Integration
+-keep class com.razorpay.** { *; }
+-keepclassmembers class com.razorpay.** { *; }
+-keep class com.google.android.apps.nbu.paisa.inapp.client.api.** { *; }
+-keepattributes *Annotation*
+-dontwarn com.razorpay.**
+-dontwarn com.google.android.apps.nbu.paisa.inapp.client.api.**
+
+# Add missing ProGuard annotations
+-dontwarn proguard.annotation.**
+-keep class proguard.annotation.** { *; }
+
+# Remove unused code
+-optimizations !code/simplification/arithmetic,!code/simplification/cast,!field/*,!class/merging/*
+-optimizationpasses 5
