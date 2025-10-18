@@ -10,6 +10,7 @@ import {
   Image,
   ActivityIndicator
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../lib/supabase';
@@ -24,9 +25,45 @@ const NearbyPeople = ({ navigation }) => {
     findNearbyPeople();
   }, []);
 
-  const findNearbyPeople = async () => {
+  const getBlockedUserIds = async (userId) => {
+    const { data, error } = await supabase
+      .from('blocked_users')
+      .select('blocked_id')
+      .eq('blocker_id', userId);
+
+    if (error) {
+      console.error('Error fetching blocked users:', error);
+      return [];
+    }
+    return data.map(item => item.blocked_id);
+  };
+
+  const findNearbyPeople = async (useCache = true) => {
     try {
       setLoading(true);
+      
+      // Try cache first
+      if (useCache) {
+        const CACHE_KEY = 'nearby_people';
+        const CACHE_EXPIRY = 5 * 60 * 1000; // 5 minutes
+        
+        try {
+          const cached = await AsyncStorage.getItem(CACHE_KEY);
+          if (cached) {
+            const { users, timestamp } = JSON.parse(cached);
+            if (Date.now() - timestamp < CACHE_EXPIRY) {
+              setNearbyUsers(users);
+              setLoading(false);
+              console.log('✅ Loaded nearby people from cache');
+              // Refresh in background
+              setTimeout(() => findNearbyPeople(false), 100);
+              return;
+            }
+          }
+        } catch (cacheError) {
+          console.error('Cache error:', cacheError);
+        }
+      }
       
       // Get location permission
       let { status } = await Location.requestForegroundPermissionsAsync();
@@ -54,9 +91,9 @@ const NearbyPeople = ({ navigation }) => {
           .eq('id', user.id);
       }
 
-      // Find nearby users (simple approach - 1km radius)
-      const latDelta = 0.009; // ~1km
-      const lngDelta = 0.009;
+      // Find nearby users (70km radius)
+      const latDelta = 0.63; // ~70km
+      const lngDelta = 0.63;
 
       const { data, error } = await supabase
         .from('profiles')
@@ -73,76 +110,68 @@ const NearbyPeople = ({ navigation }) => {
 
       if (error) throw error;
 
-      // Filter out blocked users and private accounts
-      const filteredUsers = await Promise.all(data.map(async (person) => {
-        try {
-          // Check if user is blocked (either direction)
-          const { data: isBlocked, error: blockError } = await supabase.rpc('is_blocked', {
-            user_id_1: user.id,
-            user_id_2: person.id
-          });
-
-          if (blockError) {
-            console.error('Error checking block status:', blockError);
-            return null; // Exclude on error
-          }
-
-          if (isBlocked) {
-            return null; // Exclude blocked users
-          }
-
-          // Check if account is private
-          const { data: settingsData, error: settingsError } = await supabase
-            .rpc('get_user_privacy', { target_user_id: person.id })
-            .maybeSingle();
-
-          if (settingsError) {
-            console.error('Error checking privacy:', settingsError);
-            // Continue with user if error (assume public)
-          }
-
-          const isPrivate = settingsData?.private_account ?? false;
-
-          // If account is private, check if current user follows them
-          if (isPrivate) {
-            const { data: followData, error: followError } = await supabase
-              .from('follows')
-              .select('*')
-              .eq('follower_id', user.id)
-              .eq('following_id', person.id)
-              .maybeSingle();
-
-            if (followError) {
-              console.error('Error checking follow status:', followError);
-              return null; // Exclude on error
-            }
-
-            if (!followData) {
-              return null; // Exclude private accounts that user doesn't follow
-            }
-          }
-
-          // Calculate distance
-          const distance = calculateDistance(
-            latitude, longitude,
-            person.current_latitude, person.current_longitude
-          );
-
-          return { ...person, distance };
-        } catch (error) {
-          console.error('Error processing user:', error);
-          return null;
-        }
+      // OPTIMIZED: Batch fetch blocked users and settings
+      const blockedUserIds = await getBlockedUserIds(user.id);
+      
+      // Calculate distances for all users
+      const usersWithDistance = data.map(person => ({
+        ...person,
+        distance: calculateDistance(
+          latitude, longitude,
+          person.current_latitude, person.current_longitude
+        )
       }));
 
-      // Filter out nulls, users beyond 1km, and sort by distance
-      const nearbyWithDistance = filteredUsers
-        .filter(Boolean)
-        .filter(person => person.distance <= 1000)
+      // Filter out blocked users and users beyond 70km
+      const nearbyFiltered = usersWithDistance
+        .filter(person => !blockedUserIds.includes(person.id))
+        .filter(person => person.distance <= 70000) // 70km in meters
         .sort((a, b) => a.distance - b.distance)
+        .slice(0, 100); // Get top 100
+
+      // Batch fetch privacy settings for remaining users
+      const userIds = nearbyFiltered.map(p => p.id);
+      const { data: settingsData } = await supabase
+        .from('user_settings')
+        .select('user_id, private_account')
+        .in('user_id', userIds);
+
+      const privateUserIds = new Set(
+        (settingsData || []).filter(s => s.private_account).map(s => s.user_id)
+      );
+
+      // Batch fetch follow status for private accounts
+      const { data: followsData } = await supabase
+        .from('follows')
+        .select('following_id')
+        .eq('follower_id', user.id)
+        .in('following_id', Array.from(privateUserIds));
+
+      const followingIds = new Set((followsData || []).map(f => f.following_id));
+
+      // Final filter: exclude private accounts user doesn't follow
+      const nearbyWithDistance = nearbyFiltered
+        .filter(person => {
+          if (privateUserIds.has(person.id)) {
+            return followingIds.has(person.id);
+          }
+          return true;
+        })
         .slice(0, 50); // Limit final results
 
       setNearbyUsers(nearbyWithDistance);
+      
+      // Cache the results
+      try {
+        const CACHE_KEY = 'nearby_people';
+        await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({
+          users: nearbyWithDistance,
+          timestamp: Date.now()
+        }));
+        console.log('Cached nearby people');
+      } catch (cacheError) {
+        console.error('Error caching nearby people:', cacheError);
+      }
       
     } catch (error) {
       console.error('Nearby search error:', error);
@@ -299,7 +328,7 @@ const NearbyPeople = ({ navigation }) => {
                 refreshing={refreshing}
                 onRefresh={() => {
                   setRefreshing(true);
-                  findNearbyPeople().finally(() => setRefreshing(false));
+                  findNearbyPeople(false).finally(() => setRefreshing(false)); // Force refresh, skip cache
                 }}
                 tintColor="white"
               />
@@ -308,7 +337,7 @@ const NearbyPeople = ({ navigation }) => {
               <View style={styles.emptyContainer}>
                 <Ionicons name="people-outline" size={60} color="rgba(255, 255, 255, 0.5)" />
                 <Text style={styles.emptyTitle}>No one nearby</Text>
-                <Text style={styles.emptyText}>No Flex users found within 1km</Text>
+                <Text style={styles.emptyText}>No Flex users found within 70km</Text>
               </View>
             }
           />

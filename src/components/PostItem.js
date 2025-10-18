@@ -502,7 +502,7 @@ const PostItem = ({ post, onOptionsPress }) => {
         Alert.alert('Error', 'Failed to update like');
       }
     } finally {
-      likeTimeout.current = setTimeout(() => setIsLiking(false), 300);
+      likeTimeout.current = setTimeout(() => setIsLiking(false), 100);
     }
   };
 

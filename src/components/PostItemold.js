@@ -614,7 +614,7 @@ const PostItem = ({ post, onOptionsPress }) => {
         Alert.alert('Error', 'Failed to update like');
       }
     } finally {
-      likeTimeout.current = setTimeout(() => setIsLiking(false), 300);
+      likeTimeout.current = setTimeout(() => setIsLiking(false), 100);
     }
   };
 
@@ -1202,15 +1202,21 @@ const PostItem = ({ post, onOptionsPress }) => {
 const styles = StyleSheet.create({
   container: {
     backgroundColor: '#ffffff',
-    marginBottom: 16,
-    marginHorizontal: 16,
-    borderRadius: 12,
-    overflow: 'hidden',
+    marginHorizontal: 15,
+    marginBottom: 15,
+    paddingBottom: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.1)',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    overflow: 'hidden',
   },
   header: {
     flexDirection: 'row',
@@ -1239,17 +1245,18 @@ const styles = StyleSheet.create({
     zIndex: -1,
   },
   avatarBorder: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    padding: 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatar: {
     width: 44,
     height: 44,
     borderRadius: 22,
+    padding: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
   },
   userInfo: {
     flex: 1,
@@ -1292,23 +1299,28 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   mediaContainer: {
-    marginBottom: 12,
+    marginBottom: 0,
   },
   videoContainer: {
     position: 'relative',
-    aspectRatio: 16/9,
+    width: '92%',
+    minHeight: 300,
+    maxHeight: 500,
     backgroundColor: '#000',
-    borderRadius: 12,
     overflow: 'hidden',
-    marginHorizontal: 16,
+    borderRadius: 20,
+    marginHorizontal: '4%',
+    marginBottom: 12,
   },
   imageContainer: {
     position: 'relative',
-    aspectRatio: 16/9,
+    width: '92%',
+    aspectRatio: 1,
     backgroundColor: '#000',
-    borderRadius: 12,
     overflow: 'hidden',
-    marginHorizontal: 16,
+    borderRadius: 20,
+    marginHorizontal: '4%',
+    marginBottom: 12,
   },
   media: {
     width: '100%',

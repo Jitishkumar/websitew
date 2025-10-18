@@ -8,6 +8,7 @@ import ProfileVisitsModal from './ProfileVisitsModal';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { donate } from '../lib/donate';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Location from 'expo-location';
 
 
 
@@ -21,6 +22,7 @@ const Sidebar = ({ isVisible, onClose }) => {
   useEffect(() => {
     if (isVisible) {
       checkUserGender();
+      prefetchNearbyPeople(); // Prefetch in background
     }
   }, [isVisible]);
 
@@ -39,6 +41,109 @@ const Sidebar = ({ isVisible, onClose }) => {
       setIsFemaleProfle(data?.gender === 'female');
     } catch (error) {
       console.error('Error checking user gender:', error);
+    }
+  };
+
+  const prefetchNearbyPeople = async () => {
+    try {
+      // Check if cache exists and is fresh
+      const CACHE_KEY = 'nearby_people';
+      const CACHE_EXPIRY = 5 * 60 * 1000; // 5 minutes
+      
+      const cached = await AsyncStorage.getItem(CACHE_KEY);
+      if (cached) {
+        const { timestamp } = JSON.parse(cached);
+        if (Date.now() - timestamp < CACHE_EXPIRY) {
+          console.log('✅ Nearby people cache is fresh, skipping prefetch');
+          return; // Cache is fresh, no need to prefetch
+        }
+      }
+
+      console.log('🔄 Prefetching nearby people in background...');
+      
+      // Check location permission silently
+      const { status } = await Location.getForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        console.log('Location permission not granted, skipping prefetch');
+        return;
+      }
+
+      // Get current location
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      const { latitude, longitude } = location.coords;
+
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Update user's location in background
+      supabase
+        .from('profiles')
+        .update({
+          current_latitude: latitude,
+          current_longitude: longitude,
+          location_updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id)
+        .then(() => {});
+
+      // Fetch nearby users (70km radius)
+      const latDelta = 0.63;
+      const lngDelta = 0.63;
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, username, avatar_url, current_latitude, current_longitude, location_updated_at')
+        .neq('id', user.id)
+        .not('current_latitude', 'is', null)
+        .not('current_longitude', 'is', null)
+        .gte('current_latitude', latitude - latDelta)
+        .lte('current_latitude', latitude + latDelta)
+        .gte('current_longitude', longitude - lngDelta)
+        .lte('current_longitude', longitude + lngDelta)
+        .gte('location_updated_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+        .limit(100);
+
+      if (error) {
+        console.error('Prefetch error:', error);
+        return;
+      }
+
+      // Calculate distances and sort
+      const calculateDistance = (lat1, lon1, lat2, lon2) => {
+        const R = 6371e3;
+        const φ1 = lat1 * Math.PI/180;
+        const φ2 = lat2 * Math.PI/180;
+        const Δφ = (lat2-lat1) * Math.PI/180;
+        const Δλ = (lon2-lon1) * Math.PI/180;
+        const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                  Math.cos(φ1) * Math.cos(φ2) *
+                  Math.sin(Δλ/2) * Math.sin(Δλ/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return R * c;
+      };
+
+      const usersWithDistance = data
+        .map(person => ({
+          ...person,
+          distance: calculateDistance(latitude, longitude, person.current_latitude, person.current_longitude)
+        }))
+        .filter(person => person.distance <= 70000)
+        .sort((a, b) => a.distance - b.distance)
+        .slice(0, 50);
+
+      // Cache the results
+      await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({
+        users: usersWithDistance,
+        timestamp: Date.now()
+      }));
+      
+      console.log('✅ Prefetched and cached nearby people');
+    } catch (error) {
+      console.error('Prefetch nearby people error:', error);
+      // Silently fail - don't alert user during prefetch
     }
   };
 

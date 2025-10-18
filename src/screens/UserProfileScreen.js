@@ -365,76 +365,77 @@ const UserProfileScreen = () => {
       if (error) {
         console.error('Error loading user profile:', error);
         setUserProfile(null);
-      } else {
-        console.log('Raw profile data:', data); // Debug log for raw data
+        return; // Exit early if there's an error
+      }
+      
+      console.log('Raw profile data:', data); // Debug log for raw data
+      
+      // Fix for nested URLs in avatar_url and cover_url
+      let avatarUrl = null;
+      let coverUrl = null;
+      
+      if (data.avatar_url) {
+        console.log('Avatar loading started');
+        // Handle double-nested URLs by extracting just the file path
+        let avatarPath = data.avatar_url;
         
-        // Fix for nested URLs in avatar_url and cover_url
-        let avatarUrl = null;
-        let coverUrl = null;
-        
-        if (data.avatar_url) {
-          console.log('Avatar loading started');
-          // Handle double-nested URLs by extracting just the file path
-          let avatarPath = data.avatar_url;
-          
-          // Check if URL is nested (contains the URL twice)
-          if (avatarPath.includes('media/media/')) {
-            // Extract just the file path after the last 'media/'
-            const parts = avatarPath.split('media/');
-            avatarPath = parts[parts.length - 1];
-          } else if (avatarPath.includes('media/')) {
-            // For single nested URLs
-            avatarPath = avatarPath.split('media/').pop();
-          }
-          
-          // Get the public URL directly
-          avatarUrl = `https://lckhaysswueoyinhfzyz.supabase.co/storage/v1/object/public/media/${avatarPath}`;
-          console.log('Fixed Avatar URL:', avatarUrl);
+        // Check if URL is nested (contains the URL twice)
+        if (avatarPath.includes('media/media/')) {
+          // Extract just the file path after the last 'media/'
+          const parts = avatarPath.split('media/');
+          avatarPath = parts[parts.length - 1];
+        } else if (avatarPath.includes('media/')) {
+          // For single nested URLs
+          avatarPath = avatarPath.split('media/').pop();
         }
         
-        if (data.cover_url) {
-          console.log('Cover photo loading started');
-          // Handle double-nested URLs by extracting just the file path
-          let coverPath = data.cover_url;
-          
-          // Check if URL is nested (contains the URL twice)
-          if (coverPath.includes('media/media/')) {
-            // Extract just the file path after the last 'media/'
-            const parts = coverPath.split('media/');
-            coverPath = parts[parts.length - 1];
-          } else if (coverPath.includes('media/')) {
-            // For single nested URLs
-            coverPath = coverPath.split('media/').pop();
-          }
-          
-          // Get the public URL directly
-          coverUrl = `https://lckhaysswueoyinhfzyz.supabase.co/storage/v1/object/public/media/${coverPath}`;
-          console.log('Fixed Cover URL:', coverUrl);
-        }
-
-        const profile = {
-          ...data,
-          avatar_url: avatarUrl,
-          cover_url: coverUrl,
-          isVerified: verifiedData?.verified || false
-        };
+        // Get the public URL directly
+        avatarUrl = `https://lckhaysswueoyinhfzyz.supabase.co/storage/v1/object/public/media/${avatarPath}`;
+        console.log('Fixed Avatar URL:', avatarUrl);
+      }
+      
+      if (data.cover_url) {
+        console.log('Cover photo loading started');
+        // Handle double-nested URLs by extracting just the file path
+        let coverPath = data.cover_url;
         
-        setUserProfile(profile);
+        // Check if URL is nested (contains the URL twice)
+        if (coverPath.includes('media/media/')) {
+          // Extract just the file path after the last 'media/'
+          const parts = coverPath.split('media/');
+          coverPath = parts[parts.length - 1];
+        } else if (coverPath.includes('media/')) {
+          // For single nested URLs
+          coverPath = coverPath.split('media/').pop();
+        }
+        
+        // Get the public URL directly
+        coverUrl = `https://lckhaysswueoyinhfzyz.supabase.co/storage/v1/object/public/media/${coverPath}`;
+        console.log('Fixed Cover URL:', coverUrl);
+      }
 
-        // Trigger blinking animation based on gender
-        if (viewerGender && profile.gender) {
-          let blinkColor;
-          if (profile.gender === 'third') {
-            blinkColor = '#00FF00'; // Green for third gender
-          } else if (viewerGender === 'male' && profile.gender === 'female') {
-            blinkColor = '#FF69B4'; // Pink when male views female
-          } else if (viewerGender === 'female' && profile.gender === 'male') {
-            blinkColor = '#ADD8E6'; // Light blue when female views male
-          }
-          
-          if (blinkColor) {
-            createBlinkAnimation(blinkColor);
-          }
+      const profile = {
+        ...data,
+        avatar_url: avatarUrl,
+        cover_url: coverUrl,
+        isVerified: verifiedData?.verified || false
+      };
+      
+      setUserProfile(profile);
+
+      // Trigger blinking animation based on gender
+      if (viewerGender && profile.gender) {
+        let blinkColor;
+        if (profile.gender === 'third') {
+          blinkColor = '#00FF00'; // Green for third gender
+        } else if (viewerGender === 'male' && profile.gender === 'female') {
+          blinkColor = '#FF69B4'; // Pink when male views female
+        } else if (viewerGender === 'female' && profile.gender === 'male') {
+          blinkColor = '#ADD8E6'; // Light blue when female views male
+        }
+        
+        if (blinkColor) {
+          createBlinkAnimation(blinkColor);
         }
       }
       
