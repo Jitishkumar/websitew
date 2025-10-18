@@ -352,6 +352,30 @@ const SettingsScreen = () => {
             </LinearGradient>
           </TouchableOpacity>
 
+          <TouchableOpacity 
+            style={styles.linkItem}
+            onPress={() => navigation.navigate('ChangePassword')}
+          >
+            <LinearGradient
+              colors={['rgba(255, 215, 0, 0.08)', 'rgba(255, 215, 0, 0.04)']} 
+              style={styles.linkItemGradient}
+            >
+              <View style={styles.settingIconContainer}>
+                <LinearGradient
+                  colors={['#ffd700', '#ffed4e']}
+                  style={styles.iconGradient}
+                >
+                  <Ionicons name="key-outline" size={20} color="#000" />
+                </LinearGradient>
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={styles.settingTitle}>Change Password</Text>
+                <Text style={styles.settingDescription}>Update your account password</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#ffd700" />
+            </LinearGradient>
+          </TouchableOpacity>
+
           <TouchableOpacity style={styles.linkItem}>
             <LinearGradient
               colors={['rgba(255, 215, 0, 0.08)', 'rgba(255, 215, 0, 0.04)']} 
