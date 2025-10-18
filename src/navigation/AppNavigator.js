@@ -39,6 +39,7 @@ import { supabase } from '../lib/supabase';
 import PhotoTextViewerScreen from '../screens/PhotoTextViewerScreen';
 import MessageSettingsScreen from '../screens/MessageSettingsScreen';
 import BlockedUsersScreen from '../screens/BlockedUsersScreen';
+import ChangePasswordScreen from '../screens/ChangePassword';
 import ConfessionCommentScreen from '../screens/ConfessionCommentScreen';
 import ConfessionButtonScreen from '../screens/ConfessionButton';
 import ConfessionPersonScreen from '../screens/ConfessionPersonScreen';
@@ -295,6 +296,7 @@ const AppNavigator = () => {
       <Stack.Screen name="VerifyAccount" component={VerifyAccountScreen} options={{ headerShown: false }} />
       <Stack.Screen name="MessageSettings" component={MessageSettingsScreen} options={{ headerShown: false }} />
       <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} options={{ headerShown: false }} />
       <Stack.Screen name="ConfessionComment" component={ConfessionCommentScreen} options={{ headerShown: false }} />
       <Stack.Screen name="ConfessionPerson" component={ConfessionPersonScreen} options={{ headerShown: false }} />
       <Stack.Screen name="ConfessionPersonComment" component={ConfessionPersonCommentScreen} options={{ headerShown: false }} />

@@ -7,7 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../lib/supabase';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const ChangePassword= () => {
+const ChangePasswordScreen = () => {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const [oldPassword, setOldPassword] = useState('');
