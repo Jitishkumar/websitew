@@ -64,7 +64,7 @@ const CreatePostScreen = () => {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.All,
+        mediaTypes: 'All',
         allowsEditing: false, // Allow selecting whole photo
         quality: 0.8, // Slightly reduced quality for better upload performance
         presentationStyle: 'pageSheet',

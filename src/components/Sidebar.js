@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, Alert, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Alert, ScrollView, Image, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
@@ -16,6 +16,8 @@ const Sidebar = ({ isVisible, onClose }) => {
   const navigation = useNavigation();
   const [showVisitsModal, setShowVisitsModal] = useState(false);
   const [showConfessionInfoModal, setShowConfessionInfoModal] = useState(false);
+  const [showSuggestedFriendsModal, setShowSuggestedFriendsModal] = useState(false);
+  const [suggestedFriends, setSuggestedFriends] = useState([]);
   const [isFemaleProfle, setIsFemaleProfle] = useState(false);
   const insets = useSafeAreaInsets();
 
@@ -23,8 +25,30 @@ const Sidebar = ({ isVisible, onClose }) => {
     if (isVisible) {
       checkUserGender();
       prefetchNearbyPeople(); // Prefetch in background
+      fetchSuggestedFriends(); // Also fetch suggested friends
     }
   }, [isVisible]);
+  
+  const fetchSuggestedFriends = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      
+      // Fetch suggested friends from profiles table
+      // This is a simple implementation - you might want to customize the query
+      // based on your specific requirements (mutual interests, location, etc.)
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, username, avatar_url, full_name')
+        .neq('id', user.id)
+        .limit(10);
+        
+      if (error) throw error;
+      setSuggestedFriends(data || []);
+    } catch (error) {
+      console.error('Error fetching suggested friends:', error);
+    }
+  };
 
   const checkUserGender = async () => {
     try {
@@ -327,6 +351,21 @@ const Sidebar = ({ isVisible, onClose }) => {
               <Ionicons name="chevron-forward" size={16} color="rgba(76, 175, 80, 0.6)" />
             </LinearGradient>
           </TouchableOpacity>
+          
+          {/* Suggested Friends */}
+          <TouchableOpacity 
+            style={styles.menuItem}
+            onPress={() => setShowSuggestedFriendsModal(true)}
+          >
+            <LinearGradient
+              colors={['rgba(33, 150, 243, 0.1)', 'rgba(33, 150, 243, 0.05)']}
+              style={styles.menuItemGradient}
+            >
+              <Ionicons name="people" size={24} color="#2196F3" />
+              <Text style={styles.menuText}>Suggested Friends</Text>
+              <Ionicons name="chevron-forward" size={16} color="rgba(33, 150, 243, 0.6)" />
+            </LinearGradient>
+          </TouchableOpacity>
 
           {/* Logout */}
            <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
@@ -347,6 +386,83 @@ const Sidebar = ({ isVisible, onClose }) => {
         visible={showVisitsModal}
         onClose={() => setShowVisitsModal(false)}
       />
+      
+      {/* Suggested Friends Modal */}
+      <Modal
+        visible={showSuggestedFriendsModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowSuggestedFriendsModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <LinearGradient
+            colors={['#1a1a2e', '#16213e', '#0f3460']}
+            style={styles.modalContent}
+          >
+            <Text style={styles.modalTitle}>Suggested Friends</Text>
+            
+            {suggestedFriends.length > 0 ? (
+              <FlatList
+                data={suggestedFriends}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => (
+                  <TouchableOpacity 
+                    style={styles.friendItem}
+                    onPress={() => {
+                      setShowSuggestedFriendsModal(false);
+                      onClose();
+                      navigation.navigate('Profile', { userId: item.id });
+                    }}
+                  >
+                    <Image 
+                      source={item.avatar_url ? { uri: item.avatar_url } : require('../../assets/defaultavatar.png')} 
+                      style={styles.avatar} 
+                    />
+                    <View style={styles.friendInfo}>
+                      <Text style={styles.friendName}>{item.full_name || item.username}</Text>
+                      <Text style={styles.friendUsername}>@{item.username}</Text>
+                    </View>
+                    <TouchableOpacity 
+                      style={styles.followButton}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        // Implement follow functionality here
+                        Alert.alert('Success', `You are now following ${item.username}`);
+                      }}
+                    >
+                      <LinearGradient
+                        colors={['#2196F3', '#1976D2']}
+                        style={styles.followButtonGradient}
+                      >
+                        <Text style={styles.followButtonText}>Follow</Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+                )}
+                style={styles.friendsList}
+              />
+            ) : (
+              <View style={styles.emptyState}>
+                <Ionicons name="people-outline" size={48} color="#2196F3" />
+                <Text style={styles.emptyStateText}>No suggestions available</Text>
+                <Text style={styles.emptyStateSubtext}>We'll show you people you might want to follow here</Text>
+              </View>
+            )}
+            
+            <TouchableOpacity 
+              style={[styles.modalButton, styles.cancelButton]} 
+              onPress={() => setShowSuggestedFriendsModal(false)}
+            >
+              <LinearGradient
+                colors={['rgba(255, 255, 255, 0.1)', 'rgba(255, 255, 255, 0.05)']}
+                style={styles.buttonGradient}
+              >
+                <Text style={styles.modalButtonText}>Close</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </LinearGradient>
+        </View>
+      </Modal>
       
       {/* Confession Info Modal */}
       <Modal
@@ -538,6 +654,72 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0, 0, 0, 0.2)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
+  },
+  // Suggested Friends styles
+  friendsList: {
+    marginBottom: 16,
+  },
+  friendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  avatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 12,
+    borderWidth: 2,
+    borderColor: '#2196F3',
+  },
+  friendInfo: {
+    flex: 1,
+  },
+  friendName: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  friendUsername: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 14,
+  },
+  followButton: {
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  followButtonGradient: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+  },
+  followButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 30,
+  },
+  emptyStateText: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginTop: 16,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptyStateSubtext: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 20,
   },
 });
 
