@@ -25,7 +25,7 @@ const Sidebar = ({ isVisible, onClose }) => {
     if (isVisible) {
       checkUserGender();
       prefetchNearbyPeople(); // Prefetch in background
-      fetchSuggestedFriends(); // Also fetch suggested friends
+      fetchSuggestedFriends();
     }
   }, [isVisible]);
   
