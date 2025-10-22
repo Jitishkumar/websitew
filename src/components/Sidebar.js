@@ -34,17 +34,28 @@ const Sidebar = ({ isVisible, onClose }) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       
-      // Fetch suggested friends from profiles table
-      // This is a simple implementation - you might want to customize the query
-      // based on your specific requirements (mutual interests, location, etc.)
+      // Fetch more users to have a larger pool for randomization
       const { data, error } = await supabase
         .from('profiles')
         .select('id, username, avatar_url, full_name')
         .neq('id', user.id)
-        .limit(10);
+        .limit(50); // Fetch 50 users to randomize from
         
       if (error) throw error;
-      setSuggestedFriends(data || []);
+      
+      // Shuffle the array randomly using Fisher-Yates algorithm
+      const shuffleArray = (array) => {
+        const shuffled = [...array];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        return shuffled;
+      };
+      
+      // Shuffle and take only 10 random users
+      const randomFriends = shuffleArray(data || []).slice(0, 10);
+      setSuggestedFriends(randomFriends);
     } catch (error) {
       console.error('Error fetching suggested friends:', error);
     }
