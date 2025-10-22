@@ -43,6 +43,98 @@ const MessagesScreen = () => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const searchBarAnim = useRef(new Animated.Value(1)).current;
   
+  // Function to delete conversation permanently from both sides
+  const handleDeleteConversation = async () => {
+    if (!selectedConversation || !currentUserId) return;
+    
+    Alert.alert(
+      'Delete Conversation',
+      'Are you sure you want to delete this conversation? This will permanently delete all messages for both you and the other person.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+          onPress: () => {
+            setShowConversationOptions(false);
+            setSelectedConversation(null);
+          }
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              console.log('Starting deletion for conversation:', selectedConversation.id);
+              
+              // Create conversation ID for cache clearing
+              const participants = [currentUserId, selectedConversation.otherUserId].sort();
+              const conversationId = `${participants[0]}_${participants[1]}`;
+              
+              // Delete all messages between current user and the other user
+              // First delete messages where current user is sender
+              const { error: error1 } = await supabase
+                .from('messages')
+                .delete()
+                .eq('sender_id', currentUserId)
+                .eq('receiver_id', selectedConversation.otherUserId);
+              
+              if (error1) {
+                console.error('Error deleting sent messages:', error1);
+                throw error1;
+              }
+              
+              console.log('Deleted sent messages');
+              
+              // Then delete messages where current user is receiver
+              const { error: error2 } = await supabase
+                .from('messages')
+                .delete()
+                .eq('sender_id', selectedConversation.otherUserId)
+                .eq('receiver_id', currentUserId);
+              
+              if (error2) {
+                console.error('Error deleting received messages:', error2);
+                throw error2;
+              }
+              
+              console.log('Deleted received messages');
+              
+              // Clear AsyncStorage cache for this conversation
+              try {
+                await AsyncStorage.removeItem(`conversation_${conversationId}`);
+                console.log('Cleared conversation cache');
+              } catch (cacheError) {
+                console.error('Error clearing cache:', cacheError);
+              }
+              
+              // Clear conversations cache
+              try {
+                await AsyncStorage.removeItem('conversations_cache');
+                await AsyncStorage.removeItem('conversations_metadata');
+                console.log('Cleared conversations list cache');
+              } catch (cacheError) {
+                console.error('Error clearing conversations cache:', cacheError);
+              }
+              
+              Alert.alert('Success', 'Conversation deleted permanently from both sides');
+              
+              // Refresh conversations
+              await fetchConversations(currentUserId, false);
+              
+              // Close modal
+              setShowConversationOptions(false);
+              setSelectedConversation(null);
+              
+            } catch (error) {
+              console.error('Error deleting conversation:', error);
+              Alert.alert('Error', 'Failed to delete conversation. Please try again.');
+            }
+          }
+        }
+      ]
+    );
+  };
+  
   // Function to mark a conversation as read
   const handleMarkAsRead = async (conversation) => {
     if (!conversation || !currentUserId) return;
@@ -351,10 +443,8 @@ const MessagesScreen = () => {
         const participants = [userId, otherUserId].sort();
         const conversationId = `${participants[0]}_${participants[1]}`;
         
-        // Only count unread messages that were sent to the current user and not dismissed
-        const dismissedBy = message.dismissed_by || [];
-        const isDismissed = dismissedBy.includes(userId);
-        const isUnread = message.receiver_id === userId && !message.read && !isDismissed;
+        // Only count unread messages that were sent to the current user
+        const isUnread = message.receiver_id === userId && !message.read;
         
         if (!conversationsMap[conversationId]) {
           conversationsMap[conversationId] = {
@@ -1349,6 +1439,14 @@ const MessagesScreen = () => {
                 <Ionicons name="checkmark-circle-outline" size={24} color="#00ff88" />
                 <Text style={styles.optionButtonText}>Mark as Read</Text>
               </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.optionButton, styles.deleteOptionButton]}
+                onPress={handleDeleteConversation}
+              >
+                <Ionicons name="trash-outline" size={24} color="#ff5252" />
+                <Text style={[styles.optionButtonText, styles.deleteOptionText]}>Delete Conversation</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -1954,6 +2052,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     padding: 20,
+  },
+  // Delete button styles
+  deleteOptionButton: {
+    backgroundColor: 'rgba(255, 82, 82, 0.1)',
+  },
+  deleteOptionText: {
+    color: '#ff5252',
   },
 });
 
