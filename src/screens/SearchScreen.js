@@ -51,15 +51,7 @@ const SearchScreen = () => {
           type,
           media_url,
           created_at,
-          user_id,
-          profiles:user_id (
-            id,
-            username,
-            avatar_url,
-            user_settings (
-              private_account
-            )
-          )
+          user_id
         `)
         .order('created_at', { ascending: false })
         .limit(60);
@@ -72,17 +64,41 @@ const SearchScreen = () => {
 
       if (error) throw error;
 
-      const visibleMedia = (data || []).filter(post => {
-        const settings = post?.profiles?.user_settings;
-        const privateSetting = Array.isArray(settings)
-          ? settings[0]?.private_account
-          : settings?.private_account;
-        return privateSetting !== true;
-      });
+      console.log('Fetched posts:', data?.length);
 
-      setMediaResults(visibleMedia);
+      // Filter out ALL posts from private accounts using RPC function
+      const visibleMedia = await Promise.all((data || []).map(async (post) => {
+        try {
+          // Use the same RPC function as user search to check privacy
+          const { data: privacyData, error: privacyError } = await supabase
+            .rpc('get_user_privacy', { target_user_id: post.user_id })
+            .maybeSingle();
+
+          if (privacyError) {
+            console.error('Error checking privacy for user:', post.user_id, privacyError);
+            // If error, assume public to be safe
+            return post;
+          }
+
+          const isPrivate = privacyData?.private_account ?? false;
+          console.log(`Post ${post.id} from user ${post.user_id} - Private: ${isPrivate}`);
+
+          // Only show posts from public accounts
+          return isPrivate ? null : post;
+        } catch (err) {
+          console.error('Exception checking privacy:', err);
+          return post; // Default to showing on error
+        }
+      }));
+
+      // Filter out null values (private account posts)
+      const filteredMedia = visibleMedia.filter(Boolean);
+      console.log('Visible media after filtering:', filteredMedia.length);
+      
+      setMediaResults(filteredMedia);
     } catch (error) {
       console.error('Error searching media:', error);
+      setMediaResults([]);
     } finally {
       setLoading(false);
     }

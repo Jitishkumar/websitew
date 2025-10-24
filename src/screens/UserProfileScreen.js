@@ -9,6 +9,7 @@ import { useVideo } from '../context/VideoContext';
 import { Video } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CacheManager, CACHE_KEYS, CACHE_TTL } from '../utils/cache';
+import PostItem from '../components/PostItem';
 
 const UserProfileScreen = () => {
   const [userProfile, setUserProfile] = useState(null);
@@ -17,6 +18,7 @@ const UserProfileScreen = () => {
   const [viewerGender, setViewerGender] = useState(null);
   const [posts, setPosts] = useState([]);
   const [shorts, setShorts] = useState([]);
+  const [tweets, setTweets] = useState([]);
   const [postsCount, setPostsCount] = useState(0);
   const [shortsCount, setShortsCount] = useState(0);
   const [activeTab, setActiveTab] = useState('Details');
@@ -27,6 +29,7 @@ const UserProfileScreen = () => {
   
   const memoizedPosts = useMemo(() => posts, [posts]);
   const memoizedShorts = useMemo(() => shorts, [shorts]);
+  const memoizedTweets = useMemo(() => tweets, [tweets]);
 
   // State for followers/following modals
   const [showFollowersModal, setShowFollowersModal] = useState(false);
@@ -756,6 +759,7 @@ const UserProfileScreen = () => {
         if (!userId) return;
 
         if (activeTab === 'Post') {
+          // Fetch only posts with media (images or videos)
           const { data, error } = await supabase
             .from('posts')
             .select(`
@@ -766,6 +770,7 @@ const UserProfileScreen = () => {
               user_likes:post_likes (user_id)
             `)
             .eq('user_id', userId)
+            .not('media_url', 'is', null)
             .order('created_at', { ascending: false });
 
           if (error) throw error;
@@ -775,6 +780,28 @@ const UserProfileScreen = () => {
             is_liked: post.user_likes?.some(like => like.user_id === user?.id) || false
           }));
           setPosts(postsWithLikeStatus || []);
+        } else if (activeTab === 'Tweets') {
+          // Fetch only text posts (no media)
+          const { data, error } = await supabase
+            .from('posts')
+            .select(`
+              *,
+              profiles:user_id (*),
+              likes:post_likes (count),
+              comments:post_comments (count),
+              user_likes:post_likes (user_id)
+            `)
+            .eq('user_id', userId)
+            .is('media_url', null)
+            .order('created_at', { ascending: false });
+
+          if (error) throw error;
+          const { data: { user } } = await supabase.auth.getUser();
+          const tweetsWithLikeStatus = data.map(post => ({
+            ...post,
+            is_liked: post.user_likes?.some(like => like.user_id === user?.id) || false
+          }));
+          setTweets(tweetsWithLikeStatus || []);
         } else if (activeTab === 'Short') {
           const { data, error } = await supabase
             .from('posts')
@@ -988,7 +1015,9 @@ const UserProfileScreen = () => {
   
   const handlePostPress = (index) => {
     console.log('Post pressed at index:', index);
-    const currentPosts = activeTab === 'Post' ? memoizedPosts : memoizedShorts;
+    const currentPosts = activeTab === 'Post' ? memoizedPosts : 
+                         activeTab === 'Tweets' ? memoizedTweets : 
+                         memoizedShorts;
     const post = currentPosts[index];
     
     // If it's a video post, set the active video ID before navigating
@@ -1109,7 +1138,29 @@ const UserProfileScreen = () => {
       );
     }
 
-    const data = activeTab === 'Post' ? memoizedPosts : memoizedShorts;
+    const data = activeTab === 'Post' ? memoizedPosts : 
+                 activeTab === 'Tweets' ? memoizedTweets : 
+                 memoizedShorts;
+    
+    // For Tweets tab, use PostItem component instead of grid
+    if (activeTab === 'Tweets') {
+      return data.length > 0 ? (
+        <FlatList
+          data={data}
+          renderItem={({ item }) => <PostItem post={item} />}
+          keyExtractor={item => item.id.toString()}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 20 }}
+          scrollEnabled={true}
+        />
+      ) : (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>No snips yet</Text>
+        </View>
+      );
+    }
+    
+    // For Posts and Shorts, use grid view
     return data.length > 0 ? (
       <FlatList
         data={data}
@@ -1246,7 +1297,23 @@ const UserProfileScreen = () => {
           setActiveTab('Post');
         }}
       >
-        <Text style={[styles.tabButtonText, activeTab === 'Post' && styles.activeTabText]}>Post</Text>
+        <Text style={[styles.tabButtonText, activeTab === 'Post' && styles.activeTabText]}>Posts</Text>
+      </TouchableOpacity>
+      <TouchableOpacity 
+        style={[styles.tabButton, activeTab === 'Tweets' && styles.activeTab]}
+        onPress={() => {
+          if (hasPrivateAccount && !canViewPrivateContent) {
+            Alert.alert(
+              'Private Account',
+              'You need to follow this account to see their snips.',
+              [{ text: 'OK' }]
+            );
+            return;
+          }
+          setActiveTab('Tweets');
+        }}
+      >
+        <Text style={[styles.tabButtonText, activeTab === 'Tweets' && styles.activeTabText, styles.italicText]}>Snips</Text>
       </TouchableOpacity>
       <TouchableOpacity 
         style={[styles.tabButton, activeTab === 'Short' && styles.activeTab]}
@@ -1363,7 +1430,9 @@ const UserProfileScreen = () => {
       );
     }
 
-    const data = activeTab === 'Post' ? memoizedPosts : memoizedShorts;
+    const data = activeTab === 'Post' ? memoizedPosts : 
+                 activeTab === 'Tweets' ? memoizedTweets : 
+                 memoizedShorts;
     
     if (loadingContent) {
       return (
@@ -1373,6 +1442,39 @@ const UserProfileScreen = () => {
       );
     }
     
+    // For Tweets tab, use list view with PostItem
+    if (activeTab === 'Tweets') {
+      return data.length > 0 ? (
+        <FlatList
+          data={data}
+          renderItem={({ item }) => <PostItem post={item} />}
+          keyExtractor={item => item.id.toString()}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: insets.bottom }}
+          ListHeaderComponent={<>
+            <ProfileHeader />
+            <TabsSection />
+            {hasPrivateAccount && !canViewPrivateContent && (
+              <View style={styles.privateAccountMessage}>
+                <Ionicons name="lock-closed" size={40} color="#ff00ff" />
+                <Text style={styles.privateAccountTitle}>This Account is Private</Text>
+                <Text style={styles.privateAccountText}>Follow this account to see their snips.</Text>
+              </View>
+            )}
+          </>}
+        />
+      ) : (
+        <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom }}>
+          <ProfileHeader />
+          <TabsSection />
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>No snips yet</Text>
+          </View>
+        </ScrollView>
+      );
+    }
+    
+    // For Posts and Shorts, use grid view
     return data.length > 0 ? (
       <FlatList
         data={data}
@@ -1867,20 +1969,23 @@ const styles = StyleSheet.create({
   tabsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    paddingHorizontal: 40,
+    paddingHorizontal: 10,
     marginTop: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#1a1a1a',
   },
   tabButton: {
-    marginRight: 30,
     paddingBottom: 10,
-    flex: 1,
+    paddingHorizontal: 4,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   tabButtonText: {
     color: '#faf7f8',
-    fontSize: 16,
+    fontSize: 14,
+  },
+  italicText: {
+    fontStyle: 'italic',
   },
   activeTab: {
     borderBottomWidth: 2,

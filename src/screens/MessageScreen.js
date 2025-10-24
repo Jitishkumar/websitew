@@ -16,6 +16,7 @@ import {
   Dimensions,
   PanResponder
 } from 'react-native';
+import Slider from '@react-native-community/slider';
 import { Video } from 'expo-av';
 import { Audio } from 'expo-av';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -29,6 +30,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { cloudinaryConfig, uploadToCloudinary } from '../config/cloudinary';
 import { NotificationService } from '../services/NotificationService';
+import { useTheme } from '../context/ThemeContext';
 
 // Audio Player Component for Messages (same as CommentScreen)
 const MessageAudioPlayer = ({ audioUrl, duration }) => {
@@ -108,6 +110,7 @@ const MessageAudioPlayer = ({ audioUrl, duration }) => {
 
 const MessageScreen = () => {
   const insets = useSafeAreaInsets();
+  const { isDarkMode } = useTheme();
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(true);
@@ -143,6 +146,11 @@ const MessageScreen = () => {
   const videoRef = useRef(null);
   const [videoLoaded, setVideoLoaded] = useState(false);
   const [hasCameraPermission, setHasCameraPermission] = useState(null);
+  
+  // Background image state (global for user, not per conversation)
+  const [backgroundImage, setBackgroundImage] = useState(null);
+  const [backgroundOpacity, setBackgroundOpacity] = useState(0.3);
+  const [showOpacitySlider, setShowOpacitySlider] = useState(false);
   
   // Voice recording states
   const [recording, setRecording] = useState(null);
@@ -1417,6 +1425,57 @@ const MessageScreen = () => {
     }
   };
 
+  const pickBackgroundImage = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.5,
+        allowsEditing: true
+      });
+      
+      if (!result.canceled) {
+        setBackgroundImage(result.assets[0].uri);
+        // Save globally for user (not per conversation)
+        await AsyncStorage.setItem(`user_chat_background_${userId}`, result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Error picking background:', error);
+      Alert.alert('Error', 'Failed to pick background image');
+    }
+  };
+
+  const removeBackgroundImage = async () => {
+    setBackgroundImage(null);
+    await AsyncStorage.removeItem(`user_chat_background_${userId}`);
+  };
+
+  const saveOpacity = async (opacity) => {
+    setBackgroundOpacity(opacity);
+    await AsyncStorage.setItem(`user_chat_opacity_${userId}`, opacity.toString());
+  };
+
+  // Load background image and opacity on mount (global for user)
+  useEffect(() => {
+    const loadBackground = async () => {
+      try {
+        if (!userId) return;
+        
+        const savedBackground = await AsyncStorage.getItem(`user_chat_background_${userId}`);
+        const savedOpacity = await AsyncStorage.getItem(`user_chat_opacity_${userId}`);
+        
+        if (savedBackground) {
+          setBackgroundImage(savedBackground);
+        }
+        if (savedOpacity) {
+          setBackgroundOpacity(parseFloat(savedOpacity));
+        }
+      } catch (error) {
+        console.error('Error loading background:', error);
+      }
+    };
+    loadBackground();
+  }, [userId]);
+
   const handleCameraCapture = async (cameraType = 'back') => {
     try {
       const result = await ImagePicker.launchCameraAsync({
@@ -1525,13 +1584,17 @@ const MessageScreen = () => {
 
   // Memoized message item component to prevent unnecessary re-renders
   const MessageItem = React.memo(({ item, onLongPress, onMediaPress, recipientReadReceipts }) => {
+    // Define colors based on dark mode - SWAPPED: red for sent, white for received
+    const myMessageColors = isDarkMode ? ['#333', '#222'] : ['#6F2746', '#6F2746'];
+    const theirMessageColors = isDarkMode ? ['#ff00ff', '#9900ff'] : ['#FFFFFF', '#F5F5F5'];
+    
     return (
       <View style={[
         styles.messageBubble,
         item.sender === 'me' ? styles.myMessage : styles.theirMessage,
       ]}>
         <LinearGradient
-          colors={item.sender === 'me' ? ['#333', '#222'] : ['#ff00ff', '#9900ff']}
+          colors={item.sender === 'me' ? myMessageColors : theirMessageColors}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.messageBubbleGradient}
@@ -1701,7 +1764,10 @@ const MessageScreen = () => {
                   }
                 })()
               ) : (
-                <Text style={styles.messageText}>{item.text}</Text>
+                <Text style={[
+                  styles.messageText,
+                  !isDarkMode && item.sender !== 'me' && { color: '#333' }
+                ]}>{item.text}</Text>
               )}
             </TouchableOpacity>
           ) : null}
@@ -1956,8 +2022,84 @@ const MessageScreen = () => {
     </Modal>
   );
 
+  // Opacity Slider Modal
+  const OpacitySliderModal = () => (
+    <Modal
+      visible={showOpacitySlider}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={() => setShowOpacitySlider(false)}
+    >
+      <View style={styles.opacityModalOverlay}>
+        <View style={styles.opacityModalContent}>
+          <Text style={styles.opacityModalTitle}>Adjust Background Brightness</Text>
+          <Text style={styles.opacityModalSubtitle}>
+            {backgroundOpacity < 0.3 ? 'Faded' : backgroundOpacity > 0.7 ? 'Original' : 'Medium'}
+          </Text>
+          
+          <View style={styles.opacitySliderContainer}>
+            <Ionicons name="sunny-outline" size={20} color="#6F2746" />
+            <Slider
+              style={styles.opacitySlider}
+              minimumValue={0.1}
+              maximumValue={1.0}
+              value={backgroundOpacity}
+              onValueChange={setBackgroundOpacity}
+              onSlidingComplete={saveOpacity}
+              minimumTrackTintColor="#6F2746"
+              maximumTrackTintColor="#ddd"
+              thumbTintColor="#6F2746"
+            />
+            <Ionicons name="sunny" size={20} color="#6F2746" />
+          </View>
+          
+          <View style={styles.opacityPresets}>
+            <TouchableOpacity 
+              style={styles.opacityPresetButton}
+              onPress={() => saveOpacity(0.2)}
+            >
+              <Text style={styles.opacityPresetText}>Faded</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.opacityPresetButton}
+              onPress={() => saveOpacity(0.5)}
+            >
+              <Text style={styles.opacityPresetText}>Medium</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.opacityPresetButton}
+              onPress={() => saveOpacity(1.0)}
+            >
+              <Text style={styles.opacityPresetText}>Original</Text>
+            </TouchableOpacity>
+          </View>
+          
+          <TouchableOpacity 
+            style={styles.opacityModalCloseButton}
+            onPress={() => setShowOpacitySlider(false)}
+          >
+            <Text style={styles.opacityModalCloseText}>Done</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+
   return (
-    <LinearGradient colors={['#0a0a2a', '#1a1a3a']} style={{ flex: 1 }}>
+    <View style={{ flex: 1 }}>
+      {/* Background image always shows if set, regardless of theme */}
+      {backgroundImage ? (
+        <Image 
+          source={{ uri: backgroundImage }} 
+          style={[styles.backgroundImage, { opacity: backgroundOpacity }]}
+          resizeMode="cover"
+        />
+      ) : (
+        <LinearGradient 
+          colors={isDarkMode ? ['#0a0a2a', '#1a1a3a'] : ['#CDDAEF', '#CDDAEF']} 
+          style={styles.backgroundGradient}
+        />
+      )}
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <KeyboardAvoidingView 
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -1968,14 +2110,14 @@ const MessageScreen = () => {
             <StatusBar style="light" />
             
             <LinearGradient
-              colors={['#1a1a1a', '#000']}
+              colors={isDarkMode ? ['#1a1a1a', '#000'] : ['#CDDAEF', '#CDDAEF']}
               style={[styles.header, { paddingTop: insets.top }]}
             >
               <TouchableOpacity 
                 style={styles.backButton} 
                 onPress={() => navigation.goBack()}
               >
-                <Ionicons name="arrow-back" size={24} color="#fff" />
+                <Ionicons name="arrow-back" size={24} color={isDarkMode ? "#fff" : "#333"} />
               </TouchableOpacity>
               
               <View style={styles.profileInfo}>
@@ -1985,24 +2127,45 @@ const MessageScreen = () => {
                 />
                 <TouchableOpacity onPress={() => navigation.navigate('MessageSettings', { recipientId, recipientName })}>
                 <View>
-                  <Text style={styles.headerTitle} numberOfLines={1} ellipsizeMode="tail">{getDisplayName()}</Text>
+                  <Text style={[styles.headerTitle, !isDarkMode && { color: '#333' }]} numberOfLines={1} ellipsizeMode="tail">{getDisplayName()}</Text>
                   {recipientOnlineStatus ? (
-                    <Text style={styles.onlineStatusText}>
+                    <Text style={[styles.onlineStatusText, !isDarkMode && { color: '#666' }]}>
                       {formatLastActive(recipientOnlineStatus)}
                     </Text>
                   ) : (
-                    <Text style={styles.onlineStatusText}>Flexx</Text>
+                    <Text style={[styles.onlineStatusText, !isDarkMode && { color: '#666' }]}>Flexx</Text>
                   )}
                 </View>
               </TouchableOpacity>
               </View>
               
               <View style={styles.headerActions}>
-                <TouchableOpacity style={styles.headerButton}>
-                  <Ionicons name="call-outline" size={22} color="#fff" />
+                <TouchableOpacity 
+                  style={styles.headerButton}
+                  onPress={() => {
+                    const options = [
+                      { text: 'Change Background', onPress: pickBackgroundImage },
+                      { text: 'Remove Background', onPress: removeBackgroundImage, style: 'destructive' },
+                      { text: 'Cancel', style: 'cancel' }
+                    ];
+                    
+                    if (backgroundImage) {
+                      options.splice(1, 0, { 
+                        text: 'Adjust Brightness', 
+                        onPress: () => setShowOpacitySlider(true) 
+                      });
+                    }
+                    
+                    Alert.alert('Chat Background', 'Choose an option', options);
+                  }}
+                >
+                  <Ionicons name="image-outline" size={22} color={isDarkMode ? "#fff" : "#6F2746"} />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.headerButton}>
-                  <Ionicons name="videocam-outline" size={22} color="#fff" />
+                  <Ionicons name="call-outline" size={22} color={isDarkMode ? "#fff" : "#6F2746"} />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.headerButton}>
+                  <Ionicons name="videocam-outline" size={22} color={isDarkMode ? "#fff" : "#6F2746"} />
                 </TouchableOpacity>
               </View>
             </LinearGradient>
@@ -2073,7 +2236,7 @@ const MessageScreen = () => {
             />
 
             <LinearGradient
-              colors={['#1a1a3a', '#0d0d2a']}
+              colors={isDarkMode ? ['#1a1a3a', '#0d0d2a'] : ['#6F2746', '#6F2746']}
               start={{x: 0, y: 0}}
               end={{x: 1, y: 1}}
               style={[styles.inputContainer, { paddingBottom: insets.bottom > 0 ? insets.bottom : 10 }]}
@@ -2153,6 +2316,7 @@ const MessageScreen = () => {
             </LinearGradient>
 
             <MediaPickerModal />
+            <OpacitySliderModal />
             
             {/* Image Preview Modal */}
             <Modal
@@ -2289,11 +2453,86 @@ const MessageScreen = () => {
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  backgroundImage: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+  },
+  backgroundGradient: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+  },
+  opacityModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  opacityModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 24,
+    width: '85%',
+    maxWidth: 400,
+  },
+  opacityModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#6F2746',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  opacityModalSubtitle: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  opacitySliderContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  opacitySlider: {
+    flex: 1,
+    marginHorizontal: 12,
+  },
+  opacityPresets: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 24,
+  },
+  opacityPresetButton: {
+    flex: 1,
+    backgroundColor: '#f0f0f0',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    marginHorizontal: 4,
+    alignItems: 'center',
+  },
+  opacityPresetText: {
+    color: '#6F2746',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  opacityModalCloseButton: {
+    backgroundColor: '#6F2746',
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  opacityModalCloseText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
   dateSeparatorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2397,9 +2636,9 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 5,
   },
   messageText: {
-    color: '#fff',
+    color: '#6F2746',
     fontSize: 16,
-    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowColor: 'rgba(0, 0, 0, 0.1)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
@@ -2561,7 +2800,7 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     paddingHorizontal: 20,
     marginHorizontal: 8,
-    color: '#fff',
+    color: '#6F2746',
     fontSize: 16,
     ...Platform.select({
       ios: {

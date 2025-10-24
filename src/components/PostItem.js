@@ -25,6 +25,7 @@ import { PostsService } from '../services/PostsService';
 import { supabase } from '../lib/supabase';
 import { Alert } from 'react-native';
 import CommentScreen from '../screens/CommentScreen';
+import ZoomableImage from './ZoomableImage';
 
 const { width } = Dimensions.get('window');
 
@@ -413,6 +414,7 @@ const PostItem = ({ post, onOptionsPress }) => {
   const [likesList, setLikesList] = useState([]);
   const [editCaption, setEditCaption] = useState(post.caption || '');
   const [currentUser, setCurrentUser] = useState(null);
+  const [showImageViewer, setShowImageViewer] = useState(false);
 
   useEffect(() => {
     const getCurrentUser = async () => {
@@ -786,7 +788,11 @@ const PostItem = ({ post, onOptionsPress }) => {
                 </View>
               </TouchableWithoutFeedback>
             ) : (
-              <View style={styles.imageContainer}>
+              <TouchableOpacity 
+                style={styles.imageContainer}
+                onPress={() => setShowImageViewer(true)}
+                activeOpacity={0.9}
+              >
                 <Image
                   source={{ uri: post.media_url }}
                   style={styles.media}
@@ -800,7 +806,7 @@ const PostItem = ({ post, onOptionsPress }) => {
                     <Text style={styles.loadingText}>Loading image...</Text>
                   </View>
                 )}
-              </View>
+              </TouchableOpacity>
             )}
           </View>
         )}
@@ -928,6 +934,19 @@ const PostItem = ({ post, onOptionsPress }) => {
               </TouchableOpacity>
             </View>
           </View>
+        </Modal>
+
+        {/* Zoomable Image Viewer Modal */}
+        <Modal
+          visible={showImageViewer}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowImageViewer(false)}
+        >
+          <ZoomableImage 
+            imageUri={post.media_url}
+            onClose={() => setShowImageViewer(false)}
+          />
         </Modal>
     </View>
   );

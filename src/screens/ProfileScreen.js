@@ -197,6 +197,7 @@ const ProfileScreen = () => {
   const [activeTab, setActiveTab] = useState('Post');
   const [shorts, setShorts] = useState([]);
   const [posts, setPosts] = useState([]);
+  const [tweets, setTweets] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showFollowersModal, setShowFollowersModal] = useState(false);
   const [showFollowingModal, setShowFollowingModal] = useState(false);
@@ -208,6 +209,7 @@ const ProfileScreen = () => {
   // Animations disabled for instant loading
   const memoizedPosts = useMemo(() => posts, [posts]);
   const memoizedShorts = useMemo(() => shorts, [shorts]);
+  const memoizedTweets = useMemo(() => tweets, [tweets]);
   const videoRefs = useRef({});
   
   useEffect(() => {
@@ -234,7 +236,9 @@ const ProfileScreen = () => {
 
   const handlePostPress = async (index) => {
     console.log('Post pressed at index:', index);
-    const currentPosts = activeTab === 'Post' ? memoizedPosts : memoizedShorts;
+    const currentPosts = activeTab === 'Post' ? memoizedPosts : 
+                         activeTab === 'Tweets' ? memoizedTweets : 
+                         memoizedShorts;
     const post = currentPosts[index];
 
     // Unload all videos before navigation
@@ -623,6 +627,15 @@ const ProfileScreen = () => {
           <Text style={[styles.tabButtonText, activeTab === 'Post' && styles.activeTabText]}>Posts</Text>
         </TouchableOpacity>
         <TouchableOpacity 
+          style={[styles.tabButton, activeTab === 'Tweets' && styles.activeTab]}
+          onPress={() => {
+            setActiveTab('Tweets');
+            fetchUserContent();
+          }}
+        >
+          <Text style={[styles.tabButtonText, activeTab === 'Tweets' && styles.activeTabText, styles.italicText]}>Snips</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
           style={[styles.tabButton, activeTab === 'Short' && styles.activeTab]}
           onPress={() => {
             setActiveTab('Short');
@@ -658,8 +671,30 @@ const ProfileScreen = () => {
       );
     }
 
-    const data = activeTab === 'Post' ? memoizedPosts : memoizedShorts;
+    const data = activeTab === 'Post' ? memoizedPosts : 
+                 activeTab === 'Tweets' ? memoizedTweets : 
+                 memoizedShorts;
     console.log(`Rendering ${data.length} items for ${activeTab} tab`);
+    
+    // For Tweets tab, use PostItem component instead of grid
+    if (activeTab === 'Tweets') {
+      return data.length > 0 ? (
+        <FlatList
+          data={data}
+          renderItem={({ item }) => <PostItem post={item} />}
+          keyExtractor={item => item.id.toString()}
+          showsVerticalScrollIndicator={true}
+          contentContainerStyle={{ paddingBottom: 20 }}
+          scrollEnabled={true}
+        />
+      ) : (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>No snips yet</Text>
+        </View>
+      );
+    }
+    
+    // For Posts and Shorts, use grid view
     return data.length > 0 ? (
       <FlatList
         data={data}
@@ -825,6 +860,7 @@ const ProfileScreen = () => {
       }
 
       if (activeTab === 'Post') {
+        // Fetch only posts with media (images or videos)
         const { data, error } = await supabase
           .from('posts')
           .select(`
@@ -835,16 +871,40 @@ const ProfileScreen = () => {
             user_likes:post_likes (user_id)
           `)
           .eq('user_id', user.id)
+          .not('media_url', 'is', null)
           .order('created_at', { ascending: false });
 
         if (error) throw error;
-        console.log(`Fetched ${data?.length || 0} posts from Supabase`);
+        console.log(`Fetched ${data?.length || 0} posts with media from Supabase`);
         const postsWithLikeStatus = data.map(post => ({
           ...post,
           is_liked: post.user_likes?.some(like => like.user_id === user.id) || false
         }));
         console.log('Setting posts state with data:', postsWithLikeStatus?.length || 0);
         setPosts(postsWithLikeStatus || []);
+      } else if (activeTab === 'Tweets') {
+        // Fetch only text posts (no media)
+        const { data, error } = await supabase
+          .from('posts')
+          .select(`
+            *,
+            profiles:user_id (*),
+            likes:post_likes (count),
+            comments:post_comments (count),
+            user_likes:post_likes (user_id)
+          `)
+          .eq('user_id', user.id)
+          .is('media_url', null)
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        console.log(`Fetched ${data?.length || 0} tweets from Supabase`);
+        const tweetsWithLikeStatus = data.map(post => ({
+          ...post,
+          is_liked: post.user_likes?.some(like => like.user_id === user.id) || false
+        }));
+        console.log('Setting tweets state with data:', tweetsWithLikeStatus?.length || 0);
+        setTweets(tweetsWithLikeStatus || []);
       } else if (activeTab === 'Short') {
         const { data, error } = await supabase
           .from('posts')
@@ -1750,21 +1810,23 @@ const styles = StyleSheet.create({
   },
   tabsContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingHorizontal: 40,
-    marginTop: 20,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 215, 0, 0.2)',
+    borderBottomColor: '#333',
+    paddingHorizontal: 10,
+    justifyContent: 'space-around',
   },
   tabButton: {
-    marginRight: 30,
     paddingBottom: 10,
-    flex: 1,
+    paddingHorizontal: 4,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   tabButtonText: {
     color: '#faf7f8',
-    fontSize: 16,
+    fontSize: 14,
+  },
+  italicText: {
+    fontStyle: 'italic',
   },
   activeTab: {
     borderBottomWidth: 2,
