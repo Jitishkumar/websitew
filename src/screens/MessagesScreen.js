@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TextInput, ScrollView, Image, TouchableOpacity, ActivityIndicator, Animated, Modal, Alert, StatusBar } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, TextInput, FlatList, Image, TouchableOpacity, ActivityIndicator, Animated, Modal, Alert, StatusBar } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
@@ -372,7 +372,7 @@ const MessagesScreen = () => {
     return unsubscribe;
   }, [navigation, currentUserId]);
   
-  // Enhanced fetch conversations function with better caching
+  // Optimized fetch conversations function with pagination and better caching
   const fetchConversations = async (userId, showLoadingIndicator = true) => {
     try {
       if (showLoadingIndicator) {
@@ -381,19 +381,32 @@ const MessagesScreen = () => {
         setRefreshing(true);
       }
       
-      // Get all messages where current user is sender or receiver
-      const { data: messagesData, error: messagesError } = await supabase
-        .from('messages')
-        .select('*')
-        .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
-        .order('created_at', { ascending: false });
+      // First, try to get the most recent conversations from cache
+      const cachedConversations = await loadCachedConversations(userId);
+      if (cachedConversations && cachedConversations.length > 0) {
+        // Immediately display cached conversations
+        setConversations(cachedConversations);
+        console.log('Displaying cached conversations while fetching fresh data');
+        
+        // If we're just refreshing in the background, don't show loading
+        if (!showLoadingIndicator) {
+          setRefreshing(false);
+        }
+      }
+      
+      // Use our optimized stored procedure to get only the latest message per conversation
+      // This dramatically reduces data transfer and processing time
+      const { data: latestMessagesData, error: messagesError } = await supabase
+        .rpc('get_latest_messages_per_conversation', {
+          user_id: userId,
+          message_limit: 50
+        }); // Limit to 50 most recent messages
       
       if (messagesError) {
         console.error('Error fetching messages:', messagesError);
         
-        // If server request fails, try to use cached data as fallback
+        // If server request fails, ensure we're using cached data as fallback
         if (!conversations || conversations.length === 0) {
-          const cachedConversations = await loadCachedConversations(userId);
           if (cachedConversations) {
             setConversations(cachedConversations);
             console.log('Using cached conversations as fallback');
@@ -427,10 +440,11 @@ const MessagesScreen = () => {
         });
       }
       
-      // Group messages by conversation
+      // Group messages by conversation - optimized for speed
       const conversationsMap = {};
       
-      for (const message of messagesData) {
+      // Use latestMessagesData instead of messagesData for faster processing
+      for (const message of latestMessagesData) {
         // Determine the other user in the conversation
         const otherUserId = message.sender_id === userId ? message.receiver_id : message.sender_id;
         
@@ -455,7 +469,9 @@ const MessagesScreen = () => {
             unread: isUnread ? 1 : 0,
             name: null,
             avatar: null,
-            hasMedia: !!message.media_url
+            hasMedia: !!message.media_url,
+            // Add raw message for faster rendering
+            rawMessage: message
           };
         } else {
           // Count all unread messages for this conversation
@@ -463,14 +479,12 @@ const MessagesScreen = () => {
             conversationsMap[conversationId].unread += 1;
           }
           
-          // Update last message if this one is newer
-          const currentTimestamp = new Date(conversationsMap[conversationId].timestamp);
-          const messageTimestamp = new Date(message.created_at);
-          
-          if (messageTimestamp > currentTimestamp) {
+          // Update last message if this one is newer - use string comparison for speed
+          if (message.created_at > conversationsMap[conversationId].timestamp) {
             conversationsMap[conversationId].lastMessage = message.content || (message.media_type ? `📷 ${message.media_type}` : 'Message');
             conversationsMap[conversationId].timestamp = message.created_at;
             conversationsMap[conversationId].hasMedia = !!message.media_url;
+            conversationsMap[conversationId].rawMessage = message;
           }
         }
       }
@@ -1055,19 +1069,23 @@ const MessagesScreen = () => {
           </TouchableOpacity>
         </View>
 
-        <ScrollView 
-          style={styles.messagesList}
-          contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
-          showsVerticalScrollIndicator={false}
-        >
-          {loading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#667eea" />
-              <Text style={styles.loadingText}>Loading conversations...</Text>
-            </View>
-          ) : activeTab === 'inbox' ? (
-            filteredConversations.length > 0 ? (
-              filteredConversations.map((conversation) => (
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#667eea" />
+            <Text style={styles.loadingText}>Loading conversations...</Text>
+          </View>
+        ) : activeTab === 'inbox' ? (
+          <FlatList
+            data={filteredConversations}
+            keyExtractor={(item) => item.id}
+            style={styles.messagesList}
+            contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
+            showsVerticalScrollIndicator={false}
+            initialNumToRender={10}
+            maxToRenderPerBatch={20}
+            windowSize={10}
+            removeClippedSubviews={true}
+            renderItem={({item: conversation}) => (
               <TouchableOpacity 
                 key={conversation.id} 
                 style={styles.messageItem}
@@ -1130,8 +1148,16 @@ const MessagesScreen = () => {
                 )}
                 </LinearGradient>
               </TouchableOpacity>
-            ))
-            ) : (
+            )}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+                colors={['#667eea']}
+                tintColor="#667eea"
+              />
+            }
+            ListEmptyComponent={() => (
               <LinearGradient
                 colors={['rgba(102, 126, 234, 0.1)', 'rgba(156, 136, 255, 0.05)']}  
                 style={styles.emptyContainer}

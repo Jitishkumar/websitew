@@ -21,6 +21,23 @@ create index IF not exists idx_messages_read_status on public.messages using btr
 
 create index IF not exists idx_messages_conversation_id on public.messages using btree (conversation_id) TABLESPACE pg_default;
 
+-- Create a function to get latest messages per conversation for faster loading
+CREATE OR REPLACE FUNCTION get_latest_messages_per_conversation(user_id UUID, message_limit INTEGER DEFAULT 50)
+RETURNS SETOF messages AS $$
+BEGIN
+  RETURN QUERY
+  WITH latest_messages AS (
+    SELECT DISTINCT ON (conversation_id) *
+    FROM messages
+    WHERE sender_id = user_id OR receiver_id = user_id
+    ORDER BY conversation_id, created_at DESC
+  )
+  SELECT * FROM latest_messages
+  ORDER BY created_at DESC
+  LIMIT message_limit;
+END;
+$$ LANGUAGE plpgsql;
+
 -- Update existing messages to set proper media_type based on media_url
 UPDATE public.messages 
 SET media_type = CASE 
