@@ -137,6 +137,10 @@ const MessageScreen = () => {
   const [currentPage, setCurrentPage] = useState(0);
   const MESSAGES_PER_PAGE = 50;
   
+  // Cache management - WhatsApp-style: Keep recent chats for instant loading
+  const CACHE_EXPIRY_HOURS = 24; // Cache conversations from last 24 hours
+  const MAX_CACHED_MESSAGES = 20; // Keep last 20 messages per conversation (faster!)
+  
   // Media preview states
   const [selectedMedia, setSelectedMedia] = useState(null);
   const [showMediaPicker, setShowMediaPicker] = useState(false);
@@ -239,7 +243,46 @@ const MessageScreen = () => {
   // Track if this is the first load
   const isFirstLoad = useRef(true);
   const lastLoadTime = useRef(0);
-  const RELOAD_THRESHOLD = 30000; // 30 seconds - only reload if last load was more than 30s ago
+
+  // INSTANT LOAD: Load cached messages IMMEDIATELY on mount (WhatsApp-style)
+  useEffect(() => {
+    const loadCacheInstantly = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user && recipientId) {
+          // Construct conversation ID
+          const participants = [user.id, recipientId].sort();
+          const convId = `${participants[0]}_${participants[1]}`;
+          
+          // Load from cache instantly
+          const cachedData = await AsyncStorage.getItem(`conversation_${convId}`);
+          if (cachedData) {
+            const parsedMessages = JSON.parse(cachedData);
+            // Show only last 20 messages from cache (includes your last sent message)
+            const formattedMessages = parsedMessages.slice(-20).map(msg => ({
+              ...msg,
+              sender: msg.sender_id === user.id ? 'me' : 'them'
+            }));
+            
+            // Display immediately!
+            setMessages(formattedMessages);
+            console.log('⚡ INSTANT: Loaded', formattedMessages.length, 'messages from cache');
+            
+            // Scroll to bottom instantly
+            setTimeout(() => {
+              if (flatListRef.current && formattedMessages.length > 0) {
+                flatListRef.current.scrollToEnd({ animated: false });
+              }
+            }, 50);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading cache instantly:', error);
+      }
+    };
+    
+    loadCacheInstantly();
+  }, [recipientId]); // Runs when recipientId is available
 
   // Get current user and set up conversation (only once)
   useEffect(() => {
@@ -279,24 +322,23 @@ const MessageScreen = () => {
     setupConversation();
   }, [recipientId]);
 
-  // WhatsApp-style: Keep messages loaded, only refresh if needed
+  // INSTANT RETURN: Keep messages in memory, NEVER reload when coming back
+  // This makes switching between chats feel instant - shows exactly as you left it
   useFocusEffect(
     React.useCallback(() => {
-      // When screen comes into focus
-      const now = Date.now();
-      const timeSinceLastLoad = now - lastLoadTime.current;
+      // When screen comes into focus, do NOTHING - messages already in memory!
+      // No reload, no refresh - just show what's there instantly
+      console.log('💾 Chat focused - showing messages from memory (instant!)');
       
-      // Only reload if it's been more than 30 seconds since last load
-      // This keeps the chat instant when navigating back and forth
-      if (!isFirstLoad.current && conversationId && userId && timeSinceLastLoad > RELOAD_THRESHOLD) {
-        console.log('Refreshing messages (30s threshold passed)');
-        loadMessages(conversationId, userId);
-        lastLoadTime.current = now;
+      // Optional: Only update read status silently in background
+      if (conversationId && userId) {
+        markConversationAsRead(conversationId, userId);
       }
       
       return () => {
         // Keep messages in memory when leaving screen
-        // Don't clear anything - this is the WhatsApp behavior
+        // NEVER clear messages - this is the WhatsApp behavior
+        console.log('💾 Chat unfocused - keeping messages in memory');
       };
     }, [conversationId, userId])
   );
@@ -839,9 +881,11 @@ const MessageScreen = () => {
         }
         
         // Update cache only for initial load
+        // Keep only recent messages (last 100) for faster loading
         if (!isLoadingOlder) {
-          await AsyncStorage.setItem(`conversation_${convId}`, JSON.stringify(formattedMessages));
-          console.log('Messages updated from network and cached:', formattedMessages.length);
+          const messagesToCache = formattedMessages.slice(-MAX_CACHED_MESSAGES);
+          await AsyncStorage.setItem(`conversation_${convId}`, JSON.stringify(messagesToCache));
+          console.log('Messages updated from network and cached:', messagesToCache.length, 'recent messages');
         }
     } catch (error) {
         console.error('Error loading messages:', error);
