@@ -85,7 +85,7 @@ const SettingsScreen = () => {
         .from('user_settings')
         .insert({
           user_id: userId,
-          dark_mode: true,
+          dark_mode: false,
           notifications: true,
           private_account: false,
           autoplay: true

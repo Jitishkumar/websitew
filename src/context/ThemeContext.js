@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const ThemeContext = createContext();
 
@@ -12,12 +13,36 @@ export const useTheme = () => {
 };
 
 export const ThemeProvider = ({ children }) => {
-  const [isDarkMode, setIsDarkMode] = useState(true); // Default to dark mode (Gen Z UI)
+  // Load theme from AsyncStorage IMMEDIATELY to prevent flash
+  const [isDarkMode, setIsDarkMode] = useState(null); // null = not loaded yet
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadThemeSettings();
+    loadThemeImmediately();
   }, []);
+
+  // Load theme from AsyncStorage FIRST (instant), then sync with database
+  const loadThemeImmediately = async () => {
+    try {
+      // Step 1: Load from AsyncStorage immediately (no network delay)
+      const cachedTheme = await AsyncStorage.getItem('user_theme_preference');
+      if (cachedTheme !== null) {
+        const isDark = cachedTheme === 'dark';
+        setIsDarkMode(isDark);
+        console.log('✅ Theme loaded instantly from cache:', isDark ? 'dark' : 'light');
+      } else {
+        // No cache, default to dark mode
+        setIsDarkMode(true);
+      }
+      
+      // Step 2: Load from database in background and sync
+      loadThemeSettings();
+    } catch (error) {
+      console.error('Error loading theme from cache:', error);
+      setIsDarkMode(true); // Fallback to dark
+      loadThemeSettings();
+    }
+  };
 
   const loadThemeSettings = async () => {
     try {
@@ -40,7 +65,10 @@ export const ThemeProvider = ({ children }) => {
       }
 
       if (data) {
-        setIsDarkMode(data.dark_mode ?? true);
+        const dbDarkMode = data.dark_mode ?? true;
+        setIsDarkMode(dbDarkMode);
+        // Update AsyncStorage cache
+        await AsyncStorage.setItem('user_theme_preference', dbDarkMode ? 'dark' : 'light');
       } else {
         // Create default settings if none exist
         await createDefaultSettings(user.id);
@@ -77,6 +105,13 @@ export const ThemeProvider = ({ children }) => {
     // Update UI immediately for instant response
     setIsDarkMode(newValue);
     
+    // Save to AsyncStorage immediately (instant cache)
+    try {
+      await AsyncStorage.setItem('user_theme_preference', newValue ? 'dark' : 'light');
+    } catch (error) {
+      console.error('Error caching theme:', error);
+    }
+    
     // Save to database in background
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -105,6 +140,11 @@ export const ThemeProvider = ({ children }) => {
     toggleDarkMode,
     loading
   };
+
+  // Don't render children until theme is loaded from cache (prevents flash)
+  if (isDarkMode === null) {
+    return null; // or return a splash screen
+  }
 
   return (
     <ThemeContext.Provider value={value}>

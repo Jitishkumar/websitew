@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TextInput, FlatList, Image, TouchableOpacity, ActivityIndicator, Animated, Modal, Alert, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, TextInput, FlatList, Image, TouchableOpacity, ActivityIndicator, Animated, Modal, Alert, StatusBar, ScrollView, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
@@ -20,6 +20,7 @@ const MessagesScreen = () => {
   const [publicGroups, setPublicGroups] = useState([]);
   const [loading, setLoading] = useState(false); // Changed to false since we'll load cache first
   const [currentUserId, setCurrentUserId] = useState(null);
+  const [cacheLoaded, setCacheLoaded] = useState(false); // Track if cache has been loaded
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewMessageButton, setShowNewMessageButton] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -42,6 +43,30 @@ const MessagesScreen = () => {
   const slideAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const searchBarAnim = useRef(new Animated.Value(1)).current;
+  
+  // INSTANT LOAD: Load cache immediately on component mount (runs once)
+  useEffect(() => {
+    const loadCacheInstantly = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const cachedData = await AsyncStorage.getItem(CONVERSATIONS_CACHE_KEY);
+          if (cachedData) {
+            const parsed = JSON.parse(cachedData);
+            if (parsed.userId === user.id && parsed.conversations) {
+              setConversations(parsed.conversations);
+              setCacheLoaded(true);
+              console.log('⚡ INSTANT: Loaded', parsed.conversations.length, 'conversations from cache');
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error loading cache instantly:', error);
+      }
+    };
+    
+    loadCacheInstantly();
+  }, []); // Empty dependency array - runs once on mount
   
   // Function to delete conversation permanently from both sides
   const handleDeleteConversation = async () => {
@@ -268,23 +293,16 @@ const MessagesScreen = () => {
         // Clear old cache for different users
         await clearOldCache(user.id);
         
-        // Load cached conversations first for immediate display
-        const cachedConversations = await loadCachedConversations(user.id);
-        if (cachedConversations && cachedConversations.length > 0) {
-          setConversations(cachedConversations);
-          console.log('Displaying cached conversations');
-        }
-        
-        // Check cache age to decide if we need to refresh
+        // Cache already loaded in the instant load useEffect above
+        // Just check if we need to refresh
         const cacheAge = await getCacheAge();
-        const shouldRefreshCache = cacheAge > 5; // Refresh if cache is older than 5 minutes
+        const shouldRefreshCache = cacheAge > 2; // Refresh if cache is older than 2 minutes
         
-        // Always fetch fresh data, but don't show loading if we have recent cache
-        if (shouldRefreshCache || !cachedConversations) {
-          setRefreshing(true);
-        }
+        // Fetch fresh data in background (never show loading if cache exists)
+        // Only show loading if absolutely no cache was loaded
+        const showLoading = !cacheLoaded && conversations.length === 0;
         
-        await fetchConversations(user.id, !cachedConversations);
+        await fetchConversations(user.id, showLoading);
         await fetchGroups(user.id);
         // Delay fetchAllUsers to ensure currentUserId is set
         setTimeout(() => fetchAllUsers(), 100);
@@ -1157,24 +1175,45 @@ const MessagesScreen = () => {
                 tintColor="#667eea"
               />
             }
-            ListEmptyComponent={() => (
-              <LinearGradient
-                colors={['rgba(102, 126, 234, 0.1)', 'rgba(156, 136, 255, 0.05)']}  
-                style={styles.emptyContainer}
-              >
+            ListEmptyComponent={() => {
+              // Don't show empty state until we've loaded (prevents flash)
+              if (loading || (!cacheLoaded && !currentUserId)) {
+                return null; // Show nothing while loading cache
+              }
+              
+              return (
                 <LinearGradient
-                  colors={['rgba(102, 126, 234, 0.3)', 'rgba(156, 136, 255, 0.2)']}  
-                  style={styles.emptyIconContainer}
+                  colors={['rgba(102, 126, 234, 0.1)', 'rgba(156, 136, 255, 0.05)']}  
+                  style={styles.emptyContainer}
                 >
-                  <Ionicons name="chatbubbles-outline" size={32} color="#fff" />
+                  <LinearGradient
+                    colors={['rgba(102, 126, 234, 0.3)', 'rgba(156, 136, 255, 0.2)']}  
+                    style={styles.emptyIconContainer}
+                  >
+                    <Ionicons name="chatbubbles-outline" size={32} color="#fff" />
+                  </LinearGradient>
+                  <Text style={styles.emptyText}>No conversations yet</Text>
+                  <Text style={styles.emptySubtext}>Start connecting with people!</Text>
                 </LinearGradient>
-                <Text style={styles.emptyText}>No conversations yet</Text>
-                <Text style={styles.emptySubtext}>Start connecting with people!</Text>
-              </LinearGradient>
-            )
-          ) : (
-            // Communities tab content
-            filteredGroups.length > 0 ? (
+              );
+            }}
+          />
+        ) : (
+          <ScrollView
+            style={styles.messagesList}
+            contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+                colors={['#667eea']}
+                tintColor="#667eea"
+              />
+            }
+          >
+            {/* Communities tab content */}
+            {filteredGroups.length > 0 ? (
               filteredGroups.map((group) => (
                 <TouchableOpacity
                   key={group.id}
@@ -1288,9 +1327,9 @@ const MessagesScreen = () => {
                 <Text style={styles.emptyText}>No groups yet</Text>
                 <Text style={styles.emptySubtext}>Create or join a group to get started!</Text>
               </LinearGradient>
-            )
-          )}
-        </ScrollView>
+            )}
+          </ScrollView>
+        )}
       
       {showNewMessageButton && (
         <TouchableOpacity 

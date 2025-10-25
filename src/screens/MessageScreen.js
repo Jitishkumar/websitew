@@ -14,13 +14,14 @@ import {
   Alert,
   Modal,
   Dimensions,
-  PanResponder
+  PanResponder,
+  RefreshControl
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { Video } from 'expo-av';
 import { Audio } from 'expo-av';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { supabase } from '../lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -113,7 +114,8 @@ const MessageScreen = () => {
   const { isDarkMode } = useTheme();
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Start false for instant cache display
+  const [refreshing, setRefreshing] = useState(false);
   const [userId, setUserId] = useState(null);
   const [conversationId, setConversationId] = useState(null);
   const navigation = useNavigation();
@@ -234,7 +236,12 @@ const MessageScreen = () => {
     getAudioPermissions();
   }, []);
 
-  // Get current user and set up conversation
+  // Track if this is the first load
+  const isFirstLoad = useRef(true);
+  const lastLoadTime = useRef(0);
+  const RELOAD_THRESHOLD = 30000; // 30 seconds - only reload if last load was more than 30s ago
+
+  // Get current user and set up conversation (only once)
   useEffect(() => {
     const setupConversation = async () => {
       try {
@@ -251,7 +258,13 @@ const MessageScreen = () => {
         const convId = `${participants[0]}_${participants[1]}`;
         setConversationId(convId);
         
-        await loadMessages(convId, user.id);
+        // Only load messages on first mount
+        if (isFirstLoad.current) {
+          await loadMessages(convId, user.id);
+          lastLoadTime.current = Date.now();
+          isFirstLoad.current = false;
+        }
+        
         fetchReadReceiptsSettings(user.id, recipientId);
 
         // If opened with a share payload (from Reels), auto-send the reel once
@@ -265,6 +278,28 @@ const MessageScreen = () => {
     
     setupConversation();
   }, [recipientId]);
+
+  // WhatsApp-style: Keep messages loaded, only refresh if needed
+  useFocusEffect(
+    React.useCallback(() => {
+      // When screen comes into focus
+      const now = Date.now();
+      const timeSinceLastLoad = now - lastLoadTime.current;
+      
+      // Only reload if it's been more than 30 seconds since last load
+      // This keeps the chat instant when navigating back and forth
+      if (!isFirstLoad.current && conversationId && userId && timeSinceLastLoad > RELOAD_THRESHOLD) {
+        console.log('Refreshing messages (30s threshold passed)');
+        loadMessages(conversationId, userId);
+        lastLoadTime.current = now;
+      }
+      
+      return () => {
+        // Keep messages in memory when leaving screen
+        // Don't clear anything - this is the WhatsApp behavior
+      };
+    }, [conversationId, userId])
+  );
 
   const hasSentShare = useRef(false);
 
@@ -683,7 +718,8 @@ const MessageScreen = () => {
       setLoadingOlder(true);
     }
 
-    // Try to load from cache first for instant loading (only for initial load)
+    // WhatsApp-style: Load from cache INSTANTLY (only for initial load)
+    let cachedMessagesLoaded = false;
     if (page === 0 && !isLoadingOlder) {
       try {
         const storedMessages = await AsyncStorage.getItem(`conversation_${convId}`);
@@ -693,16 +729,19 @@ const MessageScreen = () => {
                 ...msg,
                 sender: msg.sender_id === actualUserId ? 'me' : 'them'
             }));
+            
+            // INSTANT DISPLAY - Show cache immediately, no loading spinner
             setMessages(updatedMessages);
             setLoading(false);
-            console.log('Loaded messages from cache:', updatedMessages.length);
+            cachedMessagesLoaded = true;
+            console.log('✅ Instant load from cache:', updatedMessages.length, 'messages');
             
-            // Scroll to bottom when loading from cache
+            // Scroll to bottom instantly
             setTimeout(() => {
               if (flatListRef.current && updatedMessages.length > 0) {
                 flatListRef.current.scrollToEnd({ animated: false });
               }
-            }, 100);
+            }, 50);
         }
       } catch (cacheError) {
         console.error('Error loading from cache:', cacheError);
@@ -809,6 +848,22 @@ const MessageScreen = () => {
     } finally {
         setLoading(false);
         setLoadingOlder(false);
+    }
+  };
+
+  // Handle pull-to-refresh
+  const handleRefresh = async () => {
+    if (!conversationId || !userId) return;
+    
+    setRefreshing(true);
+    try {
+      await loadMessages(conversationId, userId, 0, false);
+      lastLoadTime.current = Date.now();
+      console.log('Messages refreshed via pull-to-refresh');
+    } catch (error) {
+      console.error('Error refreshing messages:', error);
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -2184,6 +2239,14 @@ const MessageScreen = () => {
               updateCellsBatchingPeriod={50}
               inverted={false}
               showsVerticalScrollIndicator={true}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={handleRefresh}
+                  tintColor={isDarkMode ? "#fff" : "#667eea"}
+                  colors={['#667eea']}
+                />
+              }
               maintainVisibleContentPosition={{
                 minIndexForVisible: 0,
                 autoscrollToTopThreshold: 10,

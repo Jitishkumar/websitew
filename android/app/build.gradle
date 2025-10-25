@@ -66,7 +66,7 @@ react {
 /**
  * Set this to true to Run Proguard on Release builds to minify the Java bytecode.
  */
-def enableProguardInReleaseBuilds = true
+def enableProguardInReleaseBuilds = (findProperty('android.enableProguardInReleaseBuilds') ?: false).toBoolean()
 
 /**
  * The preferred build flavor of JavaScriptCore (JSC)
@@ -81,7 +81,6 @@ def enableProguardInReleaseBuilds = true
  */
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
-// Add this inside the android {} block
 android {
     ndkVersion rootProject.ext.ndkVersion
 
@@ -107,20 +106,17 @@ android {
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
+            minifyEnabled false
+            shrinkResources false
         }
         release {
             // Caution! In production, you need to generate your own keystore file.
             // see https://reactnative.dev/docs/signed-apk-android.
             signingConfig signingConfigs.debug
-            shrinkResources true
+            shrinkResources (findProperty('android.enableShrinkResourcesInReleaseBuilds')?.toBoolean() ?: false)
             minifyEnabled enableProguardInReleaseBuilds
-            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
-            crunchPngs true
-            
-            // Additional size optimizations
-            ndk {
-                debugSymbolLevel 'NONE'
-            }
+            proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+            crunchPngs (findProperty('android.enablePngCrunchInReleaseBuilds')?.toBoolean() ?: true)
         }
     }
     packagingOptions {
@@ -130,30 +126,6 @@ android {
     }
     androidResources {
         ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~'
-    }
-    
-    // Configure split APKs
-    splits {
-        abi {
-            enable true
-            reset()
-            include "armeabi-v7a", "arm64-v8a"
-            universalApk true
-        }
-    }
-    
-    // Map for the version code that gives each architecture a value
-    def versionCodes = ["armeabi-v7a": 1, "arm64-v8a": 2, "x86": 3, "x86_64": 4]
-    
-    // Set versionCode based on architecture
-    applicationVariants.all { variant ->
-        variant.outputs.each { output ->
-            def versionCode = project.hasProperty('versionCode') ? project.property('versionCode').toInteger() : 1
-            def abiName = output.getFilter(com.android.build.OutputFile.ABI)
-            if (abiName != null) {
-                output.versionCodeOverride = versionCode * 10 + versionCodes.get(abiName)
-            }
-        }
     }
 }
 
@@ -181,8 +153,8 @@ dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
     
-    // Google Pay API for Razorpay integration
-    implementation 'com.google.android.gms:play-services-wallet:19.2.1'
+    // ProGuard annotations for R8
+    compileOnly 'com.google.code.findbugs:jsr305:3.0.2'
 
     def isGifEnabled = (findProperty('expo.gif.enabled') ?: "") == "true";
     def isWebpEnabled = (findProperty('expo.webp.enabled') ?: "") == "true";

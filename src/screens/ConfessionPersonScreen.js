@@ -1164,15 +1164,21 @@ const ConfessionPersonScreen = () => {
         
         const notificationContent = `${senderName} posted a confession about you (${personProfile.name}): "${newConfession.trim().substring(0, 50)}${newConfession.length > 50 ? '...' : ''}"`;
         
+        // Create notification with confession UUID as reference_id
+        // Store person_id in post_id field (as string) for navigation
+        // IMPORTANT: Ensure selectedPerson.id is converted to string properly
+        const personIdString = String(selectedPerson.id);
+        
         const { data: notificationData, error: notificationError } = await supabase
           .from('notifications')
           .insert([
             {
               recipient_id: recipientId,
               sender_id: remainAnonymous ? null : user.id,
-              type: 'mention',
+              type: 'person_confession', // Changed from 'mention' to be more specific
               content: notificationContent,
-              reference_id: newConfessionData.id,
+              reference_id: newConfessionData.id, // Confession UUID
+              post_id: personIdString, // Person ID as string for navigation
               is_read: false
             }
           ])
@@ -1181,7 +1187,7 @@ const ConfessionPersonScreen = () => {
         if (notificationError) {
           console.error('Error creating notification:', notificationError);
         } else {
-          console.log('Notification created successfully:', notificationData);
+          console.log('✅ Notification created successfully:', notificationData);
         }
       } else {
         console.log('No user account or creator found for person profile, skipping notification');
@@ -1215,9 +1221,14 @@ const ConfessionPersonScreen = () => {
         .from('person_confessions')
         .select('id, media, creator_id')
         .eq('id', confessionId)
-        .single();
+        .maybeSingle(); // Use maybeSingle() to handle 0 or 1 rows
 
       if (fetchError) throw fetchError;
+      
+      if (!confessionData) {
+        Alert.alert('Error', 'Confession not found');
+        return;
+      }
       
       // Check if the current user is the creator of the confession
       const { data: { user } } = await supabase.auth.getUser();

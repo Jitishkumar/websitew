@@ -11,8 +11,10 @@ const EditProfileScreen = ({ navigation }) => {
   const [username, setUsername] = useState('');
   const [bio, setBio] = useState('');
   const [loading, setLoading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [coverUrl, setCoverUrl] = useState(null);
+  const [tempCoverUrl, setTempCoverUrl] = useState(null); // For instant preview
   const [gender, setGender] = useState('');
   const [showGenderModal, setShowGenderModal] = useState(false);
   const blinkAnimation = useRef(new Animated.Value(0)).current;
@@ -65,9 +67,9 @@ const EditProfileScreen = ({ navigation }) => {
         mediaTypes,
         allowsEditing: true,
         aspect: type === 'avatar' ? [1, 1] : [16, 9],
-        quality: 0.5,
-        base64: true,
-        videoMaxDuration: 30, // Limit video duration to 30 seconds
+        quality: type === 'cover' ? 0.7 : 0.5, // Better quality for cover
+        base64: false, // Don't use base64 for faster upload
+        videoMaxDuration: 30,
       });
 
       if (!result.canceled && result.assets[0]) {
@@ -79,62 +81,75 @@ const EditProfileScreen = ({ navigation }) => {
           return;
         }
         
-        // Check if base64 data is available
-        if (!file.base64) {
-          Alert.alert('Error', 'Could not process the selected file. Please try another one.');
-          return;
+        // Show immediate preview for cover photo (optimistic UI)
+        if (type === 'cover') {
+          setTempCoverUrl(file.uri);
+          console.log('✅ Instant preview shown');
         }
         
-        await uploadImage(file.base64, type, isVideo);
+        // Upload in background
+        await uploadImageOptimized(file.uri, type, isVideo);
       }
     } catch (error) {
       console.error('Error picking media:', error);
       Alert.alert('Error', 'Failed to pick media');
+      setTempCoverUrl(null);
     }
   };
 
-  const uploadImage = async (base64Image, type, isVideo = false) => {
+  // Optimized upload without base64 encoding
+  const uploadImageOptimized = async (fileUri, type, isVideo = false) => {
     try {
       setLoading(true);
+      setUploadProgress(0);
+      
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('No user');
 
-      // Check if base64Image is null or undefined
-      if (!base64Image) {
-        throw new Error('Invalid image data. Please try again.');
-      }
-
-      // Check file size (base64 string length is approximately 4/3 of the file size)
-      const fileSizeInMB = (base64Image.length * 0.75) / (1024 * 1024);
-      const maxSizeMB = isVideo ? 20 : 5; // 20MB for videos, 5MB for images
+      // Create FormData for direct file upload (faster than base64)
+      const fileExtension = isVideo ? 'mp4' : 'jpg';
+      const fileName = `${type}_${Date.now()}.${fileExtension}`;
+      const filePath = `${user.id}/${fileName}`;
+      
+      // Fetch the file as blob (faster than base64)
+      const response = await fetch(fileUri);
+      const blob = await response.blob();
+      
+      // Check file size
+      const fileSizeInMB = blob.size / (1024 * 1024);
+      const maxSizeMB = isVideo ? 20 : 5;
       
       if (fileSizeInMB > maxSizeMB) {
         throw new Error(`File size too large. Please select a ${isVideo ? 'video' : 'photo'} under ${maxSizeMB}MB.`);
       }
 
-      // Set appropriate file extension and content type based on media type
-      const fileExtension = isVideo ? 'mp4' : 'jpg';
-      const contentType = isVideo ? 'video/mp4' : 'image/jpeg';
-      const filePath = `${user.id}/${type}_${Date.now()}.${fileExtension}`;
-      const body = decode(base64Image);
+      setUploadProgress(20);
 
-      // Delete old file if exists
+      // Delete old file if exists (don't wait for it)
       if (type === 'avatar' && avatarUrl) {
         const oldPath = avatarUrl.split('/').pop();
-        await supabase.storage.from('media').remove([`${user.id}/${oldPath}`]);
+        supabase.storage.from('media').remove([`${user.id}/${oldPath}`]).catch(console.error);
       } else if (type === 'cover' && coverUrl) {
         const oldPath = coverUrl.split('/').pop();
-        await supabase.storage.from('media').remove([`${user.id}/${oldPath}`]);
+        supabase.storage.from('media').remove([`${user.id}/${oldPath}`]).catch(console.error);
       }
 
-      // Upload new file
+      setUploadProgress(40);
+
+      // Upload new file using ArrayBuffer (faster)
+      const arrayBuffer = await blob.arrayBuffer();
       const { error: uploadError } = await supabase.storage
         .from('media')
-        .upload(filePath, body, { contentType, upsert: true });
+        .upload(filePath, arrayBuffer, { 
+          contentType: isVideo ? 'video/mp4' : 'image/jpeg',
+          upsert: true 
+        });
 
       if (uploadError) throw uploadError;
 
-      // Get the public URL using the correct format
+      setUploadProgress(80);
+
+      // Get the public URL
       const { data } = supabase.storage
         .from('media')
         .getPublicUrl(filePath);
@@ -144,26 +159,29 @@ const EditProfileScreen = ({ navigation }) => {
       if (type === 'avatar') {
         setAvatarUrl(publicUrl);
       } else {
-        // For cover, also store whether it's a video
         setCoverUrl(publicUrl);
-        // Update the profile with the cover_is_video field
+        setTempCoverUrl(null); // Clear temp preview
+        
+        // Update cover_is_video flag in background
         if (isVideo) {
-          const { data: { user: currentUser } } = await supabase.auth.getUser();
-          if (currentUser) {
-            await supabase
-              .from('profiles')
-              .update({ cover_is_video: isVideo })
-              .eq('id', currentUser.id);
-          }
+          supabase
+            .from('profiles')
+            .update({ cover_is_video: isVideo })
+            .eq('id', user.id)
+            .then(() => console.log('✅ Cover video flag updated'))
+            .catch(console.error);
         }
       }
 
-      console.log(`${type} URL:`, publicUrl); // Debug log
+      setUploadProgress(100);
+      console.log(`✅ ${type} uploaded successfully:`, publicUrl);
     } catch (error) {
-      console.error('Upload error:', error); // Debug log
-      Alert.alert('Error', error.message);
+      console.error('Upload error:', error);
+      Alert.alert('Error', error.message || 'Failed to upload');
+      setTempCoverUrl(null);
     } finally {
       setLoading(false);
+      setTimeout(() => setUploadProgress(0), 500);
     }
   };
 
@@ -250,11 +268,12 @@ const EditProfileScreen = ({ navigation }) => {
     <ScrollView style={styles.container}>
       {/* Cover Photo */}
       <TouchableOpacity onPress={() => pickImage('cover')} style={styles.coverContainer}>
-        {coverUrl ? (
+        {(tempCoverUrl || coverUrl) ? (
           <View style={styles.coverPhotoContainer}>
-            {coverUrl.endsWith('.mp4') ? (
+            {/* Show temp preview immediately, then replace with uploaded URL */}
+            {(tempCoverUrl || coverUrl).endsWith('.mp4') ? (
               <Video
-                source={{ uri: coverUrl }}
+                source={{ uri: tempCoverUrl || coverUrl }}
                 style={styles.coverPhoto}
                 resizeMode="cover"
                 play
@@ -262,11 +281,22 @@ const EditProfileScreen = ({ navigation }) => {
                 muted={true}
               />
             ) : (
-              <Image source={{ uri: coverUrl }} style={styles.coverPhoto} />
+              <Image source={{ uri: tempCoverUrl || coverUrl }} style={styles.coverPhoto} />
             )}
+            
+            {/* Upload progress indicator */}
+            {uploadProgress > 0 && uploadProgress < 100 && (
+              <View style={styles.uploadProgressContainer}>
+                <View style={styles.uploadProgressBar}>
+                  <View style={[styles.uploadProgressFill, { width: `${uploadProgress}%` }]} />
+                </View>
+                <Text style={styles.uploadProgressText}>Uploading... {uploadProgress}%</Text>
+              </View>
+            )}
+            
             <View style={styles.coverTypeIndicator}>
-              <Ionicons name={coverUrl.endsWith('.mp4') ? "videocam" : "image"} size={20} color="#fff" />
-              <Text style={styles.coverTypeText}>{coverUrl.endsWith('.mp4') ? "Video" : "Photo"}</Text>
+              <Ionicons name={(tempCoverUrl || coverUrl).endsWith('.mp4') ? "videocam" : "image"} size={20} color="#fff" />
+              <Text style={styles.coverTypeText}>{(tempCoverUrl || coverUrl).endsWith('.mp4') ? "Video" : "Photo"}</Text>
             </View>
           </View>
         ) : (
@@ -556,6 +586,32 @@ const styles = StyleSheet.create({
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  uploadProgressContainer: {
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    borderRadius: 10,
+    padding: 10,
+  },
+  uploadProgressBar: {
+    height: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginBottom: 5,
+  },
+  uploadProgressFill: {
+    height: '100%',
+    backgroundColor: '#00ff88',
+    borderRadius: 3,
+  },
+  uploadProgressText: {
+    color: '#fff',
+    fontSize: 12,
+    textAlign: 'center',
   },
   avatarContainer: {
     width: 100,

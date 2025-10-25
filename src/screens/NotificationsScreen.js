@@ -275,6 +275,22 @@ const NotificationsScreen = () => {
 
       // Handle navigation based on notification type
       switch (notification.type) {
+        case 'person_confession': {
+          // Navigate to ConfessionPersonScreen with the specific confession
+          if (!notification.reference_id || !notification.post_id) {
+            Alert.alert('Error', 'Confession details not found.');
+            return;
+          }
+          
+          // post_id contains the person_id as string
+          const personId = parseInt(notification.post_id);
+          
+          navigation.navigate('ConfessionPerson', {
+            selectedConfessionId: notification.reference_id,
+            personId: personId
+          });
+          break;
+        }
         case 'like':
         case 'comment':
         case 'mention': {
