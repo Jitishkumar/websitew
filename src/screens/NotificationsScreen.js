@@ -282,11 +282,19 @@ const NotificationsScreen = () => {
             return;
           }
           
-          // post_id contains the person_id as string
-          const personId = parseInt(notification.post_id);
+          // post_id contains the confession_id as "confession_123" format
+          // reference_id contains the person_id (UUID)
+          const confessionIdMatch = notification.post_id.match(/confession_(\d+)/);
+          if (!confessionIdMatch) {
+            Alert.alert('Error', 'Invalid confession reference.');
+            return;
+          }
+          
+          const confessionId = parseInt(confessionIdMatch[1]);
+          const personId = notification.reference_id; // Already a UUID
           
           navigation.navigate('ConfessionPerson', {
-            selectedConfessionId: notification.reference_id,
+            selectedConfessionId: confessionId,
             personId: personId
           });
           break;
@@ -415,6 +423,8 @@ const NotificationsScreen = () => {
         return <Ionicons name="checkmark-circle" size={20} color="#00cc99" />;
       case 'mention':
         return <Ionicons name="at" size={20} color="#ffcc00" />;
+      case 'person_confession':
+        return <Ionicons name="person" size={20} color="#ff6b6b" />;
       default:
         return <Ionicons name="notifications" size={20} color="#999" />;
     }

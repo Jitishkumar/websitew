@@ -56,8 +56,8 @@ const PersonConfessionsHeader = React.memo(function PersonConfessionsHeaderCompo
           style={styles.searchInput}
           placeholder="Search for a person..."
           placeholderTextColor="#999"
-          value={typeof props.searchQuery === 'string' ? props.searchQuery : ''}
-          onChangeText={(text) => props.setSearchQuery(text || '')}
+          value={(props.searchQuery ?? '').toString()}
+          onChangeText={(text) => props.setSearchQuery((text ?? '').toString())}
           autoCapitalize="none"
         />
         {(props.searchQuery || '').length > 0 && (
@@ -163,6 +163,33 @@ const ConfessionPersonScreen = () => {
   const [confessionVerifications, setConfessionVerifications] = useState({});
   const [currentUser, setCurrentUser] = useState(null);
   const [currentUserUsername, setCurrentUserUsername] = useState(null); // New state for current user's username
+
+  // Realtime updates for person confessions (insert/delete/update)
+  useEffect(() => {
+    if (!selectedPerson?.id) return;
+
+    const channel = supabase
+      .channel(`person_confessions_${selectedPerson.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'person_confessions', filter: `person_id=eq.${selectedPerson.id}` },
+        async () => {
+          // Invalidate cache and reload silently
+          try {
+            await AsyncStorage.removeItem(`person_confessions_${selectedPerson.id}`);
+          } catch (e) {
+            console.error('Realtime cache clear error:', e);
+          }
+          // Fetch fresh data
+          loadPersonConfessions(selectedPerson.id, true);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [selectedPerson?.id, loadPersonConfessions]);
   const [confessionLikes, setConfessionLikes] = useState({});
   const [confessionComments, setConfessionComments] = useState({});
   const [showCommentModal, setShowCommentModal] = useState(false); // Added state for CommentScreen modal
@@ -573,21 +600,60 @@ const ConfessionPersonScreen = () => {
     }
   };
 
-  const selectPerson = React.useCallback((person) => { 
+  const selectPerson = React.useCallback(async (person) => { 
     if (!person) {
       console.error('Error: Attempted to select undefined person');
       return;
     }
-    
-    setSelectedPerson(person); 
-    setSearchResults([]);
     
     if (!person.id) { 
       console.error('Error: Selected person has no ID');
       Alert.alert('Error', 'Invalid person data. Please try selecting a different person.');
       return;
     }
+
+    try {
+      // Ensure person_profiles entry exists for this user
+      const { data: existingPersonProfile, error: checkError } = await supabase
+        .from('person_profiles')
+        .select('id')
+        .eq('id', person.id)
+        .maybeSingle();
+
+      if (checkError && checkError.code !== 'PGRST116') {
+        console.error('Error checking person_profiles:', checkError);
+      }
+
+      // If person_profiles entry doesn't exist, create it
+      if (!existingPersonProfile) {
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        const { error: insertError } = await supabase
+          .from('person_profiles')
+          .insert({
+            id: person.id,
+            name: person.name,
+            profile_image: person.profile_image,
+            bio: person.bio || null,
+            created_by: user?.id || null,
+            created_at: new Date().toISOString()
+          });
+
+        if (insertError) {
+          console.error('Error creating person_profiles entry:', insertError);
+          Alert.alert('Error', 'Failed to setup person profile. Please try again.');
+          return;
+        }
+        console.log('✅ Created person_profiles entry for user:', person.id);
+      }
+    } catch (error) {
+      console.error('Error in selectPerson:', error);
+      Alert.alert('Error', 'Failed to select person. Please try again.');
+      return;
+    }
     
+    setSelectedPerson(person); 
+    setSearchResults([]);
     loadPersonProfile(person.id); 
     loadPersonConfessions(person.id); // Load confessions using person ID
   }, [setSearchResults, setSelectedPerson, loadPersonProfile, loadPersonConfessions]); 
@@ -1122,28 +1188,35 @@ const ConfessionPersonScreen = () => {
       // Create a notification for the person being confessed about
       console.log('Creating notification for person ID:', selectedPerson.id);
       
-      // Get the person's profile to find their user account or creator
-      const { data: personProfile, error: personError } = await supabase
-        .from('person_profiles')
-        .select(`
-          id, 
-          name,
-          created_by
-        `)
+      // Check if the person ID matches a user profile (i.e., the person IS an actual user)
+      const { data: userProfile, error: userProfileError } = await supabase
+        .from('profiles')
+        .select('id, username')
         .eq('id', selectedPerson.id)
-        .single();
-
-      console.log('Person profile data:', personProfile);
-      
-      if (personError) {
-        console.error('Error fetching person profile:', personError);
-        return; // Exit if we can't get the person's profile
-      }
+        .maybeSingle();
 
       // Determine who should receive the notification
-      // Priority 1: If the person is linked to a user account (user_id), notify that user
-      // Priority 2: Otherwise, if there's a creator (created_by), notify them
-      const recipientId = personProfile.user_id || personProfile.created_by;
+      // Priority 1: If the person is an actual user (their ID exists in profiles table)
+      // Priority 2: Otherwise, check if there's a person_profile entry with a creator
+      let recipientId = null;
+      
+      if (userProfile) {
+        // The person is an actual user, notify them
+        recipientId = userProfile.id;
+        console.log('Person is a user, notifying user:', recipientId);
+      } else {
+        // Person is not a user, check if there's a person_profile with a creator
+        const { data: personProfile, error: personError } = await supabase
+          .from('person_profiles')
+          .select('id, name, created_by')
+          .eq('id', selectedPerson.id)
+          .maybeSingle();
+
+        if (personProfile?.created_by) {
+          recipientId = personProfile.created_by;
+          console.log('Person is not a user, notifying creator:', recipientId);
+        }
+      }
       
       if (recipientId) {
         console.log(`Sending notification to user: ${recipientId}`);
@@ -1162,32 +1235,41 @@ const ConfessionPersonScreen = () => {
           }
         }
         
-        const notificationContent = `${senderName} posted a confession about you (${personProfile.name}): "${newConfession.trim().substring(0, 50)}${newConfession.length > 50 ? '...' : ''}"`;
+        const notificationContent = `${senderName} posted a confession about ${userProfile ? 'you' : selectedPerson.name}: "${newConfession.trim().substring(0, 50)}${newConfession.length > 50 ? '...' : ''}"`;
         
-        // Create notification with confession UUID as reference_id
-        // Store person_id in post_id field (as string) for navigation
-        // IMPORTANT: Ensure selectedPerson.id is converted to string properly
-        const personIdString = String(selectedPerson.id);
+        // Create notification with confession ID as string in post_id (since reference_id is UUID type)
+        // Store confession_id in post_id as "confession_ID" format
+        // Store person_id in reference_id (which is UUID compatible)
+        const confessionIdString = `confession_${newConfessionData.id}`;
         
-        const { data: notificationData, error: notificationError } = await supabase
-          .from('notifications')
-          .insert([
-            {
-              recipient_id: recipientId,
-              sender_id: remainAnonymous ? null : user.id,
-              type: 'person_confession', // Changed from 'mention' to be more specific
-              content: notificationContent,
-              reference_id: newConfessionData.id, // Confession UUID
-              post_id: personIdString, // Person ID as string for navigation
-              is_read: false
-            }
-          ])
-          .select();
-          
-        if (notificationError) {
-          console.error('Error creating notification:', notificationError);
+        // Get fresh session to ensure auth.uid() is available for RLS
+        const { data: { session } } = await supabase.auth.getSession();
+        console.log('Session check:', session ? 'Active' : 'No session', session?.user?.id);
+        
+        if (!session) {
+          console.error('⚠️ No active session for notification creation - skipping notification');
+          // Continue without notification rather than failing
         } else {
-          console.log('✅ Notification created successfully:', notificationData);
+          console.log('✅ Session active, creating notification...');
+          const { error: notificationError } = await supabase
+            .from('notifications')
+            .insert([
+              {
+                recipient_id: recipientId,
+                sender_id: remainAnonymous ? null : user.id,
+                type: 'person_confession',
+                content: notificationContent,
+                reference_id: selectedPerson.id,
+                post_id: confessionIdString,
+                is_read: false
+              }
+            ]);
+          
+          if (notificationError) {
+            console.error('Error creating notification:', notificationError);
+          } else {
+            console.log('✅ Notification created successfully');
+          }
         }
       } else {
         console.log('No user account or creator found for person profile, skipping notification');
@@ -1198,9 +1280,21 @@ const ConfessionPersonScreen = () => {
       setMedia([]);
       setShowNewConfessionModal(false);
       
-      // Refresh the confessions list
+      // Clear cache and refresh the confessions list
       if (selectedPerson?.id) {
-        loadPersonConfessions(selectedPerson.id);
+        // Clear the cache for this person to force fresh data
+        try {
+          const cacheKey = `person_confessions_${selectedPerson.id}`;
+          await AsyncStorage.removeItem(cacheKey);
+          console.log('Cache cleared for refresh');
+        } catch (cacheError) {
+          console.error('Error clearing cache:', cacheError);
+        }
+        
+        // Force refresh with a small delay to ensure database consistency
+        setTimeout(() => {
+          loadPersonConfessions(selectedPerson.id);
+        }, 500);
       }
       
       // Show success message
@@ -1259,9 +1353,25 @@ const ConfessionPersonScreen = () => {
 
       if (deleteError) throw deleteError;
       
-      // Refresh the confessions list
+      // Immediately update UI by removing from state
+      setConfessions(prevConfessions => 
+        prevConfessions.filter(c => c.id !== confessionId)
+      );
+      
+      // Clear cache and refresh the confessions list
       if (selectedPerson?.id) {
-        loadPersonConfessions(selectedPerson.id);
+        try {
+          const cacheKey = `person_confessions_${selectedPerson.id}`;
+          await AsyncStorage.removeItem(cacheKey);
+          console.log('Cache cleared after deletion');
+        } catch (cacheError) {
+          console.error('Error clearing cache:', cacheError);
+        }
+        
+        // Refresh to ensure consistency
+        setTimeout(() => {
+          loadPersonConfessions(selectedPerson.id);
+        }, 300);
       }
       
       Alert.alert('Success', 'Confession deleted successfully');
