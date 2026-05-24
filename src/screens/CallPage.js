@@ -174,15 +174,14 @@ function CallPage(props) {
     paddingTop: insets.top > 0 ? insets.top : 16,
   };
 
-  // Create HTML for Daily.co Prebuilt - using Daily.js SDK
-  const dailyHTML = `
+  // Create HTML for Jitsi Meet - completely free!
+  const jitsiHTML = `
     <!DOCTYPE html>
     <html>
       <head>
         <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-        <title>Daily Video Call</title>
-        <script crossorigin src="https://unpkg.com/@daily-co/daily-js"></script>
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+        <title>Jitsi Video Call</title>
         <style>
           * {
             margin: 0;
@@ -193,125 +192,61 @@ function CallPage(props) {
             width: 100%;
             height: 100%;
             background: #0a0a2a;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            overflow: hidden;
           }
-          #call-container {
+          #jitsi-iframe {
             width: 100%;
             height: 100%;
-          }
-          #status {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            color: white;
-            background: rgba(0,0,0,0.5);
-            padding: 10px;
-            border-radius: 5px;
-            z-index: 1000;
-            font-size: 12px;
+            border: none;
           }
         </style>
       </head>
       <body>
-        <div id="status">Connecting...</div>
-        <div id="call-container"></div>
+        <iframe
+          id="jitsi-iframe"
+          allow="camera; microphone; fullscreen; display-capture; autoplay"
+          allowfullscreen="true"
+        ></iframe>
         <script>
           const roomUrl = '${roomUrl}';
           const userName = '${name}';
-          const statusDiv = document.getElementById('status');
           
-          console.log('Initializing Daily.co call...');
-          console.log('Room URL:', roomUrl);
-          console.log('User name:', userName);
+          // Extract room name from URL
+          const roomName = roomUrl.split('/').pop();
           
-          statusDiv.textContent = 'Initializing...';
+          console.log('Loading Jitsi Meet...');
+          console.log('Room:', roomName);
+          console.log('User:', userName);
           
-          try {
-            // Create Daily call object
-            const callFrame = window.DailyIframe.createFrame('call-container', {
-              showLeaveButton: true,
-              showFullscreenButton: false,
-              iframeStyle: {
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: '100%',
-                height: '100%',
-                border: 'none'
+          // Build Jitsi Meet URL with config parameters to skip pre-join
+          const jitsiUrl = 'https://meet.jit.si/' + roomName + 
+            '#config.prejoinPageEnabled=false' +
+            '&config.startWithAudioMuted=false' +
+            '&config.startWithVideoMuted=false' +
+            '&config.requireDisplayName=false' +
+            '&config.disableDeepLinking=true' +
+            '&userInfo.displayName=' + encodeURIComponent(userName);
+          
+          console.log('Jitsi URL:', jitsiUrl);
+          
+          const iframe = document.getElementById('jitsi-iframe');
+          iframe.src = jitsiUrl;
+          
+          // Listen for messages from Jitsi
+          window.addEventListener('message', (event) => {
+            if (event.data && typeof event.data === 'object') {
+              console.log('Jitsi event:', event.data);
+              
+              // Handle various Jitsi events
+              if (event.data.event === 'videoConferenceLeft' || 
+                  event.data.event === 'readyToClose') {
+                window.ReactNativeWebView?.postMessage(JSON.stringify({
+                  type: 'call-ended',
+                  reason: event.data.event
+                }));
               }
-            });
-            
-            statusDiv.textContent = 'Joining room...';
-            
-            // Join the room
-            callFrame.join({ 
-              url: roomUrl,
-              userName: userName
-            })
-            .then(() => {
-              console.log('Successfully joined room');
-              statusDiv.textContent = 'Connected!';
-              setTimeout(() => {
-                statusDiv.style.display = 'none';
-              }, 2000);
-            })
-            .catch((error) => {
-              console.error('Failed to join room:', error);
-              statusDiv.textContent = 'Error: ' + error.message;
-              statusDiv.style.background = 'rgba(255,0,0,0.8)';
-              
-              window.ReactNativeWebView?.postMessage(JSON.stringify({
-                type: 'call-error',
-                error: error.message,
-                roomUrl: roomUrl
-              }));
-            });
-            
-            // Set up event listeners
-            callFrame.on('left-meeting', () => {
-              console.log('Left meeting');
-              window.ReactNativeWebView?.postMessage(JSON.stringify({
-                type: 'call-ended',
-                reason: 'left-meeting'
-              }));
-            });
-            
-            callFrame.on('error', (error) => {
-              console.error('Daily error:', error);
-              statusDiv.textContent = 'Error: ' + (error.errorMsg || 'Unknown error');
-              statusDiv.style.background = 'rgba(255,0,0,0.8)';
-              
-              window.ReactNativeWebView?.postMessage(JSON.stringify({
-                type: 'call-error',
-                error: error.errorMsg || 'Unknown error'
-              }));
-            });
-            
-            callFrame.on('participant-left', (event) => {
-              console.log('Participant left:', event);
-              // Check if we're alone now
-              setTimeout(() => {
-                callFrame.participants().then((participants) => {
-                  if (Object.keys(participants).length <= 1) {
-                    window.ReactNativeWebView?.postMessage(JSON.stringify({
-                      type: 'call-ended',
-                      reason: 'participant-left'
-                    }));
-                  }
-                });
-              }, 1000);
-            });
-            
-          } catch (error) {
-            console.error('Error initializing call:', error);
-            statusDiv.textContent = 'Initialization error: ' + error.message;
-            statusDiv.style.background = 'rgba(255,0,0,0.8)';
-            
-            window.ReactNativeWebView?.postMessage(JSON.stringify({
-              type: 'call-error',
-              error: error.message
-            }));
-          }
+            }
+          });
         </script>
       </body>
     </html>
@@ -328,11 +263,7 @@ function CallPage(props) {
         case 'call-error':
           Alert.alert(
             'Call Error', 
-            'Failed to connect to video call. This might be because:\n\n' +
-            '1. Daily.co API key is not configured\n' +
-            '2. Network connection issue\n' +
-            '3. Room URL is invalid\n\n' +
-            'Please check GET_DAILY_API_KEY.md for setup instructions.',
+            'An error occurred during the video call. Please try again.',
             [
               { text: 'OK', onPress: () => handleCallEnd('error') }
             ]
@@ -367,22 +298,26 @@ function CallPage(props) {
       </View>
       
       <WebView
-        source={{ html: dailyHTML }}
+        source={{ html: jitsiHTML }}
         style={styles.webview}
         javaScriptEnabled={true}
         domStorageEnabled={true}
         mediaPlaybackRequiresUserAction={false}
         allowsInlineMediaPlayback={true}
+        allowsProtectedMedia={true}
+        mediaCapturePermissionGrantType="grant"
+        geolocationEnabled={false}
         onMessage={handleWebViewMessage}
+        onPermissionRequest={(request) => {
+          // Auto-grant camera and microphone permissions to WebView
+          console.log('Permission requested:', request.resources);
+          request.grant(request.resources);
+        }}
         onError={(error) => {
           console.error('WebView error:', error);
           Alert.alert(
             'Connection Error',
-            'Failed to load video call interface. Please check:\n\n' +
-            '1. Internet connection\n' +
-            '2. Daily.co API key is configured\n' +
-            '3. Room URL is valid\n\n' +
-            'See GET_DAILY_API_KEY.md for setup instructions.',
+            'Failed to load video call interface. Please check your internet connection.',
             [
               { text: 'OK', onPress: () => handleCallEnd('webview_error') }
             ]

@@ -8,7 +8,6 @@ import { Audio } from 'expo-av';
 import { supabase } from '../lib/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
 import Constants from 'expo-constants';
-import DailyService from '../services/DailyService';
 
 const { width, height } = Dimensions.get('window');
 
@@ -197,26 +196,16 @@ function HomePage({navigation}) {
     return `${timestamp}_${randomStr}`;
   };
 
-  const createDailyRoom = async () => {
+  const createJitsiRoom = async () => {
     try {
-      // Check if Daily.co API key is configured
-      if (!DailyService.isConfigured()) {
-        console.warn('Daily.co API key not configured, using fallback method');
-        // Fallback: use simple room name that Daily will auto-create
-        const roomName = generateCallId();
-        return `https://perfectfl.daily.co/${roomName}`;
-      }
-
-      // Create room using Daily.co API
+      // Jitsi Meet is completely free - no API key needed!
+      // We'll use the public Jitsi server: meet.jit.si
       const roomName = generateCallId();
-      const room = await DailyService.createRoom(roomName);
-      console.log('Daily.co room created:', room.url);
-      return room.url;
+      return `https://meet.jit.si/${roomName}`;
     } catch (error) {
-      console.error('Error creating Daily room:', error);
-      // Fallback: use simple room name
-      const roomName = generateCallId();
-      return `https://perfectfl.daily.co/${roomName}`;
+      console.error('Error creating Jitsi room:', error);
+      // Fallback: use a simple room name
+      return `https://meet.jit.si/${generateCallId()}`;
     }
   };
 
@@ -375,8 +364,8 @@ function HomePage({navigation}) {
       if (availableMatch) {
         setMatchingStatus('Match found! Setting up call...');
         
-        // Create a Daily.co room
-        const roomUrl = await createDailyRoom();
+        // Create a Jitsi Meet room (completely free!)
+        const roomUrl = await createJitsiRoom();
         
         // Create active call session
         const { error: sessionError } = await supabase
@@ -430,7 +419,7 @@ function HomePage({navigation}) {
         setMatchingStatus('No users available. Adding you to waiting list...');
         
         const newCallId = generateCallId();
-        const roomUrl = await createDailyRoom();
+        const roomUrl = await createJitsiRoom();
         
         const { error: waitingError } = await supabase
           .from('waiting_users')
