@@ -174,110 +174,144 @@ function CallPage(props) {
     paddingTop: insets.top > 0 ? insets.top : 16,
   };
 
-  // Create HTML for Daily.co Prebuilt
+  // Create HTML for Daily.co Prebuilt - using Daily.js SDK
   const dailyHTML = `
     <!DOCTYPE html>
     <html>
       <head>
         <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Video Call</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+        <title>Daily Video Call</title>
         <script crossorigin src="https://unpkg.com/@daily-co/daily-js"></script>
         <style>
-          body {
+          * {
             margin: 0;
             padding: 0;
+            box-sizing: border-box;
+          }
+          html, body {
+            width: 100%;
+            height: 100%;
             background: #0a0a2a;
-            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
           }
           #call-container {
-            width: 100vw;
-            height: 100vh;
+            width: 100%;
+            height: 100%;
+          }
+          #status {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0,0,0,0.5);
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 1000;
+            font-size: 12px;
           }
         </style>
       </head>
       <body>
+        <div id="status">Connecting...</div>
         <div id="call-container"></div>
         <script>
-          let call;
+          const roomUrl = '${roomUrl}';
+          const userName = '${name}';
+          const statusDiv = document.getElementById('status');
           
-          function initializeCall() {
-            try {
-              call = window.Daily.createFrame({
-                showLeaveButton: true,
-                showFullscreenButton: false,
-                showLocalVideo: true,
-                showParticipantsBar: false,
-                iframeStyle: {
-                  position: 'fixed',
-                  top: '0',
-                  left: '0',
-                  width: '100%',
-                  height: '100%',
-                  border: 'none'
-                },
-                theme: {
-                  colors: {
-                    accent: '#ff00ff',
-                    accentText: '#ffffff',
-                    background: '#0a0a2a',
-                    backgroundAccent: '#1a1a2e',
-                    baseText: '#ffffff',
-                    border: '#333333',
-                    mainAreaBg: '#0a0a2a',
-                    mainAreaBgAccent: '#1a1a2e',
-                    mainAreaText: '#ffffff',
-                    supportiveText: '#cccccc'
-                  }
-                }
-              });
+          console.log('Initializing Daily.co call...');
+          console.log('Room URL:', roomUrl);
+          console.log('User name:', userName);
+          
+          statusDiv.textContent = 'Initializing...';
+          
+          try {
+            // Create Daily call object
+            const callFrame = window.DailyIframe.createFrame('call-container', {
+              showLeaveButton: true,
+              showFullscreenButton: false,
+              iframeStyle: {
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                border: 'none'
+              }
+            });
+            
+            statusDiv.textContent = 'Joining room...';
+            
+            // Join the room
+            callFrame.join({ 
+              url: roomUrl,
+              userName: userName
+            })
+            .then(() => {
+              console.log('Successfully joined room');
+              statusDiv.textContent = 'Connected!';
+              setTimeout(() => {
+                statusDiv.style.display = 'none';
+              }, 2000);
+            })
+            .catch((error) => {
+              console.error('Failed to join room:', error);
+              statusDiv.textContent = 'Error: ' + error.message;
+              statusDiv.style.background = 'rgba(255,0,0,0.8)';
               
-              call.join({ 
-                url: '${roomUrl}',
-                userName: '${name}'
-              });
-
-              // Set up event listeners
-              call.on('left-meeting', () => {
-                window.ReactNativeWebView?.postMessage(JSON.stringify({
-                  type: 'call-ended',
-                  reason: 'left-meeting'
-                }));
-              });
-
-              call.on('error', (error) => {
-                console.error('Daily error:', error);
-                window.ReactNativeWebView?.postMessage(JSON.stringify({
-                  type: 'call-error',
-                  error: error
-                }));
-              });
-
-              call.on('participant-left', (event) => {
-                console.log('Participant left:', event);
-                // Check if we're alone now
-                setTimeout(() => {
-                  const participants = call.participants();
+              window.ReactNativeWebView?.postMessage(JSON.stringify({
+                type: 'call-error',
+                error: error.message,
+                roomUrl: roomUrl
+              }));
+            });
+            
+            // Set up event listeners
+            callFrame.on('left-meeting', () => {
+              console.log('Left meeting');
+              window.ReactNativeWebView?.postMessage(JSON.stringify({
+                type: 'call-ended',
+                reason: 'left-meeting'
+              }));
+            });
+            
+            callFrame.on('error', (error) => {
+              console.error('Daily error:', error);
+              statusDiv.textContent = 'Error: ' + (error.errorMsg || 'Unknown error');
+              statusDiv.style.background = 'rgba(255,0,0,0.8)';
+              
+              window.ReactNativeWebView?.postMessage(JSON.stringify({
+                type: 'call-error',
+                error: error.errorMsg || 'Unknown error'
+              }));
+            });
+            
+            callFrame.on('participant-left', (event) => {
+              console.log('Participant left:', event);
+              // Check if we're alone now
+              setTimeout(() => {
+                callFrame.participants().then((participants) => {
                   if (Object.keys(participants).length <= 1) {
                     window.ReactNativeWebView?.postMessage(JSON.stringify({
                       type: 'call-ended',
                       reason: 'participant-left'
                     }));
                   }
-                }, 1000);
-              });
-
-            } catch (error) {
-              console.error('Error initializing call:', error);
-              window.ReactNativeWebView?.postMessage(JSON.stringify({
-                type: 'call-error',
-                error: error.message
-              }));
-            }
+                });
+              }, 1000);
+            });
+            
+          } catch (error) {
+            console.error('Error initializing call:', error);
+            statusDiv.textContent = 'Initialization error: ' + error.message;
+            statusDiv.style.background = 'rgba(255,0,0,0.8)';
+            
+            window.ReactNativeWebView?.postMessage(JSON.stringify({
+              type: 'call-error',
+              error: error.message
+            }));
           }
-
-          // Initialize call when page loads
-          window.addEventListener('load', initializeCall);
         </script>
       </body>
     </html>
@@ -292,8 +326,17 @@ function CallPage(props) {
           handleCallEnd(message.reason);
           break;
         case 'call-error':
-          Alert.alert('Call Error', 'An error occurred during the call.');
-          handleCallEnd('error');
+          Alert.alert(
+            'Call Error', 
+            'Failed to connect to video call. This might be because:\n\n' +
+            '1. Daily.co API key is not configured\n' +
+            '2. Network connection issue\n' +
+            '3. Room URL is invalid\n\n' +
+            'Please check GET_DAILY_API_KEY.md for setup instructions.',
+            [
+              { text: 'OK', onPress: () => handleCallEnd('error') }
+            ]
+          );
           break;
         default:
           console.log('Unknown message from WebView:', message);
@@ -333,8 +376,17 @@ function CallPage(props) {
         onMessage={handleWebViewMessage}
         onError={(error) => {
           console.error('WebView error:', error);
-          Alert.alert('Error', 'Failed to load video call');
-          handleCallEnd('webview_error');
+          Alert.alert(
+            'Connection Error',
+            'Failed to load video call interface. Please check:\n\n' +
+            '1. Internet connection\n' +
+            '2. Daily.co API key is configured\n' +
+            '3. Room URL is valid\n\n' +
+            'See GET_DAILY_API_KEY.md for setup instructions.',
+            [
+              { text: 'OK', onPress: () => handleCallEnd('webview_error') }
+            ]
+          );
         }}
       />
     </SafeAreaView>
@@ -511,6 +563,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginHorizontal: 20,
+  },
+  webview: {
+    flex: 1,
+    backgroundColor: '#0a0a2a',
   },
 });
 

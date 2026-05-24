@@ -8,6 +8,7 @@ import { Audio } from 'expo-av';
 import { supabase } from '../lib/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
 import Constants from 'expo-constants';
+import DailyService from '../services/DailyService';
 
 const { width, height } = Dimensions.get('window');
 
@@ -198,14 +199,24 @@ function HomePage({navigation}) {
 
   const createDailyRoom = async () => {
     try {
-      // Simple approach: use Daily.co's auto-room creation
-      // Daily.co will automatically create a room if it doesn't exist
+      // Check if Daily.co API key is configured
+      if (!DailyService.isConfigured()) {
+        console.warn('Daily.co API key not configured, using fallback method');
+        // Fallback: use simple room name that Daily will auto-create
+        const roomName = generateCallId();
+        return `https://perfectfl.daily.co/${roomName}`;
+      }
+
+      // Create room using Daily.co API
       const roomName = generateCallId();
-      return `https://perfectfl.daily.co/${roomName}`;
+      const room = await DailyService.createRoom(roomName);
+      console.log('Daily.co room created:', room.url);
+      return room.url;
     } catch (error) {
       console.error('Error creating Daily room:', error);
-      // Fallback: use a simple room name that Daily will auto-create
-      return `https://perfectfl.daily.co/${generateCallId()}`;
+      // Fallback: use simple room name
+      const roomName = generateCallId();
+      return `https://perfectfl.daily.co/${roomName}`;
     }
   };
 
