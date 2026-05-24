@@ -685,7 +685,25 @@ const ProfileScreen = () => {
       );
     }
     
-    // For Posts and Shorts, use grid view
+    // For Posts tab, also use PostItem component (same as Tweets)
+    if (activeTab === 'Post') {
+      return data.length > 0 ? (
+        <FlatList
+          data={data}
+          renderItem={({ item }) => <PostItem post={item} />}
+          keyExtractor={item => item.id.toString()}
+          showsVerticalScrollIndicator={true}
+          contentContainerStyle={{ paddingBottom: 20 }}
+          scrollEnabled={true}
+        />
+      ) : (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>No posts yet</Text>
+        </View>
+      );
+    }
+    
+    // For Shorts, use grid view
     return data.length > 0 ? (
       <FlatList
         data={data}
@@ -699,9 +717,7 @@ const ProfileScreen = () => {
       />
     ) : (
       <View style={styles.emptyContainer}>
-        <Text style={styles.emptyText}>
-          {activeTab === 'Post' ? 'No posts yet' : 'No shorts yet'}
-        </Text>
+        <Text style={styles.emptyText}>No shorts yet</Text>
       </View>
     );
   };
@@ -851,7 +867,7 @@ const ProfileScreen = () => {
       }
 
       if (activeTab === 'Post') {
-        // Fetch only posts with media (images or videos)
+        // Fetch ALL posts (both with and without media)
         const { data, error } = await supabase
           .from('posts')
           .select(`
@@ -862,11 +878,10 @@ const ProfileScreen = () => {
             user_likes:post_likes (user_id)
           `)
           .eq('user_id', user.id)
-          .not('media_url', 'is', null)
           .order('created_at', { ascending: false });
 
         if (error) throw error;
-        console.log(`Fetched ${data?.length || 0} posts with media from Supabase`);
+        console.log(`Fetched ${data?.length || 0} posts from Supabase`);
         const postsWithLikeStatus = data.map(post => ({
           ...post,
           is_liked: post.user_likes?.some(like => like.user_id === user.id) || false
