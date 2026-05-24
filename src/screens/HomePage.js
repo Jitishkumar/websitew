@@ -193,7 +193,20 @@ function HomePage({navigation}) {
   const generateCallId = () => {
     const timestamp = Date.now().toString(36);
     const randomStr = Math.random().toString(36).substr(2, 9);
-    return `call_${timestamp}_${randomStr}`;
+    return `${timestamp}_${randomStr}`;
+  };
+
+  const createDailyRoom = async () => {
+    try {
+      // Simple approach: use Daily.co's auto-room creation
+      // Daily.co will automatically create a room if it doesn't exist
+      const roomName = generateCallId();
+      return `https://perfectfl.daily.co/${roomName}`;
+    } catch (error) {
+      console.error('Error creating Daily room:', error);
+      // Fallback: use a simple room name that Daily will auto-create
+      return `https://perfectfl.daily.co/${generateCallId()}`;
+    }
   };
 
   const cleanupUserWaitingEntry = async () => {
@@ -351,14 +364,15 @@ function HomePage({navigation}) {
       if (availableMatch) {
         setMatchingStatus('Match found! Setting up call...');
         
-        // Use the waiting user's existing call_id
-        const callIdToUse = availableMatch.call_id;
+        // Create a Daily.co room
+        const roomUrl = await createDailyRoom();
         
         // Create active call session
         const { error: sessionError } = await supabase
           .from('active_calls')
           .insert({
-            call_id: callIdToUse,
+            call_id: availableMatch.call_id,
+            room_url: roomUrl,
             user1_id: availableMatch.user_id,
             user1_name: availableMatch.username,
             user2_id: currentUser.id,
@@ -385,7 +399,7 @@ function HomePage({navigation}) {
           console.error('Error removing matched user from waiting list:', deleteError);
         }
 
-        setCallId(callIdToUse);
+        setCallId(availableMatch.call_id);
         setIsMatching(false);
         setMatchingStatus('');
         
@@ -393,7 +407,8 @@ function HomePage({navigation}) {
         setTimeout(() => {
           navigation.navigate('CallPage', {
             data: currentUser.username,
-            id: callIdToUse,
+            id: availableMatch.call_id,
+            roomUrl: roomUrl,
             matchedUser: availableMatch.username,
             isJoining: true
           });
@@ -404,6 +419,7 @@ function HomePage({navigation}) {
         setMatchingStatus('No users available. Adding you to waiting list...');
         
         const newCallId = generateCallId();
+        const roomUrl = await createDailyRoom();
         
         const { error: waitingError } = await supabase
           .from('waiting_users')
@@ -412,6 +428,7 @@ function HomePage({navigation}) {
             username: currentUser.username,
             gender: currentUser.gender,
             call_id: newCallId,
+            room_url: roomUrl,
             status: 'waiting',
             created_at: new Date().toISOString()
           });
@@ -429,7 +446,7 @@ function HomePage({navigation}) {
         setMatchingStatus('Waiting for someone to join...');
         
         // Start polling for matches
-        startMatchingPolling(newCallId);
+        startMatchingPolling(newCallId, roomUrl);
       }
 
     } catch (error) {
@@ -440,7 +457,7 @@ function HomePage({navigation}) {
     }
   };
 
-  const startMatchingPolling = (callId) => {
+  const startMatchingPolling = (callId, roomUrl) => {
     let pollCount = 0;
     const maxPolls = 150; // 5 minutes with 2-second intervals
     
@@ -476,6 +493,7 @@ function HomePage({navigation}) {
             navigation.navigate('CallPage', {
               data: currentUser.username,
               id: callId,
+              roomUrl: call.room_url || roomUrl,
               matchedUser: matchedUser,
               isJoining: false
             });

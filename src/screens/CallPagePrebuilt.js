@@ -6,19 +6,23 @@ import {
   TouchableOpacity, 
   SafeAreaView, 
   Alert, 
-  AppState
+  AppState,
+  Dimensions 
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { WebView } from 'react-native-webview';
 
-function CallPage(props) {
+const { width, height } = Dimensions.get('window');
+
+function CallPagePrebuilt(props) {
   console.log(props.route.params);
   const name = props.route.params.data;
   const id = props.route.params.id;
   const roomUrl = props.route.params.roomUrl;
   const matchedUser = props.route.params.matchedUser || 'Unknown User';
+  const isJoining = props.route.params.isJoining || false;
   const insets = useSafeAreaInsets();
   const [callEnded, setCallEnded] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
@@ -345,7 +349,6 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#0a0a2a',
-    paddingTop: 0,
   },
   header: {
     flexDirection: 'row',
@@ -413,105 +416,10 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: 'bold',
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#0a0a2a',
-  },
-  loadingText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  callContainer: {
+  webview: {
     flex: 1,
     backgroundColor: '#0a0a2a',
-  },
-  remoteVideoContainer: {
-    flex: 1,
-    backgroundColor: '#000',
-    position: 'relative',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  remoteVideo: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#1a1a1a',
-  },
-  participantLabel: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  waitingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#0a0a2a',
-    paddingHorizontal: 20,
-  },
-  waitingText: {
-    color: '#ffffff',
-    fontSize: 18,
-    textAlign: 'center',
-    marginBottom: 10,
-  },
-  waitingSubText: {
-    color: 'rgba(255, 255, 255, 0.6)',
-    fontSize: 12,
-    textAlign: 'center',
-  },
-  localVideoInfo: {
-    position: 'absolute',
-    top: 100,
-    right: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  localLabel: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  controlsContainer: {
-    position: 'absolute',
-    bottom: 50,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 40,
-  },
-  controlButton: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginHorizontal: 20,
-  },
-  controlButtonMuted: {
-    backgroundColor: 'rgba(255, 68, 68, 0.3)',
-  },
-  endCallButton: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: '#ff4444',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginHorizontal: 20,
   },
 });
 
-export default CallPage;
+export default CallPagePrebuilt;
