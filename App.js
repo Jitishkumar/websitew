@@ -27,7 +27,8 @@ export default function App() {
           }
         }
       } catch (error) {
-        console.error('Error initializing notifications:', error);
+        // Silently fail if Supabase is unavailable
+        console.log('Notifications unavailable - Supabase connection failed');
       }
     };
 

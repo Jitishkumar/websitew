@@ -256,22 +256,13 @@ const ProfileScreen = () => {
 
     await unloadAllVideos();
   
-    // If it's a video post, navigate to ShortsScreen
-    if (post && post.type === 'video') {
-      // Navigate to ShortsScreen for video posts
-      setTimeout(() => {
-        navigation.navigate('Shorts', {
-          posts: currentPosts.filter(p => p.type === 'video'),
-          initialIndex: currentPosts.filter(p => p.type === 'video').findIndex(p => p.id === post.id),
-        });
-      }, 100);
-    } else {
-      // For non-video posts (photos and text), navigate to PhotoTextViewer
-      navigation.navigate('PhotoTextViewer', {
-        posts: currentPosts.filter(p => p.type !== 'video'),
-        initialIndex: currentPosts.filter(p => p.type !== 'video').findIndex(p => p.id === post.id),
+    // Navigate to PostViewer for all posts (like Instagram)
+    setTimeout(() => {
+      navigation.navigate('PostViewer', {
+        posts: currentPosts,
+        initialIndex: index,
       });
-    }
+    }, 100);
   };
 
   const renderGridItem = ({ item, index }) => {

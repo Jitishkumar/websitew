@@ -7,6 +7,10 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@env';
 const supabaseUrl = SUPABASE_URL;
 const supabaseKey = SUPABASE_ANON_KEY;
 
+// Debug: Log the values to see if they're loaded
+console.log('Supabase URL:', supabaseUrl);
+console.log('Supabase Key exists:', !!supabaseKey);
+
 // And only one export of the supabase client
 export const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: {

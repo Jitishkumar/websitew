@@ -253,15 +253,35 @@ const TabNavigator = () => {
 };
 
 const AppNavigator = () => {
-  const [initialRoute, setInitialRoute] = useState(null);
+  const [initialRoute, setInitialRoute] = useState('Login'); // Default to Login
+  const [isLoading, setIsLoading] = useState(true);
+  
   useEffect(() => {
     const checkSession = async () => {
-      const { data } = await supabase.auth.getSession();
-      setInitialRoute(data.session ? 'MainApp' : 'Login');
+      try {
+        // Set a timeout for the session check
+        const sessionPromise = supabase.auth.getSession();
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Session check timeout')), 2000)
+        );
+        
+        const { data } = await Promise.race([sessionPromise, timeoutPromise]);
+        setInitialRoute(data.session ? 'MainApp' : 'Login');
+      } catch (error) {
+        console.log('Session check failed, defaulting to Login:', error.message);
+        setInitialRoute('Login');
+      } finally {
+        setIsLoading(false);
+      }
     };
+    
     checkSession();
   }, []);
-  if (!initialRoute) return null;
+
+  // Don't render anything while loading
+  if (isLoading) {
+    return null;
+  }
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName={initialRoute}>
       <Stack.Screen name="Login" component={LoginScreen} />
