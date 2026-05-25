@@ -6,15 +6,12 @@ import {
   TouchableOpacity, 
   SafeAreaView, 
   Alert, 
-  AppState,
-  PermissionsAndroid,
-  Platform
+  Linking,
+  BackHandler
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
-import { WebView } from 'react-native-webview';
-import { Camera } from 'expo-camera';
 
 function CallPage(props) {
   console.log(props.route.params);
@@ -26,36 +23,35 @@ function CallPage(props) {
   const [callEnded, setCallEnded] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const callTimerRef = useRef(null);
-  const appStateRef = useRef(AppState.currentState);
-  const webViewRef = useRef(null);
+  const cleanupDoneRef = useRef(false);
 
   useEffect(() => {
-    requestPermissions();
     getCurrentUser();
+    openJitsiInBrowser();
     
     // Start 3-minute timer for automatic call end
     callTimerRef.current = setTimeout(() => {
       if (!callEnded) {
-        Alert.alert('Time Up', 'Call duration limit (3 minutes) reached. Call will end now.');
+        Alert.alert('Time Up', 'Call duration limit (3 minutes) reached.');
         handleCallEnd('time_limit');
       }
     }, 180000); // 3 minutes
 
-    // Listen for app state changes (user switching apps, going to background)
-    const appStateSubscription = AppState.addEventListener('change', handleAppStateChange);
-
-    // Update call session when component mounts
-    updateCallSession('active');
+    // Handle Android back button
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      handleGoBack();
+      return true;
+    });
     
     return () => {
       if (callTimerRef.current) {
         clearTimeout(callTimerRef.current);
       }
-      appStateSubscription?.remove();
+      backHandler.remove();
       
       // Clean up when component unmounts
-      if (!callEnded) {
-        handleCallEnd('component_unmount');
+      if (!cleanupDoneRef.current) {
+        cleanupCallData();
       }
     };
   }, []);
@@ -64,127 +60,68 @@ function CallPage(props) {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('username, gender')
-          .eq('id', user.id)
-          .single();
-        
-        if (profile) {
-          setCurrentUser({...user, ...profile});
-        }
+        setCurrentUser(user);
       }
     } catch (error) {
       console.error('Error fetching user:', error);
     }
   };
 
-  const requestPermissions = async () => {
+  const openJitsiInBrowser = async () => {
     try {
-      if (Platform.OS === 'android') {
-        // Request Android permissions
-        const cameraPermission = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.CAMERA,
-          {
-            title: 'Camera Permission',
-            message: 'Flexx needs access to your camera for video calls',
-            buttonNeutral: 'Ask Me Later',
-            buttonNegative: 'Cancel',
-            buttonPositive: 'OK',
-          }
-        );
-
-        const audioPermission = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-          {
-            title: 'Microphone Permission',
-            message: 'Flexx needs access to your microphone for video calls',
-            buttonNeutral: 'Ask Me Later',
-            buttonNegative: 'Cancel',
-            buttonPositive: 'OK',
-          }
-        );
-
-        if (
-          cameraPermission === PermissionsAndroid.RESULTS.GRANTED &&
-          audioPermission === PermissionsAndroid.RESULTS.GRANTED
-        ) {
-          console.log('✅ Camera and microphone permissions granted (Android)');
-        } else {
-          console.warn('⚠️ Permissions denied');
-          Alert.alert(
-            'Permissions Required',
-            'Camera and microphone permissions are required for video calls. Please enable them in settings.',
-            [
-              { text: 'OK', onPress: () => {} }
-            ]
-          );
-        }
+      // Simple Jitsi URL that opens in browser
+      const jitsiUrl = `https://meet.jit.si/${id}`;
+      
+      const supported = await Linking.canOpenURL(jitsiUrl);
+      if (supported) {
+        await Linking.openURL(jitsiUrl);
+        console.log('✅ Opened Jitsi in browser:', jitsiUrl);
       } else {
-        // Request iOS permissions
-        const cameraStatus = await Camera.requestCameraPermissionsAsync();
-        const audioStatus = await Camera.requestMicrophonePermissionsAsync();
-
-        if (cameraStatus.granted && audioStatus.granted) {
-          console.log('✅ Camera and microphone permissions granted (iOS)');
-        } else {
-          console.warn('⚠️ Permissions denied');
-          Alert.alert(
-            'Permissions Required',
-            'Camera and microphone permissions are required for video calls. Please enable them in settings.',
-            [
-              { text: 'OK', onPress: () => {} }
-            ]
-          );
-        }
+        Alert.alert('Error', 'Cannot open video call');
       }
     } catch (error) {
-      console.error('Error requesting permissions:', error);
-    }
-  };
-
-  const handleAppStateChange = (nextAppState) => {
-    // Don't end call when app goes to background - user might be switching apps
-    // Only log the state change
-    console.log('App state changed:', appStateRef.current, '->', nextAppState);
-    appStateRef.current = nextAppState;
-  };
-
-  const updateCallSession = async (status) => {
-    try {
-      const updateData = {
-        status: status
-      };
-      
-      if (status === 'ended') {
-        updateData.ended_at = new Date().toISOString();
-      }
-      
-      await supabase
-        .from('active_calls')
-        .update(updateData)
-        .eq('call_id', id);
-    } catch (error) {
-      console.error('Error updating call session:', error);
+      console.error('Error opening Jitsi:', error);
+      Alert.alert('Error', 'Failed to open video call');
     }
   };
 
   const cleanupCallData = async () => {
-    if (!currentUser) return;
+    if (cleanupDoneRef.current) return; // Prevent duplicate cleanup
+    cleanupDoneRef.current = true;
+    
+    if (!currentUser) {
+      console.log('⚠️ No current user for cleanup');
+      return;
+    }
     
     try {
-      // Remove from active calls
-      await supabase
+      console.log('🧹 Cleaning up call data for user:', currentUser.id);
+      
+      // 1. Delete from active_calls table
+      const { error: callError } = await supabase
         .from('active_calls')
         .delete()
         .eq('call_id', id);
 
-      // Remove from waiting users (in case they were waiting)
-      await supabase
+      if (callError) {
+        console.error('Error deleting from active_calls:', callError);
+      } else {
+        console.log('✅ Deleted from active_calls');
+      }
+
+      // 2. Delete from waiting_users table (in case they were waiting)
+      const { error: waitingError } = await supabase
         .from('waiting_users')
         .delete()
         .eq('user_id', currentUser.id);
-        
+
+      if (waitingError) {
+        console.error('Error deleting from waiting_users:', waitingError);
+      } else {
+        console.log('✅ Deleted from waiting_users');
+      }
+      
+      console.log('✅ Cleanup completed successfully');
     } catch (error) {
       console.error('Error cleaning up call data:', error);
     }
@@ -200,10 +137,9 @@ function CallPage(props) {
       clearTimeout(callTimerRef.current);
     }
     
-    console.log('Call ended:', { callID: id, reason });
+    console.log('📞 Call ended:', { callID: id, reason });
     
-    // Update call session and cleanup
-    await updateCallSession('ended');
+    // Cleanup database
     await cleanupCallData();
     
     // Navigate back to homepage
@@ -236,58 +172,18 @@ function CallPage(props) {
     ...styles.header,
     paddingTop: insets.top > 0 ? insets.top : 16,
   };
-  
-  // Create Jitsi URL with proper configuration
-  // Determine if this user should be moderator (user1 is always moderator)
-  const isUser1 = props.route.params.isUser1 || false;
-  
-  const jitsiConfig = {
-    startWithAudioMuted: false,
-    startWithVideoMuted: false,
-    disableModeratorIndicator: true, // Hide moderator indicator
-    prejoinPageEnabled: false,
-    startAudioOnly: false,
-    requireDisplayName: false,
-    enableWelcomePage: false,
-    enableClosePage: false,
-    disableDeepLinking: true,
-    // Make everyone a moderator to avoid "waiting for moderator" issue
-    enableUserRolesBasedOnToken: false,
-    enableFeaturesBasedOnToken: false,
-    // Disable lobby/waiting room
-    enableLobbyChat: false,
-    // Auto-grant moderator rights
-    disableModeratorIndicator: true,
-  };
-  
-  const jitsiParams = new URLSearchParams({
-    'userInfo.displayName': name || 'User',
-  });
-  
-  // Add config parameters
-  Object.keys(jitsiConfig).forEach(key => {
-    const value = jitsiConfig[key];
-    if (typeof value === 'boolean') {
-      jitsiParams.append(`config.${key}`, value.toString());
-    } else if (typeof value === 'string' || typeof value === 'number') {
-      jitsiParams.append(`config.${key}`, value.toString());
-    }
-  });
-  
-  // Use hash parameters for better compatibility
-  // Add a special parameter to make first user moderator
-  const jitsiUrl = `https://meet.jit.si/${id}#${jitsiParams.toString()}&config.enableUserRolesBasedOnToken=false`;
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={headerStyle}>
         <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
           <Ionicons name="call-outline" size={24} color="#ff4444" />
-          <Text style={styles.endCallText}>End</Text>
+          <Text style={styles.endCallText}>End Call</Text>
         </TouchableOpacity>
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>Video Call</Text>
           <Text style={styles.matchInfo}>Connected with: {matchedUser}</Text>
+          <Text style={styles.timerInfo}>Call opened in browser</Text>
           <Text style={styles.timerInfo}>Call limit: 3 minutes</Text>
         </View>
         <View style={styles.headerRight}>
@@ -298,33 +194,36 @@ function CallPage(props) {
         </View>
       </View>
       
-      <WebView
-        source={{ uri: jitsiUrl }}
-        style={styles.webview}
-        javaScriptEnabled={true}
-        domStorageEnabled={true}
-        mediaPlaybackRequiresUserAction={false}
-        allowsInlineMediaPlayback={true}
-        allowsProtectedMedia={true}
-        startInLoadingState={true}
-        userAgent="Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.120 Mobile Safari/537.36"
-        onLoadEnd={() => {
-          console.log('✅ Jitsi loaded successfully');
-        }}
-        onError={(error) => {
-          console.error('WebView error:', error);
-          Alert.alert(
-            'Connection Error',
-            'Failed to load video call interface. Please check your internet connection.',
-            [
-              { text: 'OK', onPress: () => handleCallEnd('webview_error') }
-            ]
-          );
-        }}
-        onMessage={(event) => {
-          console.log('WebView message:', event.nativeEvent.data);
-        }}
-      />
+      <View style={styles.callContainer}>
+        <View style={styles.instructionsContainer}>
+          <Ionicons name="videocam" size={80} color="#ff00ff" />
+          <Text style={styles.instructionsTitle}>Video Call Started</Text>
+          <Text style={styles.instructionsText}>
+            Your video call has been opened in your browser.
+          </Text>
+          <Text style={styles.instructionsText}>
+            Switch to your browser to join the call.
+          </Text>
+          <Text style={styles.instructionsSubtext}>
+            Room: {id}
+          </Text>
+          <Text style={styles.instructionsSubtext}>
+            Matched with: {matchedUser}
+          </Text>
+          
+          <TouchableOpacity 
+            style={styles.endCallButton}
+            onPress={handleCallEnd}
+          >
+            <Ionicons name="call" size={24} color="#fff" />
+            <Text style={styles.endCallButtonText}>End Call & Return Home</Text>
+          </TouchableOpacity>
+          
+          <Text style={styles.warningText}>
+            ⚠️ Call will automatically end after 3 minutes
+          </Text>
+        </View>
+      </View>
     </SafeAreaView>
   );
 }
@@ -401,108 +300,62 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: 'bold',
   },
-  loadingContainer: {
+  callContainer: {
     flex: 1,
+    backgroundColor: '#0a0a2a',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0a0a2a',
+    padding: 20,
   },
-  loadingText: {
+  instructionsContainer: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 0, 255, 0.1)',
+    borderRadius: 20,
+    padding: 30,
+    borderWidth: 2,
+    borderColor: '#ff00ff',
+    maxWidth: 400,
+  },
+  instructionsTitle: {
+    color: '#ffffff',
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginTop: 20,
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  instructionsText: {
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  instructionsSubtext: {
+    color: 'rgba(255, 255, 255, 0.6)',
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  endCallButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ff4444',
+    paddingHorizontal: 30,
+    paddingVertical: 15,
+    borderRadius: 25,
+    marginTop: 30,
+    gap: 10,
+  },
+  endCallButtonText: {
     color: '#ffffff',
     fontSize: 16,
     fontWeight: 'bold',
   },
-  callContainer: {
-    flex: 1,
-    backgroundColor: '#0a0a2a',
-  },
-  remoteVideoContainer: {
-    flex: 1,
-    backgroundColor: '#000',
-    position: 'relative',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  remoteVideo: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#1a1a1a',
-  },
-  participantLabel: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  waitingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#0a0a2a',
-    paddingHorizontal: 20,
-  },
-  waitingText: {
-    color: '#ffffff',
-    fontSize: 18,
-    textAlign: 'center',
-    marginBottom: 10,
-  },
-  waitingSubText: {
-    color: 'rgba(255, 255, 255, 0.6)',
+  warningText: {
+    color: '#ffaa00',
     fontSize: 12,
     textAlign: 'center',
-  },
-  localVideoInfo: {
-    position: 'absolute',
-    top: 100,
-    right: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  localLabel: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  controlsContainer: {
-    position: 'absolute',
-    bottom: 50,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 40,
-  },
-  controlButton: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginHorizontal: 20,
-  },
-  controlButtonMuted: {
-    backgroundColor: 'rgba(255, 68, 68, 0.3)',
-  },
-  endCallButton: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: '#ff4444',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginHorizontal: 20,
-  },
-  webview: {
-    flex: 1,
-    backgroundColor: '#0a0a2a',
+    marginTop: 20,
   },
 });
 
