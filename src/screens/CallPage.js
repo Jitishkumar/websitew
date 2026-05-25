@@ -6,12 +6,15 @@ import {
   TouchableOpacity, 
   SafeAreaView, 
   Alert, 
-  AppState
+  AppState,
+  PermissionsAndroid,
+  Platform
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { WebView } from 'react-native-webview';
+import { Camera } from 'expo-camera';
 
 function CallPage(props) {
   console.log(props.route.params);
@@ -26,6 +29,7 @@ function CallPage(props) {
   const appStateRef = useRef(AppState.currentState);
 
   useEffect(() => {
+    requestPermissions();
     getCurrentUser();
     
     // Start 3-minute timer for automatic call end
@@ -71,6 +75,70 @@ function CallPage(props) {
       }
     } catch (error) {
       console.error('Error fetching user:', error);
+    }
+  };
+
+  const requestPermissions = async () => {
+    try {
+      if (Platform.OS === 'android') {
+        // Request Android permissions
+        const cameraPermission = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.CAMERA,
+          {
+            title: 'Camera Permission',
+            message: 'Flexx needs access to your camera for video calls',
+            buttonNeutral: 'Ask Me Later',
+            buttonNegative: 'Cancel',
+            buttonPositive: 'OK',
+          }
+        );
+
+        const audioPermission = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+          {
+            title: 'Microphone Permission',
+            message: 'Flexx needs access to your microphone for video calls',
+            buttonNeutral: 'Ask Me Later',
+            buttonNegative: 'Cancel',
+            buttonPositive: 'OK',
+          }
+        );
+
+        if (
+          cameraPermission === PermissionsAndroid.RESULTS.GRANTED &&
+          audioPermission === PermissionsAndroid.RESULTS.GRANTED
+        ) {
+          console.log('✅ Camera and microphone permissions granted (Android)');
+        } else {
+          console.warn('⚠️ Permissions denied');
+          Alert.alert(
+            'Permissions Required',
+            'Camera and microphone permissions are required for video calls. Please enable them in settings.',
+            [
+              { text: 'OK', onPress: () => {} }
+            ]
+          );
+        }
+      } else {
+        // Request iOS permissions
+        const cameraStatus = await Camera.requestCameraPermissionsAsync();
+        const audioStatus = await Camera.requestMicrophonePermissionsAsync();
+
+        if (cameraStatus.granted && audioStatus.granted) {
+          console.log('✅ Camera and microphone permissions granted (iOS)');
+        } else {
+          console.warn('⚠️ Permissions denied');
+          Alert.alert(
+            'Permissions Required',
+            'Camera and microphone permissions are required for video calls. Please enable them in settings.',
+            [
+              { text: 'OK', onPress: () => {} }
+            ]
+          );
+        }
+      }
+    } catch (error) {
+      console.error('Error requesting permissions:', error);
     }
   };
 
@@ -174,7 +242,7 @@ function CallPage(props) {
     paddingTop: insets.top > 0 ? insets.top : 16,
   };
 
-  // Create HTML for Jitsi Meet - completely free!
+  // Create HTML for Jitsi Meet - with proper media handling
   const jitsiHTML = `
     <!DOCTYPE html>
     <html>
@@ -194,19 +262,23 @@ function CallPage(props) {
             background: #0a0a2a;
             overflow: hidden;
           }
-          #jitsi-iframe {
+          #jitsi-container {
             width: 100%;
             height: 100%;
-            border: none;
+          }
+          .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            color: white;
+            font-family: Arial, sans-serif;
           }
         </style>
       </head>
       <body>
-        <iframe
-          id="jitsi-iframe"
-          allow="camera; microphone; fullscreen; display-capture; autoplay"
-          allowfullscreen="true"
-        ></iframe>
+        <div id="jitsi-container" class="loading">Connecting...</div>
+        <script src="https://meet.jit.si/external_api.js"></script>
         <script>
           const roomUrl = '${roomUrl}';
           const userName = '${name}';
@@ -214,39 +286,142 @@ function CallPage(props) {
           // Extract room name from URL
           const roomName = roomUrl.split('/').pop();
           
-          console.log('Loading Jitsi Meet...');
-          console.log('Room:', roomName);
-          console.log('User:', userName);
+          console.log('🚀 Initializing Jitsi Meet...');
+          console.log('📍 Room:', roomName);
+          console.log('👤 User:', userName);
           
-          // Build Jitsi Meet URL with config parameters to skip pre-join
-          const jitsiUrl = 'https://meet.jit.si/' + roomName + 
-            '#config.prejoinPageEnabled=false' +
-            '&config.startWithAudioMuted=false' +
-            '&config.startWithVideoMuted=false' +
-            '&config.requireDisplayName=false' +
-            '&config.disableDeepLinking=true' +
-            '&userInfo.displayName=' + encodeURIComponent(userName);
-          
-          console.log('Jitsi URL:', jitsiUrl);
-          
-          const iframe = document.getElementById('jitsi-iframe');
-          iframe.src = jitsiUrl;
-          
-          // Listen for messages from Jitsi
-          window.addEventListener('message', (event) => {
-            if (event.data && typeof event.data === 'object') {
-              console.log('Jitsi event:', event.data);
-              
-              // Handle various Jitsi events
-              if (event.data.event === 'videoConferenceLeft' || 
-                  event.data.event === 'readyToClose') {
-                window.ReactNativeWebView?.postMessage(JSON.stringify({
-                  type: 'call-ended',
-                  reason: event.data.event
-                }));
+          const domain = 'meet.jit.si';
+          const options = {
+            roomName: roomName,
+            width: '100%',
+            height: '100%',
+            parentNode: document.querySelector('#jitsi-container'),
+            userInfo: {
+              displayName: userName
+            },
+            configOverwrite: {
+              startWithAudioMuted: false,
+              startWithVideoMuted: false,
+              enableWelcomePage: false,
+              prejoinPageEnabled: false,
+              disableDeepLinking: true,
+              enableClosePage: false,
+              requireDisplayName: false,
+              disableProfile: true,
+              hideConferenceSubject: true,
+              hideConferenceTimer: false,
+              toolbarButtons: [
+                'microphone',
+                'camera',
+                'hangup',
+                'chat',
+                'settings',
+                'videoquality',
+                'filmstrip',
+                'tileview'
+              ],
+              // Enable audio/video by default
+              audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true
+              },
+              video: {
+                width: 640,
+                height: 480
               }
+            },
+            interfaceConfigOverwrite: {
+              SHOW_JITSI_WATERMARK: false,
+              SHOW_WATERMARK_FOR_GUESTS: false,
+              SHOW_BRAND_WATERMARK: false,
+              SHOW_POWERED_BY: false,
+              DISABLE_JOIN_LEAVE_NOTIFICATIONS: true,
+              MOBILE_APP_PROMO: false,
+              HIDE_INVITE_MORE_HEADER: true,
+              DISABLE_VIDEO_BACKGROUND: false,
+              VIDEO_LAYOUT_FIT: 'both'
             }
-          });
+          };
+          
+          try {
+            const api = new JitsiMeetExternalAPI(domain, options);
+            
+            // Request camera and microphone permissions
+            navigator.mediaDevices.getUserMedia({ 
+              audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true
+              },
+              video: {
+                width: { ideal: 640 },
+                height: { ideal: 480 }
+              }
+            }).then((stream) => {
+              console.log('✅ Got media stream:', stream);
+              // Stop the stream since we're just checking permissions
+              stream.getTracks().forEach(track => track.stop());
+            }).catch((error) => {
+              console.error('❌ Media permission error:', error);
+              window.ReactNativeWebView?.postMessage(JSON.stringify({
+                type: 'permission-error',
+                error: error.name + ': ' + error.message
+              }));
+            });
+            
+            api.addEventListener('videoConferenceJoined', (event) => {
+              console.log('✅ Joined conference:', event);
+              window.ReactNativeWebView?.postMessage(JSON.stringify({
+                type: 'conference-joined',
+                data: event
+              }));
+            });
+            
+            api.addEventListener('videoConferenceLeft', (event) => {
+              console.log('👋 Left conference:', event);
+              window.ReactNativeWebView?.postMessage(JSON.stringify({
+                type: 'call-ended',
+                reason: 'left-meeting'
+              }));
+            });
+            
+            api.addEventListener('participantLeft', (event) => {
+              console.log('👤 Participant left:', event);
+              setTimeout(() => {
+                const participants = api.getNumberOfParticipants();
+                if (participants <= 1) {
+                  window.ReactNativeWebView?.postMessage(JSON.stringify({
+                    type: 'call-ended',
+                    reason: 'participant-left'
+                  }));
+                }
+              }, 1000);
+            });
+            
+            api.addEventListener('readyToClose', () => {
+              console.log('🔴 Ready to close');
+              window.ReactNativeWebView?.postMessage(JSON.stringify({
+                type: 'call-ended',
+                reason: 'ready-to-close'
+              }));
+            });
+            
+            api.addEventListener('errorOccurred', (error) => {
+              console.error('❌ Jitsi error:', error);
+              window.ReactNativeWebView?.postMessage(JSON.stringify({
+                type: 'call-error',
+                error: error.error || 'Unknown error'
+              }));
+            });
+            
+          } catch (error) {
+            console.error('❌ Error initializing Jitsi:', error);
+            window.ReactNativeWebView?.postMessage(JSON.stringify({
+              type: 'call-error',
+              error: error.message
+            }));
+          }
         </script>
       </body>
     </html>
@@ -268,6 +443,18 @@ function CallPage(props) {
               { text: 'OK', onPress: () => handleCallEnd('error') }
             ]
           );
+          break;
+        case 'permission-error':
+          Alert.alert(
+            'Permission Error',
+            `Camera/Microphone access failed: ${message.error}\n\nPlease check your device settings and ensure permissions are granted.`,
+            [
+              { text: 'OK', onPress: () => {} }
+            ]
+          );
+          break;
+        case 'conference-joined':
+          console.log('✅ Conference joined successfully');
           break;
         default:
           console.log('Unknown message from WebView:', message);
@@ -306,11 +493,10 @@ function CallPage(props) {
         allowsInlineMediaPlayback={true}
         allowsProtectedMedia={true}
         mediaCapturePermissionGrantType="grant"
-        geolocationEnabled={false}
         onMessage={handleWebViewMessage}
         onPermissionRequest={(request) => {
-          // Auto-grant camera and microphone permissions to WebView
-          console.log('Permission requested:', request.resources);
+          console.log('🎥 WebView permission request:', request.resources);
+          // Auto-grant all permissions (camera, microphone, etc.)
           request.grant(request.resources);
         }}
         onError={(error) => {
@@ -323,6 +509,11 @@ function CallPage(props) {
             ]
           );
         }}
+        userAgent="Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+        startInLoadingState={true}
+        scalesPageToFit={true}
+        scrollEnabled={false}
+        bounces={false}
       />
     </SafeAreaView>
   );

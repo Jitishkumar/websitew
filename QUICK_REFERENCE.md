@@ -1,70 +1,137 @@
-# Quick Reference - Performance Optimizations ⚡
+# Quick Reference - Jitsi Meet Setup
 
-## 🎯 What Was Done
+## Problem → Solution
 
-✅ **Caching** - Instant load from cache (<0.5s)
-✅ **Lazy Loading** - Load only 10 posts initially
-✅ **Infinite Scroll** - Load more as you scroll
-✅ **Screen Manager** - Only load visible screens
-✅ **Video Preloader** - Load only 3 videos at a time
-✅ **Parallel Queries** - Load everything at once
-✅ **Profile Optimization** - 70% faster profile loads
+| Problem | Solution |
+|---------|----------|
+| "permission not granted" in settings | Added native permission requests in CallPage.js |
+| WebView can't access camera | Added `mediaCapturePermissionGrantType="grant"` |
+| WebView can't access microphone | Added `onPermissionRequest` handler |
+| Video doesn't start | Improved Jitsi configuration |
+| Audio doesn't work | Added audio config with echo cancellation |
 
----
-
-## 📊 Results
-
-| What | Before | After |
-|------|--------|-------|
-| **HomeScreen** | 5-6s | <1s ⚡ |
-| **ProfileScreen** | 3-5s | <1s ⚡ |
-| **Memory** | 225 MB | 82 MB ⚡ |
-| **Posts Loaded** | 20-100 | 10 ⚡ |
-| **Videos in Memory** | All | 3 ⚡ |
-
-**70-85% faster, 63% less memory!**
-
----
-
-## 🧪 Test Commands
+## Quick Test
 
 ```bash
-# Run the app
-npx expo start
+# Emulator
+npm start → 'a' → Find Match → Grant permissions → Video starts ✅
 
-# Watch console for:
-📦 Loaded posts from cache
-⚡ Cache load time: 234ms
-✅ Loaded 10 posts in 1234ms
-📄 Loading page 1...
-🎬 Preloaded videos: 3
+# Physical Device
+npm start → 'a' → Select device → Find Match → Grant permissions → Video starts ✅
+
+# Two Devices
+Terminal 1: npm start → 'a' (emulator)
+Terminal 2: npm start → 'a' (physical device)
+Both: Find Match → Grant permissions → Video starts ✅
 ```
 
+## Key Files Changed
+
+| File | Change |
+|------|--------|
+| `src/screens/CallPage.js` | Added permission requests, improved Jitsi config |
+| `app.json` | Added Jitsi plugin |
+| `plugins/withJitsiMeet.js` | Created (new file) |
+
+## Permission Flow
+
+```
+1. User navigates to CallPage
+   ↓
+2. requestPermissions() called
+   ↓
+3. Android permission dialogs shown
+   ↓
+4. User grants permissions
+   ↓
+5. WebView loads Jitsi
+   ↓
+6. Jitsi requests camera/microphone
+   ↓
+7. WebView grants permissions (already approved)
+   ↓
+8. Video/audio starts ✅
+```
+
+## Testing Commands
+
+```bash
+# View logs
+adb logcat | grep "LOG"
+
+# View errors
+adb logcat | grep "ERROR"
+
+# View Jitsi logs
+adb logcat | grep "Jitsi"
+
+# Clear app data
+adb shell pm clear com.flexx.app
+
+# List devices
+adb devices
+
+# Install APK
+adb install app.apk
+```
+
+## Expected Behavior
+
+### Before Fix
+```
+❌ WebView loads
+❌ Click settings → "permission not granted"
+❌ No video/audio
+```
+
+### After Fix
+```
+✅ Permissions requested
+✅ User grants permissions
+✅ WebView loads
+✅ Click settings → "permission granted"
+✅ Video/audio works
+```
+
+## Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| "permission not granted" | Check Android manifest, clear app data |
+| Video doesn't start | Check permissions granted, check camera works |
+| Audio doesn't work | Check microphone permission, check volume |
+| App crashes | Check logs, check Supabase connection |
+| Devices don't match | Check network, check database |
+
+## Build & Deploy
+
+```bash
+# Development build
+eas build --profile development --platform android
+
+# Production build
+eas build --profile production --platform android
+
+# Install APK
+adb install app.apk
+```
+
+## Important Notes
+
+- ✅ Still FREE (Jitsi Meet)
+- ✅ Still WebView (no native module issues)
+- ✅ Permissions now properly handled
+- ✅ Video/audio should work
+- ✅ Omegle-like experience maintained
+
+## Next Steps
+
+1. Test on emulator
+2. Test on physical device
+3. Test with two devices
+4. Build APK
+5. Deploy to users
+
 ---
 
-## 📁 New Files
-
-1. `src/utils/cache.js` - Caching system
-2. `src/utils/screenManager.js` - Screen manager
-3. `src/utils/videoPreloader.js` - Video preloader
-
----
-
-## 🎨 User Experience
-
-**Before**: Wait 5-6 seconds, all posts load, laggy
-**After**: Instant load (<0.5s), smooth scroll, professional
-
----
-
-## ✅ Status
-
-**ALL OPTIMIZATIONS COMPLETE!**
-
-Your app is now:
-- ⚡ 70-85% faster
-- 💾 63% less memory
-- 📱 Smooth & professional
-- 🚀 Production ready
-
-**As fast as Instagram, TikTok, Twitter!** 🎉
+**Last Updated:** May 24, 2026

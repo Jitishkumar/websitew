@@ -137,11 +137,15 @@ function HomePage({navigation}) {
       // Request microphone permissions
       const audioStatus = await Audio.requestPermissionsAsync();
       
+      console.log('Camera permission:', cameraStatus.status);
+      console.log('Audio permission:', audioStatus.status);
+      
       if (cameraStatus.status === 'granted' && audioStatus.status === 'granted') {
         setPermissionsGranted(true);
-        console.log('Camera and microphone permissions granted');
+        console.log('✅ Camera and microphone permissions granted');
       } else {
         setPermissionsGranted(false);
+        console.log('❌ Permissions not granted');
         Alert.alert(
           'Permissions Required',
           'Camera and microphone permissions are required for video calls. Please enable them in your device settings.',
