@@ -81,6 +81,7 @@ function MatchConfirmScreen({ route, navigation }) {
           id: callData.roomName,
           roomUrl: callData.roomUrl,
           matchedUser: callData.otherUserName,
+          isUser1: callData.isUser1, // Pass isUser1 to determine moderator
         });
       } else {
         // Waiting for other user to accept
@@ -106,6 +107,7 @@ function MatchConfirmScreen({ route, navigation }) {
                   id: callData.roomName,
                   roomUrl: callData.roomUrl,
                   matchedUser: callData.otherUserName,
+                  isUser1: callData.isUser1, // Pass isUser1 to determine moderator
                 });
               } else if (updatedCall.status === 'rejected') {
                 // Other user rejected

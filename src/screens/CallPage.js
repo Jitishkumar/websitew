@@ -144,12 +144,9 @@ function CallPage(props) {
   };
 
   const handleAppStateChange = (nextAppState) => {
-    // If user goes to background or inactive, end the call
-    if (appStateRef.current === 'active' && (nextAppState === 'background' || nextAppState === 'inactive')) {
-      if (!callEnded) {
-        handleCallEnd('app_background');
-      }
-    }
+    // Don't end call when app goes to background - user might be switching apps
+    // Only log the state change
+    console.log('App state changed:', appStateRef.current, '->', nextAppState);
     appStateRef.current = nextAppState;
   };
 
@@ -241,15 +238,26 @@ function CallPage(props) {
   };
   
   // Create Jitsi URL with proper configuration
+  // Determine if this user should be moderator (user1 is always moderator)
+  const isUser1 = props.route.params.isUser1 || false;
+  
   const jitsiConfig = {
     startWithAudioMuted: false,
     startWithVideoMuted: false,
-    disableModeratorIndicator: false,
+    disableModeratorIndicator: true, // Hide moderator indicator
     prejoinPageEnabled: false,
     startAudioOnly: false,
     requireDisplayName: false,
     enableWelcomePage: false,
     enableClosePage: false,
+    disableDeepLinking: true,
+    // Make everyone a moderator to avoid "waiting for moderator" issue
+    enableUserRolesBasedOnToken: false,
+    enableFeaturesBasedOnToken: false,
+    // Disable lobby/waiting room
+    enableLobbyChat: false,
+    // Auto-grant moderator rights
+    disableModeratorIndicator: true,
   };
   
   const jitsiParams = new URLSearchParams({
@@ -258,11 +266,17 @@ function CallPage(props) {
   
   // Add config parameters
   Object.keys(jitsiConfig).forEach(key => {
-    jitsiParams.append(`config.${key}`, jitsiConfig[key].toString());
+    const value = jitsiConfig[key];
+    if (typeof value === 'boolean') {
+      jitsiParams.append(`config.${key}`, value.toString());
+    } else if (typeof value === 'string' || typeof value === 'number') {
+      jitsiParams.append(`config.${key}`, value.toString());
+    }
   });
   
   // Use hash parameters for better compatibility
-  const jitsiUrl = `https://meet.jit.si/${id}#${jitsiParams.toString()}`;
+  // Add a special parameter to make first user moderator
+  const jitsiUrl = `https://meet.jit.si/${id}#${jitsiParams.toString()}&config.enableUserRolesBasedOnToken=false`;
 
   return (
     <SafeAreaView style={styles.safeArea}>
