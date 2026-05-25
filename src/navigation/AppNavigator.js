@@ -32,6 +32,7 @@ import ShortsScreen from '../screens/ShortsScreen';
 import ShortsCommentScreen from '../screens/ShortsCommentScreen';
 import HomePage from '../screens/HomePage';
 import CallPage from '../screens/CallPage';
+import MatchConfirmScreen from '../screens/MatchConfirmScreen';
 import DonateScreen from '../screens/DonateScreen';
 import WealthiestDonorsScreen from '../screens/WealthiestDonorsScreen';
 import VerifyAccountScreen from '../screens/VerifyAccountScreen';
@@ -311,6 +312,7 @@ const AppNavigator = () => {
       <Stack.Screen name="PhotoTextViewer" component={PhotoTextViewerScreen} options={{ headerShown: false }} />
       <Stack.Screen name="HomePage" component={HomePage} />
       <Stack.Screen name="CallPage" component={CallPage} />
+      <Stack.Screen name="MatchConfirm" component={MatchConfirmScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Donate" component={DonateScreen} options={{ headerShown: false }} />
       <Stack.Screen name="WealthiestDonors" component={WealthiestDonorsScreen} options={{ headerShown: false }} />
       <Stack.Screen name="VerifyAccount" component={VerifyAccountScreen} options={{ headerShown: false }} />

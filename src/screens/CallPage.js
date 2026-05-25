@@ -27,6 +27,7 @@ function CallPage(props) {
   const [currentUser, setCurrentUser] = useState(null);
   const callTimerRef = useRef(null);
   const appStateRef = useRef(AppState.currentState);
+  const webViewRef = useRef(null);
 
   useEffect(() => {
     requestPermissions();
@@ -209,10 +210,7 @@ function CallPage(props) {
     await cleanupCallData();
     
     // Navigate back to homepage
-    props.navigation.reset({
-      index: 0,
-      routes: [{ name: 'HomePage' }],
-    });
+    props.navigation.navigate('MainApp', { screen: 'Home' });
   };
 
   const handleGoBack = () => {
@@ -233,7 +231,7 @@ function CallPage(props) {
         ]
       );
     } else {
-      props.navigation.navigate('HomePage');
+      props.navigation.navigate('MainApp', { screen: 'Home' });
     }
   };
   
@@ -241,228 +239,30 @@ function CallPage(props) {
     ...styles.header,
     paddingTop: insets.top > 0 ? insets.top : 16,
   };
-
-  // Create HTML for Jitsi Meet - with proper media handling
-  const jitsiHTML = `
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-        <title>Jitsi Video Call</title>
-        <style>
-          * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-          }
-          html, body {
-            width: 100%;
-            height: 100%;
-            background: #0a0a2a;
-            overflow: hidden;
-          }
-          #jitsi-container {
-            width: 100%;
-            height: 100%;
-          }
-          .loading {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100%;
-            color: white;
-            font-family: Arial, sans-serif;
-          }
-        </style>
-      </head>
-      <body>
-        <div id="jitsi-container" class="loading">Connecting...</div>
-        <script src="https://meet.jit.si/external_api.js"></script>
-        <script>
-          const roomUrl = '${roomUrl}';
-          const userName = '${name}';
-          
-          // Extract room name from URL
-          const roomName = roomUrl.split('/').pop();
-          
-          console.log('🚀 Initializing Jitsi Meet...');
-          console.log('📍 Room:', roomName);
-          console.log('👤 User:', userName);
-          
-          const domain = 'meet.jit.si';
-          const options = {
-            roomName: roomName,
-            width: '100%',
-            height: '100%',
-            parentNode: document.querySelector('#jitsi-container'),
-            userInfo: {
-              displayName: userName
-            },
-            configOverwrite: {
-              startWithAudioMuted: false,
-              startWithVideoMuted: false,
-              enableWelcomePage: false,
-              prejoinPageEnabled: false,
-              disableDeepLinking: true,
-              enableClosePage: false,
-              requireDisplayName: false,
-              disableProfile: true,
-              hideConferenceSubject: true,
-              hideConferenceTimer: false,
-              toolbarButtons: [
-                'microphone',
-                'camera',
-                'hangup',
-                'chat',
-                'settings',
-                'videoquality',
-                'filmstrip',
-                'tileview'
-              ],
-              // Enable audio/video by default
-              audio: {
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true
-              },
-              video: {
-                width: 640,
-                height: 480
-              }
-            },
-            interfaceConfigOverwrite: {
-              SHOW_JITSI_WATERMARK: false,
-              SHOW_WATERMARK_FOR_GUESTS: false,
-              SHOW_BRAND_WATERMARK: false,
-              SHOW_POWERED_BY: false,
-              DISABLE_JOIN_LEAVE_NOTIFICATIONS: true,
-              MOBILE_APP_PROMO: false,
-              HIDE_INVITE_MORE_HEADER: true,
-              DISABLE_VIDEO_BACKGROUND: false,
-              VIDEO_LAYOUT_FIT: 'both'
-            }
-          };
-          
-          try {
-            const api = new JitsiMeetExternalAPI(domain, options);
-            
-            // Request camera and microphone permissions
-            navigator.mediaDevices.getUserMedia({ 
-              audio: {
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true
-              },
-              video: {
-                width: { ideal: 640 },
-                height: { ideal: 480 }
-              }
-            }).then((stream) => {
-              console.log('✅ Got media stream:', stream);
-              // Stop the stream since we're just checking permissions
-              stream.getTracks().forEach(track => track.stop());
-            }).catch((error) => {
-              console.error('❌ Media permission error:', error);
-              window.ReactNativeWebView?.postMessage(JSON.stringify({
-                type: 'permission-error',
-                error: error.name + ': ' + error.message
-              }));
-            });
-            
-            api.addEventListener('videoConferenceJoined', (event) => {
-              console.log('✅ Joined conference:', event);
-              window.ReactNativeWebView?.postMessage(JSON.stringify({
-                type: 'conference-joined',
-                data: event
-              }));
-            });
-            
-            api.addEventListener('videoConferenceLeft', (event) => {
-              console.log('👋 Left conference:', event);
-              window.ReactNativeWebView?.postMessage(JSON.stringify({
-                type: 'call-ended',
-                reason: 'left-meeting'
-              }));
-            });
-            
-            api.addEventListener('participantLeft', (event) => {
-              console.log('👤 Participant left:', event);
-              setTimeout(() => {
-                const participants = api.getNumberOfParticipants();
-                if (participants <= 1) {
-                  window.ReactNativeWebView?.postMessage(JSON.stringify({
-                    type: 'call-ended',
-                    reason: 'participant-left'
-                  }));
-                }
-              }, 1000);
-            });
-            
-            api.addEventListener('readyToClose', () => {
-              console.log('🔴 Ready to close');
-              window.ReactNativeWebView?.postMessage(JSON.stringify({
-                type: 'call-ended',
-                reason: 'ready-to-close'
-              }));
-            });
-            
-            api.addEventListener('errorOccurred', (error) => {
-              console.error('❌ Jitsi error:', error);
-              window.ReactNativeWebView?.postMessage(JSON.stringify({
-                type: 'call-error',
-                error: error.error || 'Unknown error'
-              }));
-            });
-            
-          } catch (error) {
-            console.error('❌ Error initializing Jitsi:', error);
-            window.ReactNativeWebView?.postMessage(JSON.stringify({
-              type: 'call-error',
-              error: error.message
-            }));
-          }
-        </script>
-      </body>
-    </html>
-  `;
-
-  const handleWebViewMessage = (event) => {
-    try {
-      const message = JSON.parse(event.nativeEvent.data);
-      
-      switch (message.type) {
-        case 'call-ended':
-          handleCallEnd(message.reason);
-          break;
-        case 'call-error':
-          Alert.alert(
-            'Call Error', 
-            'An error occurred during the video call. Please try again.',
-            [
-              { text: 'OK', onPress: () => handleCallEnd('error') }
-            ]
-          );
-          break;
-        case 'permission-error':
-          Alert.alert(
-            'Permission Error',
-            `Camera/Microphone access failed: ${message.error}\n\nPlease check your device settings and ensure permissions are granted.`,
-            [
-              { text: 'OK', onPress: () => {} }
-            ]
-          );
-          break;
-        case 'conference-joined':
-          console.log('✅ Conference joined successfully');
-          break;
-        default:
-          console.log('Unknown message from WebView:', message);
-      }
-    } catch (error) {
-      console.error('Error parsing WebView message:', error);
-    }
+  
+  // Create Jitsi URL with proper configuration
+  const jitsiConfig = {
+    startWithAudioMuted: false,
+    startWithVideoMuted: false,
+    disableModeratorIndicator: false,
+    prejoinPageEnabled: false,
+    startAudioOnly: false,
+    requireDisplayName: false,
+    enableWelcomePage: false,
+    enableClosePage: false,
   };
+  
+  const jitsiParams = new URLSearchParams({
+    'userInfo.displayName': name || 'User',
+  });
+  
+  // Add config parameters
+  Object.keys(jitsiConfig).forEach(key => {
+    jitsiParams.append(`config.${key}`, jitsiConfig[key].toString());
+  });
+  
+  // Use hash parameters for better compatibility
+  const jitsiUrl = `https://meet.jit.si/${id}#${jitsiParams.toString()}`;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -485,19 +285,17 @@ function CallPage(props) {
       </View>
       
       <WebView
-        source={{ html: jitsiHTML }}
+        source={{ uri: jitsiUrl }}
         style={styles.webview}
         javaScriptEnabled={true}
         domStorageEnabled={true}
         mediaPlaybackRequiresUserAction={false}
         allowsInlineMediaPlayback={true}
         allowsProtectedMedia={true}
-        mediaCapturePermissionGrantType="grant"
-        onMessage={handleWebViewMessage}
-        onPermissionRequest={(request) => {
-          console.log('🎥 WebView permission request:', request.resources);
-          // Auto-grant all permissions (camera, microphone, etc.)
-          request.grant(request.resources);
+        startInLoadingState={true}
+        userAgent="Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.120 Mobile Safari/537.36"
+        onLoadEnd={() => {
+          console.log('✅ Jitsi loaded successfully');
         }}
         onError={(error) => {
           console.error('WebView error:', error);
@@ -509,11 +307,9 @@ function CallPage(props) {
             ]
           );
         }}
-        userAgent="Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
-        startInLoadingState={true}
-        scalesPageToFit={true}
-        scrollEnabled={false}
-        bounces={false}
+        onMessage={(event) => {
+          console.log('WebView message:', event.nativeEvent.data);
+        }}
       />
     </SafeAreaView>
   );

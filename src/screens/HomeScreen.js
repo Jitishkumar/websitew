@@ -12,6 +12,7 @@ import { StoriesService } from '../services/StoriesService';
 import { PostsService } from '../services/PostsService';
 import { Video } from 'expo-av';
 import { supabase } from '../lib/supabase';
+import { MatchingService } from '../services/MatchingService';
 import PostItem from '../components/PostItem';
 import PostItemOld from '../components/PostItemold';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -45,6 +46,11 @@ const HomeScreen = () => {
   const [currentPage, setCurrentPage] = useState(0);
   const [hasMorePosts, setHasMorePosts] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  
+  // Matching system state
+  const [isWaiting, setIsWaiting] = useState(false);
+  const [waitingCheckInterval, setWaitingCheckInterval] = useState(null);
+  const [currentUserProfile, setCurrentUserProfile] = useState(null);
   
   // Screen manager
   const screenManager = useScreenManager('Home');
@@ -450,6 +456,107 @@ const HomeScreen = () => {
     navigation.navigate('CreatePost');
   };
 
+  // Matching system functions
+  const handleFindMatch = async () => {
+    setLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        Alert.alert('Error', 'Not logged in');
+        setLoading(false);
+        return;
+      }
+
+      // Get user profile
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('username, avatar_url')
+        .eq('id', user.id)
+        .single();
+
+      if (!profile) {
+        Alert.alert('Error', 'Could not load profile');
+        setLoading(false);
+        return;
+      }
+
+      setCurrentUserProfile(profile);
+
+      // Add user to waiting queue
+      const result = await MatchingService.addToWaitingQueue(supabase, user.id, profile.username);
+      
+      if (!result.success) {
+        Alert.alert('Error', 'Failed to join queue: ' + (result.error?.message || 'Unknown error'));
+        setLoading(false);
+        return;
+      }
+
+      console.log('✅ Added to waiting queue');
+      setIsWaiting(true);
+      setLoading(false);
+
+      // Start checking for matches every 2 seconds
+      const interval = setInterval(() => {
+        checkForMatch(user.id);
+      }, 2000);
+
+      setWaitingCheckInterval(interval);
+
+      Alert.alert('Waiting', 'Looking for a match... You can skip anytime.');
+    } catch (error) {
+      console.error('Error finding match:', error);
+      Alert.alert('Error', 'Failed to find match: ' + error.message);
+      setLoading(false);
+    }
+  };
+
+  const checkForMatch = async (userId) => {
+    try {
+      // First, trigger matching for all waiting users
+      await MatchingService.matchWaitingUsers(supabase);
+
+      // Then check if this user has been matched
+      const result = await MatchingService.checkForMatch(supabase, userId);
+
+      if (result.matched) {
+        // User has been matched!
+        console.log('✅ Match found!', result.callData);
+        clearInterval(waitingCheckInterval);
+        setIsWaiting(false);
+
+        // Navigate to match confirmation screen
+        navigation.navigate('MatchConfirm', {
+          callData: result.callData,
+          userName: currentUserProfile?.username || 'User',
+        });
+      }
+    } catch (error) {
+      console.error('Error checking for match:', error);
+    }
+  };
+
+  const handleSkip = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) return;
+
+      // Clear waiting status
+      clearInterval(waitingCheckInterval);
+      setIsWaiting(false);
+
+      // Remove from waiting queue
+      const result = await MatchingService.skipUser(supabase, user.id);
+      
+      if (result.success) {
+        Alert.alert('Skipped', 'You have been removed from the queue.');
+      }
+    } catch (error) {
+      console.error('Error skipping:', error);
+    }
+  };
+
   if (!fontsLoaded) {
     return null;
   }
@@ -475,6 +582,14 @@ const HomeScreen = () => {
           </View>
           
           <View style={styles.headerIcons}>
+            <TouchableOpacity
+              style={styles.iconButton}
+              onPress={handleFindMatch}
+              activeOpacity={0.7}
+            >
+              <MaterialIcons name="videocam" size={24} color={isDarkMode ? "rgba(255, 255, 255, 0.9)" : "#333333"} />
+            </TouchableOpacity>
+
             <TouchableOpacity
               style={styles.iconButton}
               onPress={() => navigation.navigate('Trending')}
