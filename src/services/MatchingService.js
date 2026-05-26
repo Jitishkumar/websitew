@@ -92,14 +92,37 @@ export const MatchingService = {
 
   /**
    * Add user to waiting queue
+   * FIXED: Delete old records first to prevent duplicates
    */
   async addToWaitingQueue(supabase, userId, username) {
     try {
-      // First, remove any existing entries for this user to prevent duplicates
-      await supabase
+      console.log('🧹 Cleaning up old records for user:', userId);
+      
+      // CRITICAL: Delete ALL old records for this user first
+      // This prevents "already waiting" errors
+      const { error: deleteWaitingError } = await supabase
         .from('waiting_users')
         .delete()
         .eq('user_id', userId);
+
+      if (deleteWaitingError) {
+        console.error('⚠️ Error deleting old waiting records:', deleteWaitingError);
+      } else {
+        console.log('✅ Deleted old waiting records');
+      }
+
+      // Also delete any stuck active calls for this user
+      const { error: deleteCallsError } = await supabase
+        .from('active_calls')
+        .delete()
+        .or(`user1_id.eq.${userId},user2_id.eq.${userId}`)
+        .in('status', ['matched', 'active']);
+
+      if (deleteCallsError) {
+        console.error('⚠️ Error deleting old active calls:', deleteCallsError);
+      } else {
+        console.log('✅ Deleted old active calls');
+      }
 
       // Generate unique call ID for this waiting session
       const callId = `call_${Date.now()}_${Math.random().toString(36).substring(7)}`;
@@ -281,9 +304,23 @@ export const MatchingService = {
 
   /**
    * End a call and disconnect both users
+   * FIXED: Delete records for BOTH users
    */
   async endCall(supabase, callId) {
     try {
+      console.log('🔚 Ending call:', callId);
+      
+      // Get call data to find both users
+      const { data: callData, error: fetchError } = await supabase
+        .from('active_calls')
+        .select('user1_id, user2_id, call_id')
+        .eq('call_id', callId)
+        .single();
+
+      if (fetchError) {
+        console.error('Error fetching call data:', fetchError);
+      }
+
       // Update call status to ended
       const { error: updateError } = await supabase
         .from('active_calls')
@@ -291,29 +328,54 @@ export const MatchingService = {
           status: 'ended',
           ended_at: new Date().toISOString(),
         })
-        .eq('id', callId);
+        .eq('call_id', callId);
 
       if (updateError) {
-        console.error('Error ending call:', updateError);
-        return { success: false, error: updateError };
+        console.error('Error updating call status:', updateError);
+      } else {
+        console.log('✅ Updated call status to ended');
       }
 
-      // Get call data to clean up users
-      const { data: callData } = await supabase
+      // CRITICAL: Delete from active_calls table
+      const { error: deleteCallError } = await supabase
         .from('active_calls')
-        .select('user1_id, user2_id')
-        .eq('id', callId)
-        .single();
+        .delete()
+        .eq('call_id', callId);
 
+      if (deleteCallError) {
+        console.error('Error deleting from active_calls:', deleteCallError);
+      } else {
+        console.log('✅ Deleted from active_calls');
+      }
+
+      // CRITICAL: Delete from waiting_users for BOTH users
       if (callData) {
-        // Remove both users from waiting queue
-        await supabase
+        // Delete user1 from waiting
+        const { error: deleteUser1Error } = await supabase
           .from('waiting_users')
           .delete()
-          .or(`user_id.eq.${callData.user1_id},user_id.eq.${callData.user2_id}`);
+          .eq('user_id', callData.user1_id);
+
+        if (deleteUser1Error) {
+          console.error('Error deleting user1 from waiting:', deleteUser1Error);
+        } else {
+          console.log('✅ Deleted user1 from waiting_users');
+        }
+
+        // Delete user2 from waiting
+        const { error: deleteUser2Error } = await supabase
+          .from('waiting_users')
+          .delete()
+          .eq('user_id', callData.user2_id);
+
+        if (deleteUser2Error) {
+          console.error('Error deleting user2 from waiting:', deleteUser2Error);
+        } else {
+          console.log('✅ Deleted user2 from waiting_users');
+        }
       }
 
-      console.log('✅ Call ended successfully');
+      console.log('✅ Call ended successfully and records deleted');
       return { success: true };
     } catch (error) {
       console.error('Error ending call:', error);

@@ -82,6 +82,16 @@ const HomeScreen = () => {
 
     const unsubscribe = navigation.addListener('focus', () => {
       const params = navigation.getState().routes.find(route => route.name === 'Home')?.params;
+      
+      // Auto-start matching if coming from call end
+      if (params?.autoStartMatch) {
+        console.log('🔄 Auto-starting new match after call ended');
+        setTimeout(() => {
+          handleFindMatch();
+        }, 500); // Small delay to ensure screen is ready
+        navigation.setParams({ autoStartMatch: undefined });
+      }
+      
       if (params?.refresh) {
         if (params.updatedPosts) {
           setPosts(params.updatedPosts);

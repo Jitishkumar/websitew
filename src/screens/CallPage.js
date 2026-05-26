@@ -176,7 +176,7 @@ function CallPage(props) {
     try {
       console.log('🧹 Cleaning up call data for user:', currentUser.id);
       
-      // 1. Delete from active_calls table
+      // 1. Delete from active_calls table (by call_id)
       const { error: callError } = await supabase
         .from('active_calls')
         .delete()
@@ -188,7 +188,7 @@ function CallPage(props) {
         console.log('✅ Deleted from active_calls');
       }
 
-      // 2. Delete from waiting_users table (in case they were waiting)
+      // 2. Delete from waiting_users table (by user_id)
       const { error: waitingError } = await supabase
         .from('waiting_users')
         .delete()
@@ -198,6 +198,20 @@ function CallPage(props) {
         console.error('Error deleting from waiting_users:', waitingError);
       } else {
         console.log('✅ Deleted from waiting_users');
+      }
+
+      // 3. EXTRA: Also delete any other stuck records for this user
+      // This handles edge cases where records weren't properly cleaned
+      const { error: extraCleanupError } = await supabase
+        .from('active_calls')
+        .delete()
+        .or(`user1_id.eq.${currentUser.id},user2_id.eq.${currentUser.id}`)
+        .in('status', ['matched', 'active']);
+
+      if (extraCleanupError) {
+        console.error('Error in extra cleanup:', extraCleanupError);
+      } else {
+        console.log('✅ Extra cleanup completed');
       }
       
       console.log('✅ Cleanup completed successfully');
