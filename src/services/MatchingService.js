@@ -47,7 +47,7 @@ export const MatchingService = {
                 user1_name: user1.username,
                 user2_id: user2.user_id,
                 user2_name: user2.username,
-                status: 'matched', // Set to 'matched' initially, will be 'active' when both accept
+                status: 'matched', // Set to 'matched' initially
                 room_url: roomUrl,
               },
             ])
@@ -179,6 +179,13 @@ export const MatchingService = {
         const otherUserId = matchedCall.user1_id === userId ? matchedCall.user2_id : matchedCall.user1_id;
         const otherUserName = matchedCall.user1_id === userId ? matchedCall.user2_name : matchedCall.user1_name;
 
+        // Fetch other user's profile photo from profiles table
+        const { data: otherUserProfile } = await supabase
+          .from('profiles')
+          .select('avatar_url, username')
+          .eq('id', otherUserId)
+          .single();
+
         return {
           matched: true,
           callData: {
@@ -187,7 +194,8 @@ export const MatchingService = {
             roomUrl: matchedCall.room_url,
             isUser1: matchedCall.user1_id === userId,
             otherUserId: otherUserId,
-            otherUserName: otherUserName,
+            otherUserName: otherUserProfile?.username || otherUserName,
+            otherUserAvatar: otherUserProfile?.avatar_url || null,
             status: matchedCall.status
           }
         };

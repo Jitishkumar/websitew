@@ -7,6 +7,7 @@ import {
   Alert,
   ActivityIndicator,
   SafeAreaView,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
@@ -21,13 +22,14 @@ function MatchConfirmScreen({ route, navigation }) {
 
   useEffect(() => {
     loadUserData();
-    
+  }, []);
+
+  // Separate useEffect for timer to avoid setState in render
+  useEffect(() => {
     // Countdown timer
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
-          // Time's up, reject automatically
-          handleReject();
           return 0;
         }
         return prev - 1;
@@ -36,6 +38,14 @@ function MatchConfirmScreen({ route, navigation }) {
 
     return () => clearInterval(timer);
   }, []);
+
+  // Auto-reject when timer reaches 0
+  useEffect(() => {
+    if (timeLeft === 0 && !loading) {
+      console.log('⏰ Timer expired, auto-rejecting');
+      handleReject();
+    }
+  }, [timeLeft, loading]);
 
   const loadUserData = async () => {
     try {
@@ -60,69 +70,106 @@ function MatchConfirmScreen({ route, navigation }) {
   };
 
   const handleAccept = async () => {
+    // Safety check for currentUser
+    if (!currentUser || !currentUser.id) {
+      console.error('❌ Current user not loaded yet');
+      Alert.alert('Error', 'User data not loaded. Please try again.');
+      navigation.navigate('MainApp', { screen: 'Home' });
+      return;
+    }
+
     setLoading(true);
     try {
       console.log('✅ User accepted match');
       
-      // Accept the match in database
-      const result = await MatchingService.acceptMatch(supabase, callData.id, currentUser.id);
+      // Update acceptance in database (simplified - no MatchingService)
+      const updateField = callData.isUser1 ? 'user1_accepted' : 'user2_accepted';
       
-      if (!result.success) {
+      const { error: updateError } = await supabase
+        .from('active_calls')
+        .update({ [updateField]: true })
+        .eq('id', callData.id);
+
+      if (updateError) {
+        console.error('Error updating acceptance:', updateError);
         Alert.alert('Error', 'Failed to accept match');
         setLoading(false);
         return;
       }
 
-      if (result.bothAccepted) {
-        // Both users accepted, navigate to call
+      // Check if both users have accepted
+      const { data: updatedCall, error: checkError } = await supabase
+        .from('active_calls')
+        .select('user1_accepted, user2_accepted')
+        .eq('id', callData.id)
+        .single();
+
+      if (checkError) {
+        console.error('Error checking acceptance:', checkError);
+        setLoading(false);
+        return;
+      }
+
+      if (updatedCall.user1_accepted && updatedCall.user2_accepted) {
+        // Both accepted - update status and start call
+        await supabase
+          .from('active_calls')
+          .update({ 
+            status: 'active',
+            started_at: new Date().toISOString()
+          })
+          .eq('id', callData.id);
+
         console.log('🎉 Both users accepted, starting call');
         navigation.replace('CallPage', {
           data: currentUser.name,
           id: callData.roomName,
           roomUrl: callData.roomUrl,
           matchedUser: callData.otherUserName,
-          isUser1: callData.isUser1, // Pass isUser1 to determine moderator
+          isUser1: callData.isUser1,
+          callRecordId: callData.id,
         });
       } else {
-        // Waiting for other user to accept
+        // Waiting for other user
         console.log('⏳ Waiting for other user to accept');
         setWaitingForOther(true);
         setLoading(false);
         
-        // Start polling for other user's response
+        // Poll for other user's response
         const pollInterval = setInterval(async () => {
           try {
-            const { data: updatedCall } = await supabase
+            const { data: call } = await supabase
               .from('active_calls')
               .select('*')
               .eq('id', callData.id)
               .single();
 
-            if (updatedCall) {
-              if (updatedCall.status === 'active') {
-                // Other user accepted, start call
+            if (call) {
+              if (call.user1_accepted && call.user2_accepted) {
+                // Both accepted
                 clearInterval(pollInterval);
                 navigation.replace('CallPage', {
                   data: currentUser.name,
                   id: callData.roomName,
                   roomUrl: callData.roomUrl,
                   matchedUser: callData.otherUserName,
-                  isUser1: callData.isUser1, // Pass isUser1 to determine moderator
+                  isUser1: callData.isUser1,
+                  callRecordId: callData.id,
                 });
-              } else if (updatedCall.status === 'rejected') {
+              } else if (call.status === 'rejected') {
                 // Other user rejected
                 clearInterval(pollInterval);
-                Alert.alert('Match Rejected', 'The other user declined the call. Finding you another match...', [
+                Alert.alert('Match Rejected', 'The other user declined. Finding you another match...', [
                   { text: 'OK', onPress: () => navigation.navigate('MainApp', { screen: 'Home' }) }
                 ]);
               }
             }
           } catch (error) {
-            console.error('Error polling for match status:', error);
+            console.error('Error polling:', error);
           }
         }, 2000);
 
-        // Clear polling after 30 seconds
+        // Timeout after 30 seconds
         setTimeout(() => {
           clearInterval(pollInterval);
           if (waitingForOther) {
@@ -140,12 +187,21 @@ function MatchConfirmScreen({ route, navigation }) {
   };
 
   const handleReject = async () => {
+    // Safety check for currentUser
+    if (!currentUser || !currentUser.id) {
+      console.error('❌ Current user not loaded yet');
+      navigation.navigate('MainApp', { screen: 'Home' });
+      return;
+    }
+
     setLoading(true);
     try {
-      const result = await MatchingService.rejectMatch(supabase, callData.id, currentUser.id);
-      
-      if (!result.success) {
-        console.error('Error rejecting match:', result.error);
+      // Delete the call record
+      if (callData && callData.id) {
+        await supabase
+          .from('active_calls')
+          .delete()
+          .eq('id', callData.id);
       }
 
       console.log('✅ Match rejected, searching for next match');
@@ -184,9 +240,16 @@ function MatchConfirmScreen({ route, navigation }) {
         {/* Current User */}
         <View style={styles.userCard}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {currentUser?.name?.charAt(0).toUpperCase() || 'Y'}
-            </Text>
+            {currentUser?.avatar_url ? (
+              <Image 
+                source={{ uri: currentUser.avatar_url }}
+                style={styles.avatarImage}
+              />
+            ) : (
+              <Text style={styles.avatarText}>
+                {currentUser?.name?.charAt(0).toUpperCase() || 'Y'}
+              </Text>
+            )}
           </View>
           <Text style={styles.userName}>{currentUser?.name || 'You'}</Text>
           <Text style={styles.userEmail}>{currentUser?.email}</Text>
@@ -201,9 +264,16 @@ function MatchConfirmScreen({ route, navigation }) {
         {/* Other User */}
         <View style={styles.userCard}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {callData.otherUserName?.charAt(0).toUpperCase() || 'U'}
-            </Text>
+            {callData.otherUserAvatar ? (
+              <Image 
+                source={{ uri: callData.otherUserAvatar }}
+                style={styles.avatarImage}
+              />
+            ) : (
+              <Text style={styles.avatarText}>
+                {callData.otherUserName?.charAt(0).toUpperCase() || 'U'}
+              </Text>
+            )}
           </View>
           <Text style={styles.userName}>{callData.otherUserName}</Text>
           <Text style={styles.userLabel}>Matched User</Text>
@@ -332,6 +402,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 40,
   },
   avatarText: {
     fontSize: 32,
