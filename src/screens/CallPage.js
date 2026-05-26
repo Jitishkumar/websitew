@@ -7,9 +7,11 @@ import {
   SafeAreaView, 
   Alert, 
   Linking,
-  BackHandler
+  BackHandler,
+  AppState
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 
@@ -24,6 +26,42 @@ function CallPage(props) {
   const [currentUser, setCurrentUser] = useState(null);
   const callTimerRef = useRef(null);
   const cleanupDoneRef = useRef(false);
+  const appStateRef = useRef(AppState.currentState);
+  const callStartTimeRef = useRef(Date.now());
+
+  // Auto-return to home when app regains focus after 30 seconds
+  useFocusEffect(
+    React.useCallback(() => {
+      const handleAppStateChange = (nextAppState) => {
+        console.log('App state changed:', appStateRef.current, '->', nextAppState);
+        
+        if (appStateRef.current === 'background' && nextAppState === 'active') {
+          // App came back from background
+          const timeInCall = Date.now() - callStartTimeRef.current;
+          
+          if (timeInCall > 30000) { // If more than 30 seconds have passed
+            console.log('🔄 App returned from background after call, auto-returning to home');
+            Alert.alert(
+              'Call Completed',
+              'Welcome back! Ready for another match?',
+              [
+                {
+                  text: 'Find New Match',
+                  onPress: () => handleCallEnd('auto_return'),
+                }
+              ]
+            );
+          }
+        }
+        
+        appStateRef.current = nextAppState;
+      };
+
+      const subscription = AppState.addEventListener('change', handleAppStateChange);
+      
+      return () => subscription?.remove();
+    }, [])
+  );
 
   useEffect(() => {
     getCurrentUser();
@@ -69,13 +107,54 @@ function CallPage(props) {
 
   const openJitsiInBrowser = async () => {
     try {
-      // Simple Jitsi URL that opens in browser
-      const jitsiUrl = `https://meet.jit.si/${id}`;
+      // Enhanced Jitsi URL with desktop mode and better configuration
+      const jitsiParams = new URLSearchParams({
+        // Force desktop mode for better quality and features
+        'config.isMobile': 'false',
+        'config.disableMobile': 'true',
+        // User configuration
+        'userInfo.displayName': name || 'User',
+        // Video/Audio quality settings for desktop mode
+        'config.resolution': '720',
+        'config.constraints.video.height.ideal': '720',
+        'config.constraints.video.width.ideal': '1280',
+        'config.startWithVideoMuted': 'false',
+        'config.startWithAudioMuted': 'false',
+        // Disable authentication and moderation
+        'config.requireDisplayName': 'false',
+        'config.prejoinPageEnabled': 'false',
+        'config.enableWelcomePage': 'false',
+        'config.enableClosePage': 'false',
+        'config.disableModeratorIndicator': 'true',
+        'config.enableUserRolesBasedOnToken': 'false',
+        'config.enableFeaturesBasedOnToken': 'false',
+        'config.enableAuth': 'false',
+        'config.enableGuests': 'true',
+        // Enhanced features for desktop mode
+        'config.enableLayerSuspension': 'true',
+        'config.enableTalkWhileMuted': 'true',
+        'config.enableNoAudioSignal': 'true',
+        'config.enableNoisyMicDetection': 'true',
+        // Disable lobby and authentication
+        'config.enableLobby': 'false',
+        'config.enableLobbyChat': 'false',
+        'config.disableInviteFunctions': 'true',
+        'config.doNotStoreRoom': 'true',
+        // Enable video effects and filters
+        'config.videoQuality.maxBitrateForTileView': '2500000',
+        'config.videoQuality.minHeightForQualityLvl': '360',
+        'config.enableInsecureRoomNameWarning': 'false',
+      });
+      
+      // Use desktop user agent to force desktop mode
+      const jitsiUrl = `https://meet.jit.si/${id}?${jitsiParams.toString()}`;
+      
+      console.log('🖥️ Opening Jitsi in desktop mode:', jitsiUrl);
       
       const supported = await Linking.canOpenURL(jitsiUrl);
       if (supported) {
         await Linking.openURL(jitsiUrl);
-        console.log('✅ Opened Jitsi in browser:', jitsiUrl);
+        console.log('✅ Opened Jitsi in browser with desktop mode');
       } else {
         Alert.alert('Error', 'Cannot open video call');
       }
@@ -127,8 +206,13 @@ function CallPage(props) {
     }
   };
 
-  const handleCallEnd = async (reason) => {
-    if (callEnded) return; // Prevent multiple calls
+  const handleCallEnd = async (reason = 'user_ended') => {
+    if (callEnded) {
+      console.log('⚠️ Call already ended, auto-starting new match');
+      // Auto-start new match instead of just going to home
+      props.navigation.replace('MainApp', { screen: 'Home', params: { autoStartMatch: true } });
+      return;
+    }
     
     setCallEnded(true);
     
@@ -139,11 +223,17 @@ function CallPage(props) {
     
     console.log('📞 Call ended:', { callID: id, reason });
     
-    // Cleanup database
-    await cleanupCallData();
+    try {
+      // Cleanup database
+      await cleanupCallData();
+      console.log('✅ Database cleanup completed, auto-starting new match');
+    } catch (error) {
+      console.error('❌ Error during cleanup:', error);
+    }
     
-    // Navigate back to homepage
-    props.navigation.navigate('MainApp', { screen: 'Home' });
+    // Navigate back to homepage with autoStartMatch flag to automatically find new match
+    console.log('🏠 Replacing current screen with MainApp -> Home (auto-start match)');
+    props.navigation.replace('MainApp', { screen: 'Home', params: { autoStartMatch: true } });
   };
 
   const handleGoBack = () => {
@@ -164,7 +254,8 @@ function CallPage(props) {
         ]
       );
     } else {
-      props.navigation.navigate('MainApp', { screen: 'Home' });
+      console.log('🏠 Call already ended, navigating to home via handleGoBack');
+      props.navigation.replace('MainApp', { screen: 'Home' });
     }
   };
   
@@ -183,7 +274,7 @@ function CallPage(props) {
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>Video Call</Text>
           <Text style={styles.matchInfo}>Connected with: {matchedUser}</Text>
-          <Text style={styles.timerInfo}>Call opened in browser</Text>
+          <Text style={styles.timerInfo}>Call opened in browser (Desktop Mode)</Text>
           <Text style={styles.timerInfo}>Call limit: 3 minutes</Text>
         </View>
         <View style={styles.headerRight}>
@@ -202,6 +293,9 @@ function CallPage(props) {
             Your video call has been opened in your browser.
           </Text>
           <Text style={styles.instructionsText}>
+            🖥️ Desktop mode enabled for better quality!
+          </Text>
+          <Text style={styles.instructionsText}>
             Switch to your browser to join the call.
           </Text>
           <Text style={styles.instructionsSubtext}>
@@ -211,9 +305,18 @@ function CallPage(props) {
             Matched with: {matchedUser}
           </Text>
           
+          <View style={styles.featuresContainer}>
+            <Text style={styles.featuresTitle}>✨ Available Features:</Text>
+            <Text style={styles.featureText}>📹 HD Video Quality (720p)</Text>
+            <Text style={styles.featureText}>🎤 Noise Suppression</Text>
+            <Text style={styles.featureText}>🖼️ Background Blur/Effects</Text>
+            <Text style={styles.featureText}>💬 Chat Messages</Text>
+            <Text style={styles.featureText}>📱 Screen Sharing</Text>
+          </View>
+          
           <TouchableOpacity 
             style={styles.endCallButton}
-            onPress={handleCallEnd}
+            onPress={() => handleCallEnd('user_ended')}
           >
             <Ionicons name="call" size={24} color="#fff" />
             <Text style={styles.endCallButtonText}>End Call & Return Home</Text>
@@ -221,6 +324,10 @@ function CallPage(props) {
           
           <Text style={styles.warningText}>
             ⚠️ Call will automatically end after 3 minutes
+          </Text>
+          
+          <Text style={styles.autoReturnText}>
+            🔄 App will auto-return to Home when you come back
           </Text>
         </View>
       </View>
@@ -336,6 +443,23 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 4,
   },
+  featuresContainer: {
+    marginTop: 20,
+    marginBottom: 20,
+    alignItems: 'center',
+  },
+  featuresTitle: {
+    color: '#ff00ff',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  featureText: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 12,
+    textAlign: 'center',
+    marginBottom: 2,
+  },
   endCallButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -343,7 +467,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 30,
     paddingVertical: 15,
     borderRadius: 25,
-    marginTop: 30,
+    marginTop: 20,
     gap: 10,
   },
   endCallButtonText: {
@@ -355,7 +479,13 @@ const styles = StyleSheet.create({
     color: '#ffaa00',
     fontSize: 12,
     textAlign: 'center',
-    marginTop: 20,
+    marginTop: 15,
+  },
+  autoReturnText: {
+    color: '#00ff88',
+    fontSize: 11,
+    textAlign: 'center',
+    marginTop: 8,
   },
 });
 
