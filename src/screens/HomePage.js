@@ -184,13 +184,34 @@ function HomePage({navigation}) {
 
   const getWaitingUsersCount = async () => {
     try {
-      const { count } = await supabase
+      // Only count recent records (last 2 minutes)
+      // Since records are auto-deleted 30 seconds after leaving CallPage
+      const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+      
+      const { count: activeCalls } = await supabase
+        .from('active_calls')
+        .select('*', { count: 'exact' })
+        .in('status', ['matched', 'active'])
+        .gte('created_at', twoMinutesAgo);
+      
+      // Each active call has 2 users, so multiply by 2
+      const usersInCalls = (activeCalls || 0) * 2;
+      
+      // Count recent waiting users
+      const { count: waitingCount } = await supabase
         .from('waiting_users')
         .select('*', { count: 'exact' })
-        .eq('status', 'waiting');
-      setWaitingUsers(count || 0);
+        .eq('status', 'waiting')
+        .gte('created_at', twoMinutesAgo);
+      
+      // Total users = users in calls + users waiting
+      const totalUsers = usersInCalls + (waitingCount || 0);
+      
+      setWaitingUsers(totalUsers);
+      console.log(`👥 Users online: ${totalUsers} (${usersInCalls} in calls, ${waitingCount || 0} waiting)`);
     } catch (error) {
       console.error('Error getting waiting users count:', error);
+      setWaitingUsers(0);
     }
   };
 
@@ -228,18 +249,22 @@ function HomePage({navigation}) {
 
   const cleanupExpiredEntries = async () => {
     try {
-      // Clean up waiting users older than 10 minutes
+      // Clean up waiting users older than 2 minutes (more aggressive)
+      const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+      
       await supabase
         .from('waiting_users')
         .delete()
-        .lt('created_at', new Date(Date.now() - 10 * 60 * 1000).toISOString());
+        .lt('created_at', twoMinutesAgo);
 
-      // Clean up active calls older than 5 minutes that are still marked as active
+      // Clean up active calls older than 2 minutes
       await supabase
         .from('active_calls')
         .delete()
-        .eq('status', 'active')
-        .lt('created_at', new Date(Date.now() - 5 * 60 * 1000).toISOString());
+        .in('status', ['matched', 'active'])
+        .lt('created_at', twoMinutesAgo);
+      
+      console.log('✅ Cleaned up expired entries');
     } catch (error) {
       console.error('Error cleaning up expired entries:', error);
     }
@@ -364,15 +389,15 @@ function HomePage({navigation}) {
         }
       }
 
-      // If we found a match, create the call
+      // If we found a match, create the call with 'matched' status
       if (availableMatch) {
-        setMatchingStatus('Match found! Setting up call...');
+        setMatchingStatus('Match found! Preparing...');
         
-        // Create a Jitsi Meet room (completely free!)
+        // Create a Jitsi Meet room
         const roomUrl = await createJitsiRoom();
         
-        // Create active call session
-        const { error: sessionError } = await supabase
+        // Create active call session with 'matched' status (not 'active' yet)
+        const { data: newCall, error: sessionError } = await supabase
           .from('active_calls')
           .insert({
             call_id: availableMatch.call_id,
@@ -382,8 +407,12 @@ function HomePage({navigation}) {
             user2_id: currentUser.id,
             user2_name: currentUser.username,
             created_at: new Date().toISOString(),
-            status: 'active'
-          });
+            status: 'matched', // Set to 'matched', will become 'active' when both accept
+            user1_accepted: false,
+            user2_accepted: false
+          })
+          .select()
+          .single();
 
         if (sessionError) {
           console.error('Error creating session:', sessionError);
@@ -394,27 +423,36 @@ function HomePage({navigation}) {
         }
 
         // Remove the matched user from waiting list
-        const { error: deleteError } = await supabase
+        await supabase
           .from('waiting_users')
           .delete()
           .eq('user_id', availableMatch.user_id);
-
-        if (deleteError) {
-          console.error('Error removing matched user from waiting list:', deleteError);
-        }
 
         setCallId(availableMatch.call_id);
         setIsMatching(false);
         setMatchingStatus('');
         
-        // Add a small delay to ensure database operations complete
+        // Fetch other user's profile photo
+        const { data: otherUserProfile } = await supabase
+          .from('profiles')
+          .select('avatar_url, username')
+          .eq('id', availableMatch.user_id)
+          .single();
+        
+        // Navigate to MatchConfirmScreen
         setTimeout(() => {
-          navigation.navigate('CallPage', {
-            data: currentUser.username,
-            id: availableMatch.call_id,
-            roomUrl: roomUrl,
-            matchedUser: availableMatch.username,
-            isJoining: true
+          navigation.navigate('MatchConfirm', {
+            callData: {
+              id: newCall.id,
+              roomName: availableMatch.call_id,
+              roomUrl: roomUrl,
+              isUser1: false, // Current user is user2
+              otherUserId: availableMatch.user_id,
+              otherUserName: otherUserProfile?.username || availableMatch.username,
+              otherUserAvatar: otherUserProfile?.avatar_url || null,
+              status: 'matched'
+            },
+            userName: currentUser.username,
           });
         }, 500);
 
@@ -463,7 +501,7 @@ function HomePage({navigation}) {
 
   const startMatchingPolling = (callId, roomUrl) => {
     let pollCount = 0;
-    const maxPolls = 150; // 5 minutes with 2-second intervals
+    const maxPolls = 20; // 40 seconds with 2-second intervals
     
     pollIntervalRef.current = setInterval(async () => {
       pollCount++;
@@ -472,12 +510,12 @@ function HomePage({navigation}) {
         // Update waiting users count
         await getWaitingUsersCount();
         
-        // Check if someone joined our call
+        // Check if someone joined our call (match found)
         const { data: activeCall } = await supabase
           .from('active_calls')
           .select('*')
           .eq('call_id', callId)
-          .eq('status', 'active')
+          .eq('status', 'matched')
           .limit(1);
 
         if (activeCall && activeCall.length > 0) {
@@ -486,60 +524,77 @@ function HomePage({navigation}) {
             clearTimeout(timeoutRef.current);
           }
           
-          setMatchingStatus('Match found! Connecting...');
+          setMatchingStatus('Match found! Preparing...');
           
           const call = activeCall[0];
-          const matchedUser = call.user1_id === currentUser.id ? call.user2_name : call.user1_name;
+          const isUser1 = call.user1_id === currentUser.id;
+          const otherUserId = isUser1 ? call.user2_id : call.user1_id;
+          const otherUserName = isUser1 ? call.user2_name : call.user1_name;
           
-          // Add delay to show the status message
+          // Fetch other user's profile photo
+          const { data: otherUserProfile } = await supabase
+            .from('profiles')
+            .select('avatar_url, username')
+            .eq('id', otherUserId)
+            .single();
+          
+          // Navigate to MatchConfirmScreen
           setTimeout(() => {
             setMatchingStatus('');
-            navigation.navigate('CallPage', {
-              data: currentUser.username,
-              id: callId,
-              roomUrl: call.room_url || roomUrl,
-              matchedUser: matchedUser,
-              isJoining: false
+            setIsMatching(false);
+            navigation.navigate('MatchConfirm', {
+              callData: {
+                id: call.id,
+                roomName: call.call_id,
+                roomUrl: call.room_url || roomUrl,
+                isUser1: isUser1,
+                otherUserId: otherUserId,
+                otherUserName: otherUserProfile?.username || otherUserName,
+                otherUserAvatar: otherUserProfile?.avatar_url || null,
+                status: call.status
+              },
+              userName: currentUser.username,
             });
-          }, 1000);
+          }, 500);
           
           return;
         }
         
-        // Update status with poll count for user feedback
-        if (pollCount % 15 === 0) { // Every 30 seconds
-          setMatchingStatus(`Waiting for someone to join... (${Math.floor(pollCount / 30)}min)`);
-        }
+        // Update status with countdown
+        const secondsLeft = (maxPolls - pollCount) * 2;
+        setMatchingStatus(`Searching for match... ${secondsLeft}s remaining`);
         
       } catch (error) {
         console.error('Error polling for match:', error);
       }
       
-      // Stop polling after max attempts
+      // Stop polling after max attempts (40 seconds)
       if (pollCount >= maxPolls) {
         clearInterval(pollIntervalRef.current);
         setMatchingStatus('');
+        setIsMatching(false);
         cleanupUserWaitingEntry();
         Alert.alert(
-          'Search Timeout', 
-          'No match found within 5 minutes. Would you like to try again?',
+          'No Match Found', 
+          'Sorry, no one is available right now. Please try again later.',
           [
-            { text: 'Cancel', style: 'cancel' },
+            { text: 'OK', style: 'cancel' },
             { text: 'Try Again', onPress: findRandomMatch }
           ]
         );
       }
     }, 2000);
 
-    // Set a timeout as backup
+    // Set a timeout as backup (45 seconds)
     timeoutRef.current = setTimeout(async () => {
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current);
       }
       setMatchingStatus('');
+      setIsMatching(false);
       await cleanupUserWaitingEntry();
-      Alert.alert('Timeout', 'No match found within 5 minutes. Please try again.');
-    }, 300000); // 5 minutes
+      Alert.alert('No Match Found', 'Sorry, no one is available right now. Please try again later.');
+    }, 45000);
   };
 
   const cancelWaiting = async () => {
@@ -706,7 +761,7 @@ function HomePage({navigation}) {
             {waitingUsers > 0 && (
               <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
                 <Text style={styles.waitingText}>
-                  {waitingUsers} user{waitingUsers === 1 ? '' : 's'} waiting
+                  {waitingUsers} user{waitingUsers === 1 ? '' : 's'} online
                 </Text>
               </Animated.View>
             )}
@@ -936,10 +991,11 @@ function HomePage({navigation}) {
             style={styles.helpGradient}
           >
             <Text style={styles.helpTitle}>How it works:</Text>
+            <Text style={styles.helpItem}>• Searches for match for 40 seconds</Text>
             <Text style={styles.helpItem}>• Priority given to opposite gender matches</Text>
+            <Text style={styles.helpItem}>• Both users must accept before call starts</Text>
+            <Text style={styles.helpItem}>• Shows profile photos on match confirmation</Text>
             <Text style={styles.helpItem}>• Falls back to same gender if no opposite available</Text>
-            <Text style={styles.helpItem}>• 3-minute call limit for all matches</Text>
-            <Text style={styles.helpItem}>• Automatic cleanup after 5 minutes of waiting</Text>
           </LinearGradient>
         </Animated.View>
       </Animated.View>

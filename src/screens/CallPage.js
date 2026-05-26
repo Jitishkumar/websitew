@@ -29,18 +29,36 @@ function CallPage(props) {
   const appStateRef = useRef(AppState.currentState);
   const callStartTimeRef = useRef(Date.now());
 
-  // Auto-return to home when app regains focus after 30 seconds
+  // Auto-cleanup when user leaves CallPage (goes to browser)
+  useFocusEffect(
+    React.useCallback(() => {
+      console.log('📱 CallPage focused');
+      
+      // When CallPage loses focus (user goes to browser), start 30-second cleanup timer
+      return () => {
+        console.log('📱 CallPage unfocused - user went to browser, starting 30s cleanup timer');
+        
+        setTimeout(async () => {
+          console.log('⏰ 30 seconds passed, auto-cleaning database records');
+          await cleanupCallData();
+          console.log('✅ Auto-cleanup completed after 30 seconds');
+        }, 30000); // 30 seconds
+      };
+    }, [currentUser])
+  );
+
+  // Auto-return to home when app regains focus after being in browser
   useFocusEffect(
     React.useCallback(() => {
       const handleAppStateChange = (nextAppState) => {
         console.log('App state changed:', appStateRef.current, '->', nextAppState);
         
         if (appStateRef.current === 'background' && nextAppState === 'active') {
-          // App came back from background
+          // App came back from background (browser)
           const timeInCall = Date.now() - callStartTimeRef.current;
           
           if (timeInCall > 30000) { // If more than 30 seconds have passed
-            console.log('🔄 App returned from background after call, auto-returning to home');
+            console.log('🔄 App returned from browser after 30s, auto-returning to home');
             Alert.alert(
               'Call Completed',
               'Welcome back! Ready for another match?',
