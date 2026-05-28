@@ -128,6 +128,7 @@ function MatchConfirmScreen({ route, navigation }) {
           matchedUser: callData.otherUserName,
           isUser1: callData.isUser1,
           callRecordId: callData.id,
+          callType: callData.callType || 'video', // Pass call type
         });
       } else {
         // Waiting for other user
@@ -155,6 +156,7 @@ function MatchConfirmScreen({ route, navigation }) {
                   matchedUser: callData.otherUserName,
                   isUser1: callData.isUser1,
                   callRecordId: callData.id,
+                  callType: callData.callType || 'video', // Pass call type
                 });
               } else if (call.status === 'rejected') {
                 // Other user rejected
@@ -232,7 +234,7 @@ function MatchConfirmScreen({ route, navigation }) {
       <View style={styles.header}>
         <Text style={styles.title}>Match Found!</Text>
         <Text style={styles.subtitle}>
-          {waitingForOther ? 'Waiting for response...' : 'Accept to start video call'}
+          {waitingForOther ? 'Waiting for response...' : `Accept to start ${callData.callType || 'video'} call`}
         </Text>
       </View>
 

@@ -153,6 +153,12 @@ const MessageScreen = () => {
   const [videoLoaded, setVideoLoaded] = useState(false);
   const [hasCameraPermission, setHasCameraPermission] = useState(null);
   
+  // View Once feature states
+  const [viewOnceEnabled, setViewOnceEnabled] = useState(false);
+  const [showMediaPreview, setShowMediaPreview] = useState(false);
+  const [previewMedia, setPreviewMedia] = useState(null);
+  const [deletedMessages, setDeletedMessages] = useState(new Set());
+  
   // Background image state (global for user, not per conversation)
   const [backgroundImage, setBackgroundImage] = useState(null);
   const [backgroundOpacity, setBackgroundOpacity] = useState(0.3);
@@ -1449,71 +1455,14 @@ const MessageScreen = () => {
       
       if (!result.canceled) {
         setShowMediaPicker(false);
-        Alert.alert('Uploading', 'Uploading media, please wait...');
         
-        try {
-          const { uploadToCloudinary } = await import('../config/cloudinary');
-          
-          const mediaType = type === 'photo' ? 'image' : 'video';
-          const uploadResult = await uploadToCloudinary(result.assets[0].uri, mediaType);
-          
-          if (!uploadResult || !uploadResult.url) {
-            throw new Error('Failed to upload media');
-          }
-          
-          const tempId = Date.now().toString();
-          const newMessage = { 
-            id: tempId, 
-            text: '',
-            media_url: uploadResult.url,
-            media_type: mediaType,
-            sender: 'me',
-            sender_id: userId,
-            timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-            read: false,
-            cloudinary_public_id: uploadResult.publicId
-          };
-          
-          const updatedMessages = [...messages, newMessage];
-          setMessages(updatedMessages);
-          
-          await AsyncStorage.setItem(`conversation_${conversationId}`, JSON.stringify(updatedMessages));
-          
-          const { data, error } = await supabase
-            .from('messages')
-            .insert({
-              conversation_id: conversationId,
-              sender_id: userId,
-              receiver_id: recipientId,
-              content: '',
-              media_url: uploadResult.url,
-              media_type: mediaType,
-              cloudinary_public_id: uploadResult.publicId,
-              created_at: new Date().toISOString()
-            })
-            .select()
-            .single();
-            
-          if (error) {
-            console.error('Error sending media message:', error);
-            setMessages(prevMessages => prevMessages.filter(msg => msg.id !== tempId));
-            Alert.alert('Error', 'Failed to send media message');
-          } else {
-            setMessages(prevMessages => 
-              prevMessages.map(msg => 
-                msg.id === tempId ? { ...msg, id: data.id } : msg
-              )
-            );
-            
-            const finalMessages = updatedMessages.map(msg => 
-              msg.id === tempId ? { ...msg, id: data.id } : msg
-            );
-            await AsyncStorage.setItem(`conversation_${conversationId}`, JSON.stringify(finalMessages));
-          }
-        } catch (uploadError) {
-          console.error('Error uploading media:', uploadError);
-          Alert.alert('Error', 'Failed to upload media: ' + uploadError.message);
-        }
+        // Show preview with View Once option
+        setPreviewMedia({
+          uri: result.assets[0].uri,
+          type: type === 'photo' ? 'image' : 'video'
+        });
+        setViewOnceEnabled(false);
+        setShowMediaPreview(true);
       } else {
         setShowMediaPicker(false);
       }
@@ -1585,73 +1534,104 @@ const MessageScreen = () => {
       });
       
       if (!result.canceled) {
-        Alert.alert('Uploading', 'Uploading photo, please wait...');
-        
-        try {
-          const { uploadToCloudinary } = await import('../config/cloudinary');
-          const uploadResult = await uploadToCloudinary(result.assets[0].uri, 'image');
-          
-          if (!uploadResult || !uploadResult.url) {
-            throw new Error('Failed to upload photo');
-          }
-          
-          const tempId = Date.now().toString();
-          const newMessage = { 
-            id: tempId, 
-            text: '',
-            media_url: uploadResult.url,
-            media_type: 'image',
-            sender: 'me',
-            sender_id: userId,
-            timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-            read: false,
-            cloudinary_public_id: uploadResult.publicId
-          };
-          
-          const updatedMessages = [...messages, newMessage];
-          setMessages(updatedMessages);
-          
-          await AsyncStorage.setItem(`conversation_${conversationId}`, JSON.stringify(updatedMessages));
-          
-          const { data, error } = await supabase
-            .from('messages')
-            .insert({
-              conversation_id: conversationId,
-              sender_id: userId,
-              receiver_id: recipientId,
-              content: '',
-              media_url: uploadResult.url,
-              media_type: 'image',
-              cloudinary_public_id: uploadResult.publicId,
-              created_at: new Date().toISOString()
-            })
-            .select()
-            .single();
-            
-          if (error) {
-            console.error('Error sending photo message:', error);
-            setMessages(prevMessages => prevMessages.filter(msg => msg.id !== tempId));
-            Alert.alert('Error', 'Failed to send photo message');
-          } else {
-            setMessages(prevMessages => 
-              prevMessages.map(msg => 
-                msg.id === tempId ? { ...msg, id: data.id } : msg
-              )
-            );
-            
-            const finalMessages = updatedMessages.map(msg => 
-              msg.id === tempId ? { ...msg, id: data.id } : msg
-            );
-            await AsyncStorage.setItem(`conversation_${conversationId}`, JSON.stringify(finalMessages));
-          }
-        } catch (uploadError) {
-          console.error('Error uploading photo:', uploadError);
-          Alert.alert('Error', 'Failed to upload photo: ' + uploadError.message);
-        }
+        // Show preview with View Once option
+        setPreviewMedia({
+          uri: result.assets[0].uri,
+          type: 'image'
+        });
+        setViewOnceEnabled(false);
+        setShowMediaPreview(true);
       }
     } catch (error) {
       console.error('Error taking picture:', error);
       Alert.alert('Error', 'Failed to take picture');
+    }
+  };
+
+  const sendMediaMessage = async () => {
+    if (!previewMedia) return;
+    
+    setShowMediaPreview(false);
+    Alert.alert('Uploading', 'Uploading media, please wait...');
+    
+    try {
+      const { uploadToCloudinary } = await import('../config/cloudinary');
+      
+      const uploadResult = await uploadToCloudinary(previewMedia.uri, previewMedia.type);
+      
+      if (!uploadResult || !uploadResult.url) {
+        throw new Error('Failed to upload media');
+      }
+      
+      const tempId = Date.now().toString();
+      const newMessage = { 
+        id: tempId, 
+        text: viewOnceEnabled ? '🔒 View once' : '',
+        media_url: uploadResult.url,
+        media_type: previewMedia.type,
+        sender: 'me',
+        sender_id: userId,
+        timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+        read: false,
+        cloudinary_public_id: uploadResult.publicId,
+        view_once: viewOnceEnabled,
+        viewed_by: []
+      };
+      
+      const updatedMessages = [...messages, newMessage];
+      setMessages(updatedMessages);
+      
+      await AsyncStorage.setItem(`conversation_${conversationId}`, JSON.stringify(updatedMessages));
+      
+      // Scroll to bottom after sending
+      setTimeout(() => {
+        if (flatListRef.current) {
+          flatListRef.current.scrollToEnd({ animated: false });
+        }
+      }, 100);
+      
+      const { data, error } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id: conversationId,
+          sender_id: userId,
+          receiver_id: recipientId,
+          content: viewOnceEnabled ? '🔒 View once' : '',
+          media_url: uploadResult.url,
+          media_type: previewMedia.type,
+          cloudinary_public_id: uploadResult.publicId,
+          view_once: viewOnceEnabled,
+          viewed_by: [],
+          created_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+        
+      if (error) {
+        console.error('Error sending media message:', error);
+        setMessages(prevMessages => prevMessages.filter(msg => msg.id !== tempId));
+        Alert.alert('Error', 'Failed to send media message');
+      } else {
+        setMessages(prevMessages => 
+          prevMessages.map(msg => 
+            msg.id === tempId ? { ...msg, id: data.id } : msg
+          )
+        );
+        
+        const finalMessages = updatedMessages.map(msg => 
+          msg.id === tempId ? { ...msg, id: data.id } : msg
+        );
+        await AsyncStorage.setItem(`conversation_${conversationId}`, JSON.stringify(finalMessages));
+      }
+      
+      // Reset preview
+      setPreviewMedia(null);
+      setViewOnceEnabled(false);
+    } catch (uploadError) {
+      console.error('Error uploading media:', uploadError);
+      Alert.alert('Error', 'Failed to upload media: ' + uploadError.message);
+      setPreviewMedia(null);
+      setViewOnceEnabled(false);
     }
   };
 
@@ -1680,6 +1660,127 @@ const MessageScreen = () => {
       console.log('Cannot delete message: not the sender');
     }
   }, [userId, deleteMessage]);
+
+  // Handle viewing view-once messages - DELETE after viewing
+  const handleViewOnceMessage = async (messageId) => {
+    try {
+      // Find the message to get media info before deleting
+      const messageToDelete = messages.find(msg => msg.id === messageId);
+      if (!messageToDelete) {
+        console.error('Message not found');
+        return;
+      }
+
+      console.log('🔍 Starting view-once deletion for message:', messageId);
+      console.log('📄 Message details:', {
+        id: messageToDelete.id,
+        sender_id: messageToDelete.sender_id,
+        view_once: messageToDelete.view_once,
+        cloudinary_public_id: messageToDelete.cloudinary_public_id
+      });
+
+      // Show the media briefly (3 seconds) then delete
+      // First mark as viewed to show the media
+      setMessages(prevMessages => 
+        prevMessages.map(msg => 
+          msg.id === messageId 
+            ? { ...msg, viewed_by: [...(msg.viewed_by || []), userId] }
+            : msg
+        )
+      );
+
+      // Wait 3 seconds to let user see the media
+      setTimeout(async () => {
+        try {
+          // Mark as deleted in UI first (instant feedback)
+          setDeletedMessages(prev => new Set([...prev, messageId]));
+
+          console.log('🗑️ Starting deletion process...');
+
+          // Delete media from Cloudinary if it exists
+          if (messageToDelete.cloudinary_public_id) {
+            try {
+              console.log('☁️ Deleting from Cloudinary:', messageToDelete.cloudinary_public_id);
+              const { deleteFromCloudinary } = await import('../config/cloudinary');
+              await deleteFromCloudinary(
+                messageToDelete.cloudinary_public_id, 
+                messageToDelete.media_type || 'image'
+              );
+              console.log('✅ Deleted media from Cloudinary');
+            } catch (mediaError) {
+              console.error('❌ Error deleting media from Cloudinary:', mediaError);
+              // Continue with message deletion even if media deletion fails
+            }
+          }
+
+          // Delete message from database using the secure function
+          console.log('🗄️ Deleting message from database using secure function...');
+          console.log('🔑 Message ID to delete:', messageId);
+          console.log('👤 Current user ID:', userId);
+
+          const { data: functionResult, error: functionError } = await supabase
+            .rpc('delete_view_once_message', { message_uuid: messageId });
+
+          console.log('📊 Function result:', {
+            result: functionResult,
+            error: functionError
+          });
+
+          if (functionError) {
+            console.error('❌ Error calling delete function:', functionError);
+            
+            // Fallback to direct delete
+            console.log('🔄 Trying direct delete as fallback...');
+            const { data: deletedData, error: deleteError } = await supabase
+              .from('messages')
+              .delete()
+              .eq('id', messageId)
+              .select();
+
+            if (deleteError) {
+              console.error('❌ Direct delete also failed:', deleteError);
+              Alert.alert('Error', 'Failed to delete message: ' + deleteError.message);
+              return;
+            }
+
+            console.log('✅ Direct delete succeeded:', deletedData);
+          } else if (functionResult === false) {
+            console.error('❌ Delete function returned false - permission denied or message not found');
+            Alert.alert('Error', 'Failed to delete message - permission denied or message not found');
+            return;
+          } else {
+            console.log('✅ Successfully deleted message using secure function');
+          }
+
+          // Wait a bit more then remove from UI completely
+          setTimeout(() => {
+            setMessages(prevMessages => prevMessages.filter(msg => msg.id !== messageId));
+            
+            // Update cache
+            AsyncStorage.getItem(`conversation_${conversationId}`)
+              .then(cachedData => {
+                if (cachedData) {
+                  const cachedMessages = JSON.parse(cachedData);
+                  const updatedMessages = cachedMessages.filter(msg => msg.id !== messageId);
+                  AsyncStorage.setItem(`conversation_${conversationId}`, JSON.stringify(updatedMessages));
+                  console.log('💾 Updated cache - removed message');
+                }
+              });
+          }, 1000); // Remove from UI after 1 more second
+
+          console.log('✅ View-once message deletion process completed');
+
+        } catch (error) {
+          console.error('❌ Error in delayed deletion:', error);
+          Alert.alert('Error', 'Failed to delete view-once message: ' + error.message);
+        }
+      }, 3000); // Show for 3 seconds then delete
+
+    } catch (error) {
+      console.error('❌ Error handling view-once message:', error);
+      Alert.alert('Error', 'Failed to handle view-once message: ' + error.message);
+    }
+  };
 
   // Memoized message item component to prevent unnecessary re-renders
   const MessageItem = React.memo(({ item, onLongPress, onMediaPress, recipientReadReceipts }) => {
@@ -1875,6 +1976,16 @@ const MessageScreen = () => {
             <TouchableOpacity
               onLongPress={() => onLongPress(item)}
               onPress={() => {
+                // Check if this is a view-once message
+                const isViewOnce = item.view_once === true;
+                const hasBeenViewed = item.viewed_by && item.viewed_by.includes(userId);
+                const isSender = item.sender === 'me';
+                
+                // If view-once and not viewed yet (and not sender), mark as viewed
+                if (isViewOnce && !hasBeenViewed && !isSender) {
+                  handleViewOnceMessage(item.id);
+                }
+                
                 if (item.media_type === 'video') {
                   // Create a mock post object for ShortsScreen
                   const mockPost = item.original_post || {
@@ -1905,71 +2016,141 @@ const MessageScreen = () => {
               delayLongPress={500}
               style={styles.mediaContainer}
             >
-              {item.media_type === 'video' ? (
-                <View style={styles.videoContainer}>
-                  <Video
-                    source={{ uri: item.media_url }}
-                    style={styles.messageVideo}
-                    resizeMode="cover"
-                    shouldPlay={false}
-                    useNativeControls={false}
-                    isLooping={false}
-                    onError={(error) => {
-                      console.error('Video error in message:', error);
-                    }}
-                    onLoadStart={() => {
-                      console.log('Video loading started for:', item.media_url);
-                    }}
-                    onLoad={async (status) => {
-                      console.log('Video loaded successfully:', status);
-                      // Seek to 1 second after load for thumbnail
-                      try {
-                        if (status.isLoaded) {
-                          await status.setPositionAsync(1000);
+              {(() => {
+                const isViewOnce = item.view_once === true;
+                const hasBeenViewed = item.viewed_by && item.viewed_by.includes(userId);
+                const isSender = item.sender === 'me';
+                const shouldBlur = isViewOnce && !hasBeenViewed && !isSender;
+                const isDeleted = deletedMessages.has(item.id);
+                
+                // Show deleted placeholder
+                if (isDeleted) {
+                  return (
+                    <View style={styles.deletedMessageContainer}>
+                      <LinearGradient
+                        colors={['rgba(100, 100, 100, 0.3)', 'rgba(80, 80, 80, 0.3)']}
+                        style={styles.deletedMessageGradient}
+                      >
+                        <Ionicons name="eye-off" size={30} color="#999" />
+                        <Text style={styles.deletedMessageText}>This photo was deleted</Text>
+                      </LinearGradient>
+                    </View>
+                  );
+                }
+                
+                if (item.media_type === 'video') {
+                  return (
+                    <View style={styles.videoContainer}>
+                      <Video
+                        source={{ uri: item.media_url }}
+                        style={styles.messageVideo}
+                        resizeMode="cover"
+                        shouldPlay={false}
+                        useNativeControls={false}
+                        isLooping={false}
+                        onError={(error) => {
+                          console.error('Video error in message:', error);
+                        }}
+                        onLoadStart={() => {
+                          console.log('Video loading started for:', item.media_url);
+                        }}
+                        onLoad={async (status) => {
+                          console.log('Video loaded successfully:', status);
+                          try {
+                            if (status.isLoaded) {
+                              await status.setPositionAsync(1000);
+                            }
+                          } catch (error) {
+                            console.warn('Error seeking video for thumbnail:', error);
+                          }
+                        }}
+                      />
+                      {shouldBlur && (
+                        <View style={styles.viewOnceBlurOverlay}>
+                          <LinearGradient
+                            colors={['rgba(0,0,0,0.8)', 'rgba(0,0,0,0.9)']}
+                            style={styles.viewOnceBlurGradient}
+                          >
+                            <Ionicons name="eye-off" size={40} color="#fff" />
+                            <Text style={styles.viewOnceBlurText}>View once</Text>
+                            <Text style={styles.viewOnceBlurSubtext}>Tap to view</Text>
+                          </LinearGradient>
+                        </View>
+                      )}
+                      {!shouldBlur && (
+                        <View style={styles.videoOverlay}>
+                          <Ionicons name="play-circle" size={50} color="rgba(255, 255, 255, 0.8)" />
+                        </View>
+                      )}
+                      {isViewOnce && hasBeenViewed && !isSender && (
+                        <View style={styles.viewOnceViewingBadge}>
+                          <Text style={styles.viewOnceViewingText}>Deleting...</Text>
+                        </View>
+                      )}
+                    </View>
+                  );
+                } else if (item.media_type === 'audio') {
+                  return (
+                    <View style={styles.audioMessageContainer}>
+                      <TouchableOpacity
+                        style={styles.audioPlayButton}
+                        onPress={() => playAudio(item.id, item.media_url)}
+                      >
+                        <Ionicons 
+                          name={playingAudio === item.id ? "pause" : "play"} 
+                          size={20} 
+                          color="#fff" 
+                        />
+                      </TouchableOpacity>
+                      <View style={styles.audioWaveform}>
+                        <Text style={styles.audioWaveformText}>
+                          {playingAudio === item.id ? "Playing..." : "🎤 Voice message"}
+                        </Text>
+                      </View>
+                      <Text style={styles.audioDuration}>
+                        {audioPositions[item.id] 
+                          ? formatAudioDuration(audioPositions[item.id].position)
+                          : (item.audio_duration 
+                              ? `${Math.floor(item.audio_duration / 60)}:${(item.audio_duration % 60).toString().padStart(2, '0')}`
+                              : '0:00'
+                            )
                         }
-                      } catch (error) {
-                        console.warn('Error seeking video for thumbnail:', error);
-                      }
-                    }}
-                  />
-                  <View style={styles.videoOverlay}>
-                    <Ionicons name="play-circle" size={50} color="rgba(255, 255, 255, 0.8)" />
-                  </View>
-                </View>
-              ) : item.media_type === 'audio' ? (
-                <View style={styles.audioMessageContainer}>
-                  <TouchableOpacity
-                    style={styles.audioPlayButton}
-                    onPress={() => playAudio(item.id, item.media_url)}
-                  >
-                    <Ionicons 
-                      name={playingAudio === item.id ? "pause" : "play"} 
-                      size={20} 
-                      color="#fff" 
-                    />
-                  </TouchableOpacity>
-                  <View style={styles.audioWaveform}>
-                    <Text style={styles.audioWaveformText}>
-                      {playingAudio === item.id ? "Playing..." : "🎤 Voice message"}
-                    </Text>
-                  </View>
-                  <Text style={styles.audioDuration}>
-                    {audioPositions[item.id] 
-                      ? formatAudioDuration(audioPositions[item.id].position)
-                      : (item.audio_duration 
-                          ? `${Math.floor(item.audio_duration / 60)}:${(item.audio_duration % 60).toString().padStart(2, '0')}`
-                          : '0:00'
-                        )
-                    }
-                  </Text>
-                </View>
-              ) : (
-                <Image 
-                  source={{ uri: item.media_url }} 
-                  style={styles.messageImage}
-                  resizeMode="cover"
-                />
-              )}
+                      </Text>
+                    </View>
+                  );
+                } else {
+                  return (
+                    <View style={styles.imageMessageContainer}>
+                      <Image 
+                        source={{ uri: item.media_url }} 
+                        style={[
+                          styles.messageImage,
+                          shouldBlur && { opacity: 0.3 }
+                        ]}
+                        resizeMode="cover"
+                        blurRadius={shouldBlur ? 50 : 0}
+                      />
+                      {shouldBlur && (
+                        <View style={styles.viewOnceBlurOverlay}>
+                          <LinearGradient
+                            colors={['rgba(0,0,0,0.7)', 'rgba(0,0,0,0.8)']}
+                            style={styles.viewOnceBlurGradient}
+                          >
+                            <Ionicons name="eye-off" size={40} color="#fff" />
+                            <Text style={styles.viewOnceBlurText}>View once</Text>
+                            <Text style={styles.viewOnceBlurSubtext}>Tap to view</Text>
+                          </LinearGradient>
+                        </View>
+                      )}
+                      {isViewOnce && hasBeenViewed && !isSender && (
+                        <View style={styles.viewOnceViewingBadge}>
+                          <Text style={styles.viewOnceViewingText}>Deleting...</Text>
+                        </View>
+                      )}
+                    </View>
+                  );
+                }
+              })()}
             </TouchableOpacity>
           ) : null}
           
@@ -2117,6 +2298,102 @@ const MessageScreen = () => {
             <Text style={styles.mediaOptionText}>Cancel</Text>
           </TouchableOpacity>
         </View>
+      </View>
+    </Modal>
+  );
+
+  // Media Preview Modal with View Once option (Instagram-style)
+  const MediaPreviewModal = () => (
+    <Modal
+      visible={showMediaPreview}
+      transparent={false}
+      animationType="slide"
+      onRequestClose={() => {
+        setShowMediaPreview(false);
+        setPreviewMedia(null);
+        setViewOnceEnabled(false);
+      }}
+    >
+      <View style={styles.mediaPreviewContainer}>
+        <LinearGradient
+          colors={['#000', '#1a1a1a']}
+          style={styles.mediaPreviewGradient}
+        >
+          {/* Header */}
+          <View style={styles.mediaPreviewHeader}>
+            <TouchableOpacity 
+              style={styles.mediaPreviewCloseButton}
+              onPress={() => {
+                setShowMediaPreview(false);
+                setPreviewMedia(null);
+                setViewOnceEnabled(false);
+              }}
+            >
+              <Ionicons name="close" size={28} color="#fff" />
+            </TouchableOpacity>
+            <Text style={styles.mediaPreviewTitle}>Send to {recipientName}</Text>
+            <View style={{ width: 28 }} />
+          </View>
+
+          {/* Media Preview */}
+          <View style={styles.mediaPreviewContent}>
+            {previewMedia?.type === 'video' ? (
+              <Video
+                source={{ uri: previewMedia.uri }}
+                style={styles.mediaPreviewVideo}
+                resizeMode="contain"
+                shouldPlay={false}
+                useNativeControls={true}
+                isLooping={false}
+              />
+            ) : (
+              <Image
+                source={{ uri: previewMedia?.uri }}
+                style={styles.mediaPreviewImage}
+                resizeMode="contain"
+              />
+            )}
+          </View>
+
+          {/* Footer with View Once and Send */}
+          <View style={styles.mediaPreviewFooter}>
+            {/* View Once Toggle */}
+            <TouchableOpacity 
+              style={styles.viewOnceButton}
+              onPress={() => setViewOnceEnabled(!viewOnceEnabled)}
+            >
+              <View style={[
+                styles.viewOnceCircle,
+                viewOnceEnabled && styles.viewOnceCircleActive
+              ]}>
+                <Ionicons 
+                  name={viewOnceEnabled ? "eye-off" : "eye-off-outline"} 
+                  size={24} 
+                  color={viewOnceEnabled ? "#fff" : "#999"} 
+                />
+              </View>
+              <Text style={[
+                styles.viewOnceText,
+                viewOnceEnabled && styles.viewOnceTextActive
+              ]}>
+                View once
+              </Text>
+            </TouchableOpacity>
+
+            {/* Send Button */}
+            <TouchableOpacity 
+              style={styles.mediaPreviewSendButton}
+              onPress={sendMediaMessage}
+            >
+              <LinearGradient
+                colors={['#ff00ff', '#9900ff']}
+                style={styles.mediaPreviewSendGradient}
+              >
+                <Ionicons name="send" size={24} color="#fff" />
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </LinearGradient>
       </View>
     </Modal>
   );
@@ -2423,6 +2700,7 @@ const MessageScreen = () => {
             </LinearGradient>
 
             <MediaPickerModal />
+            <MediaPreviewModal />
             <OpacitySliderModal />
             
             {/* Image Preview Modal */}
@@ -3494,6 +3772,182 @@ const styles = StyleSheet.create({
     fontSize: 12,
     opacity: 0.8,
     marginLeft: 8,
+  },
+  // Media Preview Modal styles (Instagram-style)
+  mediaPreviewContainer: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  mediaPreviewGradient: {
+    flex: 1,
+  },
+  mediaPreviewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 50,
+    paddingBottom: 16,
+  },
+  mediaPreviewCloseButton: {
+    padding: 8,
+  },
+  mediaPreviewTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  mediaPreviewContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mediaPreviewImage: {
+    width: '100%',
+    height: '100%',
+  },
+  mediaPreviewVideo: {
+    width: '100%',
+    height: '100%',
+  },
+  mediaPreviewFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    paddingBottom: 40,
+  },
+  viewOnceButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  viewOnceCircle: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  viewOnceCircleActive: {
+    backgroundColor: '#ff00ff',
+    borderColor: '#ff00ff',
+  },
+  viewOnceText: {
+    color: '#999',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  viewOnceTextActive: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  mediaPreviewSendButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    overflow: 'hidden',
+    elevation: 5,
+    shadowColor: '#ff00ff',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
+  },
+  mediaPreviewSendGradient: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  // View Once blur overlay styles
+  imageMessageContainer: {
+    position: 'relative',
+    width: 200,
+    height: 200,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  viewOnceBlurOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 12,
+  },
+  viewOnceBlurGradient: {
+    flex: 1,
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  viewOnceBlurText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginTop: 12,
+  },
+  viewOnceBlurSubtext: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  viewOnceOpenedBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  viewOnceOpenedText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  viewOnceViewingBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(255, 165, 0, 0.8)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  viewOnceViewingText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  deletedMessageContainer: {
+    width: 200,
+    height: 120,
+    borderRadius: 12,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  deletedMessageGradient: {
+    flex: 1,
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(150, 150, 150, 0.3)',
+    borderStyle: 'dashed',
+  },
+  deletedMessageText: {
+    color: '#999',
+    fontSize: 12,
+    marginTop: 8,
+    fontStyle: 'italic',
   },
 });
 

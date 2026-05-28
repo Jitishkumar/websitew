@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { TextInput } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { Camera } from 'expo-camera';
 import { Audio } from 'expo-av';
 import { supabase } from '../lib/supabase';
@@ -11,7 +12,7 @@ import Constants from 'expo-constants';
 
 const { width, height } = Dimensions.get('window');
 
-function HomePage({navigation}) {
+function HomePage({navigation, route}) {
   const [name, setName] = useState('');
   const [callId, setCallId] = useState('');
   const [currentUser, setCurrentUser] = useState(null);
@@ -35,12 +36,29 @@ function HomePage({navigation}) {
 
   useEffect(() => {
     getCurrentUser();
-    getWaitingUsersCount();
     requestPermissions();
     initializeAnimations();
     
+    // Get initial waiting users count
+    getWaitingUsersCount();
+    
+    // Update count every 30 seconds for the first minute only
+    let updateCount = 0;
+    const maxUpdates = 2; // 2 updates = 1 minute (30s * 2)
+    
+    const countInterval = setInterval(() => {
+      updateCount++;
+      if (updateCount >= maxUpdates) {
+        clearInterval(countInterval);
+        console.log('Stopped checking waiting users count after 1 minute');
+      } else {
+        getWaitingUsersCount();
+      }
+    }, 30000); // Every 30 seconds
+    
     // Clean up any existing waiting entries for this user on mount
     return () => {
+      clearInterval(countInterval);
       cleanupUserWaitingEntry();
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current);
@@ -50,6 +68,54 @@ function HomePage({navigation}) {
       }
     };
   }, []);
+
+  // Add cleanup when screen loses focus (navigating away)
+  useFocusEffect(
+    React.useCallback(() => {
+      // This runs when screen comes into focus
+      console.log('HomePage focused');
+      
+      // Return cleanup function that runs when screen loses focus
+      return () => {
+        console.log('HomePage lost focus - cleaning up');
+        cleanupUserWaitingEntry();
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+          timeoutRef.current = null;
+        }
+        setIsMatching(false);
+        setMatchingStatus('');
+      };
+    }, [currentUser])
+  );
+
+  // Add navigation listener to cleanup when screen loses focus
+  useFocusEffect(
+    React.useCallback(() => {
+      // This runs when screen comes into focus
+      console.log('HomePage focused');
+      
+      // Return cleanup function that runs when screen loses focus
+      return () => {
+        console.log('HomePage lost focus - cleaning up waiting entry');
+        cleanupUserWaitingEntry();
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+          timeoutRef.current = null;
+        }
+        setIsMatching(false);
+        setMatchingStatus('');
+      };
+    }, [currentUser]) // Re-run if currentUser changes
+  );
 
   const initializeAnimations = () => {
     // Main entrance animations
@@ -131,10 +197,8 @@ function HomePage({navigation}) {
 
   const requestPermissions = async () => {
     try {
-      // Request camera permissions
+      // Request both camera and microphone permissions for video calls
       const cameraStatus = await Camera.requestCameraPermissionsAsync();
-      
-      // Request microphone permissions
       const audioStatus = await Audio.requestPermissionsAsync();
       
       console.log('Camera permission:', cameraStatus.status);
@@ -902,7 +966,7 @@ function HomePage({navigation}) {
               ) : isWaiting ? (
                 <Text style={styles.joinButtonText}>CANCEL WAITING</Text>
               ) : (
-                <Text style={styles.joinButtonText}>FIND RANDOM MATCH</Text>
+                <Text style={styles.joinButtonText}>FIND VIDEO MATCH</Text>
               )}
             </LinearGradient>
           </TouchableOpacity>

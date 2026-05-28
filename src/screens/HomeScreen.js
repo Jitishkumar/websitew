@@ -104,8 +104,14 @@ const HomeScreen = () => {
       }
     });
 
-    return unsubscribe;
-  }, [navigation]);
+    return () => {
+      unsubscribe();
+      // Clean up the matching interval when component unmounts
+      if (waitingCheckInterval) {
+        clearInterval(waitingCheckInterval);
+      }
+    };
+  }, [navigation, waitingCheckInterval]);
 
   const createParticles = () => {
     // Disabled heavy particle animations for better performance
@@ -594,14 +600,6 @@ const HomeScreen = () => {
           <View style={styles.headerIcons}>
             <TouchableOpacity
               style={styles.iconButton}
-              onPress={handleFindMatch}
-              activeOpacity={0.7}
-            >
-              <MaterialIcons name="videocam" size={24} color={isDarkMode ? "rgba(255, 255, 255, 0.9)" : "#333333"} />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.iconButton}
               onPress={() => navigation.navigate('Trending')}
               activeOpacity={0.7}
             >
@@ -1067,10 +1065,7 @@ const HomeScreen = () => {
                     style={styles.acceptButton}
                     onPress={() => {
                       setShowTermsModal(false);
-                      navigation.reset({
-                        index: 0,
-                        routes: [{ name: 'HomePage' }],
-                      });
+                      navigation.navigate('HomePage', { callType: 'video' });
                     }}
                     activeOpacity={0.8}
                   >

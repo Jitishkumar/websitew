@@ -23,7 +23,7 @@ export const MatchingService = {
       }
 
       if (!waitingUsers || waitingUsers.length < 2) {
-        console.log('Not enough waiting users to match');
+        // Silently return - this is normal when there aren't enough users
         return;
       }
 

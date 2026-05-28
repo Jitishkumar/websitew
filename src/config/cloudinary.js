@@ -92,6 +92,11 @@ const blobToBase64 = (blob) => {
 // You need to create an "unsigned" upload preset in Cloudinary Dashboard
 const uploadUnsigned = async (uri, type) => {
   try {
+    console.log('Starting unsigned upload to Cloudinary...');
+    console.log('URI:', uri);
+    console.log('Type:', type);
+    console.log('Cloud Name:', CLOUDINARY_CLOUD_NAME);
+    
     const formData = new FormData();
     
     // Prepare the file
@@ -108,7 +113,15 @@ const uploadUnsigned = async (uri, type) => {
     // Use your existing unsigned upload preset
     formData.append('upload_preset', 'connect_app_preset');
     
-    const response = await fetch(
+    console.log('Uploading to Cloudinary API...');
+    
+    // Create a timeout promise for React Native compatibility
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Upload timeout')), 30000); // 30 seconds
+    });
+    
+    // Race between fetch and timeout
+    const fetchPromise = fetch(
       `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${type}/upload`,
       {
         method: 'POST',
@@ -118,12 +131,19 @@ const uploadUnsigned = async (uri, type) => {
         }
       }
     );
+    
+    const response = await Promise.race([fetchPromise, timeoutPromise]);
+
+    console.log('Response status:', response.status);
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const errorText = await response.text();
+      console.error('Upload failed with status:', response.status, errorText);
+      throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
+    console.log('Upload successful:', data.secure_url);
     
     if (data.error) {
       throw new Error(data.error.message);
@@ -137,6 +157,16 @@ const uploadUnsigned = async (uri, type) => {
     
   } catch (error) {
     console.error('Error uploading to Cloudinary:', error);
+    
+    // Provide more specific error messages
+    if (error.message === 'Upload timeout') {
+      throw new Error('Upload timed out. Please check your internet connection and try again.');
+    } else if (error.message.includes('Network request failed')) {
+      throw new Error('Network error. Please check your internet connection and try again.');
+    } else if (error.message.includes('Invalid upload preset')) {
+      throw new Error('Upload configuration error. Please contact support.');
+    }
+    
     throw error;
   }
 };

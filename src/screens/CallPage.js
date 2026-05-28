@@ -42,7 +42,7 @@ function CallPage(props) {
           console.log('⏰ 30 seconds passed, auto-cleaning database records');
           await cleanupCallData();
           console.log('✅ Auto-cleanup completed after 30 seconds');
-        }, 30000); // 30 seconds
+        }, 60000); // 60 seconds
       };
     }, [currentUser])
   );
@@ -132,7 +132,7 @@ function CallPage(props) {
         'config.disableMobile': 'true',
         // User configuration
         'userInfo.displayName': name || 'User',
-        // Video/Audio quality settings for desktop mode
+        // Video quality settings for desktop mode
         'config.resolution': '720',
         'config.constraints.video.height.ideal': '720',
         'config.constraints.video.width.ideal': '1280',
@@ -167,18 +167,18 @@ function CallPage(props) {
       // Use desktop user agent to force desktop mode
       const jitsiUrl = `https://meet.jit.si/${id}?${jitsiParams.toString()}`;
       
-      console.log('🖥️ Opening Jitsi in desktop mode:', jitsiUrl);
+      console.log(`🖥️ Opening Jitsi in ${callType} mode:`, jitsiUrl);
       
       const supported = await Linking.canOpenURL(jitsiUrl);
       if (supported) {
         await Linking.openURL(jitsiUrl);
-        console.log('✅ Opened Jitsi in browser with desktop mode');
+        console.log(`✅ Opened Jitsi in browser with ${callType} mode`);
       } else {
-        Alert.alert('Error', 'Cannot open video call');
+        Alert.alert('Error', `Cannot open ${callType} call`);
       }
     } catch (error) {
       console.error('Error opening Jitsi:', error);
-      Alert.alert('Error', 'Failed to open video call');
+      Alert.alert('Error', `Failed to open ${callType} call`);
     }
   };
 

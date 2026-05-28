@@ -177,8 +177,13 @@ const Sidebar = ({ isVisible, onClose }) => {
       
       console.log('✅ Prefetched and cached nearby people');
     } catch (error) {
-      console.error('Prefetch nearby people error:', error);
-      // Silently fail - don't alert user during prefetch
+      // Silently fail for location errors (common in emulators)
+      if (error.message?.includes('location') || error.message?.includes('Location')) {
+        console.log('⚠️ Location unavailable (emulator or disabled) - skipping nearby people prefetch');
+      } else {
+        console.error('Prefetch nearby people error:', error);
+      }
+      // Don't alert user during prefetch
     }
   };
 
