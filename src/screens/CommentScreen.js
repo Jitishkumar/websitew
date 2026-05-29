@@ -25,11 +25,13 @@ import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context'
 import { processMentions } from '../utils/mentionService';
 import { Audio } from 'expo-av';
 import { uploadToCloudinary } from '../config/cloudinary';
+import { useTheme } from '../context/ThemeContext';
 
 const { height } = Dimensions.get('window');
 
 // Audio Player Component
 const AudioPlayer = ({ audioUrl, duration }) => {
+  const { isDarkMode, theme } = useTheme();
   const [sound, setSound] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [position, setPosition] = useState(0);
@@ -86,18 +88,18 @@ const AudioPlayer = ({ audioUrl, duration }) => {
   };
 
   return (
-    <View style={styles.audioPlayerContainer}>
+    <View style={[styles.audioPlayerContainer, { backgroundColor: theme.surfaceElevated }]}>
       <TouchableOpacity onPress={playPauseAudio} style={styles.audioPlayButton}>
         <Ionicons 
           name={isPlaying ? 'pause' : 'play'} 
           size={20} 
-          color="#ff00ff" 
+          color={theme.primaryAccent} 
         />
       </TouchableOpacity>
       <View style={styles.audioWaveform}>
-        <View style={[styles.audioProgress, { width: `${(position / audioDuration) * 100}%` }]} />
+        <View style={[styles.audioProgress, { width: `${(position / audioDuration) * 100}%`, backgroundColor: theme.primaryAccent }]} />
       </View>
-      <Text style={styles.audioDuration}>
+      <Text style={[styles.audioDuration, { color: theme.textSecondary }]}>
         {formatTime(position)} / {formatTime(audioDuration)}
       </Text>
     </View>
@@ -111,6 +113,7 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
   const currentHighlightCommentId = route.params?.highlightCommentId || initialHighlightCommentId;
 
   const insets = useSafeAreaInsets();
+  const { isDarkMode, theme } = useTheme();
   const flatListRef = useRef(null);
   
   // Ultra-premium animation refs
@@ -372,11 +375,11 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
 
     content.replace(mentionRegex, (match, username, offset) => {
       if (offset > lastIndex) {
-        parts.push(<Text key={`text-${lastIndex}`}>{content.substring(lastIndex, offset)}</Text>);
+        parts.push(<Text key={`text-${lastIndex}`} style={{ color: theme.textPrimary }}>{content.substring(lastIndex, offset)}</Text>);
       }
       parts.push(
         <TouchableOpacity key={`mention-${offset}`} onPress={() => handleMentionPress(username)}>
-          <Text style={styles.mentionText}>@{username}</Text>
+          <Text style={[styles.mentionText, { color: theme.secondaryAccent }]}>@{username}</Text>
         </TouchableOpacity>
       );
       lastIndex = offset + match.length;
@@ -384,9 +387,9 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
     });
 
     if (lastIndex < content.length) {
-      parts.push(<Text key={`text-${lastIndex}`}>{content.substring(lastIndex)}</Text>);
+      parts.push(<Text key={`text-${lastIndex}`} style={{ color: theme.textPrimary }}>{content.substring(lastIndex)}</Text>);
     }
-    return <Text style={styles.commentText}>{parts}</Text>;
+    return <Text style={[styles.commentText, { color: theme.textPrimary }]}>{parts}</Text>;
   };
   
   const loadComments = async () => {
@@ -782,21 +785,21 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
     const defaultAvatar = 'https://via.placeholder.com/40';
   
     return (
-      <View style={[styles.commentContainer, item.parent_comment_id && styles.replyContainer]}>
+      <View style={[styles.commentContainer, item.parent_comment_id && styles.replyContainer, item.parent_comment_id && { borderLeftColor: theme.border }]}>
         <TouchableOpacity onPress={() => !isAnonymousComment && navigateToUserProfile(item.user_id)}>
           <LinearGradient
-            colors={['#ff00ff', '#00ffff']}
+            colors={[theme.primaryAccent, theme.secondaryAccent]}
             style={styles.avatarBorder}
           >
             <Image
               source={{ uri: isAnonymousComment ? defaultAvatar : (item.profiles?.avatar_url || defaultAvatar) }}
-              style={styles.avatar}
+              style={[styles.avatar, { borderColor: theme.backgroundSolid }]}
             />
           </LinearGradient>
         </TouchableOpacity>
-        <View style={styles.commentContent}>
+        <View style={[styles.commentContent, { backgroundColor: theme.surfaceElevated, borderColor: theme.border, borderWidth: 1 }]}>
           <TouchableOpacity onPress={() => !isAnonymousComment && navigateToUserProfile(item.user_id)}>
-            <Text style={styles.username}>
+            <Text style={[styles.username, { color: isAnonymousComment ? theme.textSecondary : theme.primaryAccent }]}>
               {isAnonymousComment ? 'Anonymous' : (item.profiles?.username || 'User')}
             </Text>
           </TouchableOpacity>
@@ -810,7 +813,7 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
             />
           )}
           
-          <Text style={styles.timestamp}>
+          <Text style={[styles.timestamp, { color: theme.textSecondary }]}>
             {formatTimestamp(item.created_at)}
           </Text>
           
@@ -822,7 +825,7 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
                 setCommentText(`@${isAnonymousComment ? 'Anonymous' : (item.profiles?.username || 'User')} `);
               }}
             >
-              <Text style={styles.replyButtonText}>Reply</Text>
+              <Text style={[styles.replyButtonText, { color: theme.secondaryAccent }]}>Reply</Text>
             </TouchableOpacity>
             
             {hasReplies && (
@@ -830,7 +833,7 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
                 style={styles.toggleRepliesButton}
                 onPress={() => toggleExpanded(item.id)}
               >
-                <Text style={styles.toggleRepliesText}>
+                <Text style={[styles.toggleRepliesText, { color: theme.primaryAccent }]}>
                   {isExpanded ? 'Hide Replies' : `View ${replies.length} ${replies.length === 1 ? 'Reply' : 'Replies'}`}
                 </Text>
               </TouchableOpacity>
@@ -841,12 +844,12 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
                 style={styles.deleteButton}
                 onPress={() => {
                   Alert.alert(
-                    'Delete Comment',
-                    'Are you sure you want to delete this comment?',
-                    [
-                      { text: 'Cancel', style: 'cancel' },
-                      { text: 'Delete', style: 'destructive', onPress: () => handleDeleteComment(item.id) }
-                    ]
+                      'Delete Comment',
+                      'Are you sure you want to delete this comment?',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Delete', style: 'destructive', onPress: () => handleDeleteComment(item.id) }
+                      ]
                   );
                 }}
               >
@@ -865,9 +868,9 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
             </View>
           )}
           {item.is_tagged && (
-            <View style={styles.taggedBadge}>
+            <View style={[styles.taggedBadge, { backgroundColor: theme.primaryAccent }]}>
               <Ionicons name="pricetag" size={12} color="#fff" />
-              <Text style={styles.taggedText}>Tagged you</Text>
+              <Text style={[styles.taggedText, { color: '#ffffff' }]}>Tagged you</Text>
             </View>
           )}
         </View>
@@ -876,7 +879,7 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.backgroundSolid }]}>
       <KeyboardAvoidingView
         style={{ flex: 1, paddingBottom: insets.bottom }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -892,16 +895,17 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
         ]}
       >
         <LinearGradient
-          colors={['rgba(26, 26, 46, 0.95)', 'rgba(22, 33, 62, 0.9)', 'rgba(15, 52, 96, 0.85)']}
+          colors={isDarkMode ? ['rgba(22, 22, 48, 0.95)', 'rgba(26, 26, 58, 0.9)', 'rgba(30, 30, 70, 0.85)'] : ['rgba(255, 255, 255, 0.95)', 'rgba(240, 244, 248, 0.9)', 'rgba(230, 235, 245, 0.85)']}
           start={{x: 0, y: 0}}
           end={{x: 1, y: 1}}
-          style={styles.headerGradient}
+          style={[styles.headerGradient, { borderColor: theme.border, borderWidth: 1 }]}
         >
           {/* Shimmer overlay effect */}
           <Animated.View 
             style={[
               styles.shimmerOverlay,
               {
+                backgroundColor: theme.border,
                 opacity: shimmerAnim.interpolate({
                   inputRange: [0, 0.5, 1],
                   outputRange: [0, 0.3, 0]
@@ -918,22 +922,23 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
           
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
             <LinearGradient
-              colors={['rgba(255, 0, 255, 0.2)', 'rgba(255, 0, 255, 0.1)']}
-              style={styles.backButtonGradient}
+              colors={[theme.surfaceElevated, theme.surface]}
+              style={[styles.backButtonGradient, { borderColor: theme.border, borderWidth: 1 }]}
             >
-              <Ionicons name="chevron-back" size={24} color="#ff00ff" />
+              <Ionicons name="chevron-back" size={24} color={theme.primaryAccent} />
             </LinearGradient>
           </TouchableOpacity>
           
           <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
             <LinearGradient
-              colors={['#ff00ff', '#ff6b9d', '#c44569']}
+              colors={[theme.primaryAccent, theme.secondaryAccent]}
               style={styles.titleContainer}
             >
               <Animated.View 
                 style={[
                   styles.titleGlow,
                   {
+                    backgroundColor: theme.primaryAccent + '50',
                     opacity: headerGlowAnim,
                     transform: [{
                       scale: headerGlowAnim.interpolate({
@@ -953,7 +958,7 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
       </Animated.View>
 
       {loading ? (
-        <ActivityIndicator size="large" color="#ff00ff" style={styles.loading} />
+        <ActivityIndicator size="large" color={theme.primaryAccent} style={styles.loading} />
       ) : (
         <Animated.View style={{ flex: 1, opacity: fadeAnim, transform: [{ scale: scaleAnim }] }}>
           <FlatList
@@ -962,7 +967,7 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
             renderItem={renderComment}
             style={styles.commentsList}
             ListEmptyComponent={
-              <Text style={styles.emptyText}>No comments yet. Be the first to comment!</Text>
+              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No comments yet. Be the first to comment!</Text>
             }
             ref={flatListRef} // Attach ref to FlatList
           />
@@ -970,43 +975,43 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
       )}
 
       <LinearGradient
-        colors={['#1a1a3a', '#0d0d2a']}
-        style={[styles.inputContainer, { paddingBottom: insets.bottom > 0 ? insets.bottom : 10 }]} // Adjusted padding
+        colors={isDarkMode ? ['#161630', '#0f0f23'] : ['#FFFFFF', '#F1F5F9']}
+        style={[styles.inputContainer, { borderTopColor: theme.border, paddingBottom: insets.bottom > 0 ? insets.bottom : 10 }]} // Adjusted padding
       >
         {replyingTo && (
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-            <Text style={{ color: '#00ffff' }}>Replying to {replyingTo.is_anonymous ? 'Anonymous' : replyingTo.profiles?.username}</Text>
+            <Text style={{ color: theme.secondaryAccent }}>Replying to {replyingTo.is_anonymous ? 'Anonymous' : replyingTo.profiles?.username}</Text>
             <TouchableOpacity onPress={() => setReplyingTo(null)} style={{ marginLeft: 10 }}>
-              <Ionicons name="close-circle" size={16} color="#fff" />
+              <Ionicons name="close-circle" size={16} color={theme.textPrimary} />
             </TouchableOpacity>
           </View>
         )}
         
         {/* Audio Recording Preview */}
         {audioUri && !isRecording && (
-          <View style={styles.audioPreviewContainer}>
+          <View style={[styles.audioPreviewContainer, { backgroundColor: theme.primaryAccent + '15', borderColor: theme.border, borderWidth: 1 }]}>
             <TouchableOpacity onPress={playPreview} style={styles.audioPreviewButton}>
               <Ionicons 
                 name={isPlayingPreview ? 'pause-circle' : 'play-circle'} 
                 size={32} 
-                color="#ff00ff" 
+                color={theme.primaryAccent} 
               />
             </TouchableOpacity>
             <View style={styles.audioPreviewInfo}>
-              <Text style={styles.audioPreviewText}>Audio recorded</Text>
-              <Text style={styles.audioPreviewDuration}>{formatDuration(recordingDuration)}</Text>
+              <Text style={[styles.audioPreviewText, { color: theme.textPrimary }]}>Audio recorded</Text>
+              <Text style={[styles.audioPreviewDuration, { color: theme.textSecondary }]}>{formatDuration(recordingDuration)}</Text>
             </View>
             <TouchableOpacity onPress={deleteAudioRecording} style={styles.audioDeleteButton}>
-              <Ionicons name="trash-outline" size={20} color="#ff4444" />
+              <Ionicons name="trash-outline" size={20} color={theme.error} />
             </TouchableOpacity>
           </View>
         )}
         
         {/* Recording Indicator */}
         {isRecording && (
-          <View style={styles.recordingIndicator}>
-            <View style={styles.recordingDot} />
-            <Text style={styles.recordingText}>Recording... {formatDuration(recordingDuration)}</Text>
+          <View style={[styles.recordingIndicator, { backgroundColor: theme.error + '15', borderColor: theme.error + '30', borderWidth: 1 }]}>
+            <View style={[styles.recordingDot, { backgroundColor: theme.error }]} />
+            <Text style={[styles.recordingText, { color: theme.error }]}>Recording... {formatDuration(recordingDuration)}</Text>
           </View>
         )}
       
@@ -1026,25 +1031,25 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
           disabled={submitting}
         >
           <LinearGradient
-            colors={isRecording ? ['#ff4444', '#ff6b6b'] : ['rgba(255, 0, 255, 0.2)', 'rgba(255, 0, 255, 0.1)']}
-            style={styles.audioButtonGradient}
+            colors={isRecording ? [theme.error, theme.error + 'cc'] : [theme.surfaceElevated, theme.surface]}
+            style={[styles.audioButtonGradient, { borderColor: theme.border, borderWidth: 1 }]}
           >
             <Ionicons 
               name={isRecording ? 'stop' : 'mic'} 
               size={20} 
-              color={isRecording ? '#fff' : '#ff00ff'} 
+              color={isRecording ? '#fff' : theme.primaryAccent} 
             />
           </LinearGradient>
         </TouchableOpacity>
         
         <LinearGradient
-          colors={['rgba(255, 0, 255, 0.1)', 'rgba(255, 107, 157, 0.05)']}
-          style={styles.textInputContainer}
+          colors={isDarkMode ? ['rgba(95, 115, 242, 0.1)', 'rgba(95, 115, 242, 0.05)'] : ['rgba(79, 70, 229, 0.08)', 'rgba(79, 70, 229, 0.04)']}
+          style={[styles.textInputContainer, { borderColor: theme.border, borderWidth: 1 }]}
         >
           <TextInput
-            style={styles.textInput}
+            style={[styles.textInput, { color: theme.textPrimary }]}
             placeholder={replyingTo ? `Reply to ${replyingTo.is_anonymous ? 'Anonymous' : replyingTo.profiles?.username}...` : "Add a comment..."}
-            placeholderTextColor="#888"
+            placeholderTextColor={theme.textSecondary}
             value={commentText}
             onChangeText={setCommentText}
             multiline
@@ -1059,7 +1064,7 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
           disabled={(!commentText.trim() && !audioUri) || submitting || isRecording}
         >
           <LinearGradient
-            colors={(commentText.trim() || audioUri) ? ['#ff00ff', '#ff6b9d'] : ['#666', '#444']}
+            colors={(commentText.trim() || audioUri) ? [theme.primaryAccent, theme.secondaryAccent] : [theme.surfaceElevated, theme.border]}
             style={styles.sendButtonGradient}
           >
             {submitting ? (
@@ -1081,14 +1086,14 @@ const CommentScreen = ({ postId, highlightCommentId: initialHighlightCommentId }
         ]}
       >
         <LinearGradient
-          colors={['rgba(255, 0, 255, 0.1)', 'rgba(0, 255, 255, 0.05)']}
-          style={styles.toggleContainer}
+          colors={isDarkMode ? ['rgba(22, 22, 48, 0.5)', 'rgba(26, 26, 58, 0.3)'] : ['rgba(255, 255, 255, 0.8)', 'rgba(240, 244, 248, 0.6)']}
+          style={[styles.toggleContainer, { borderColor: theme.border, borderWidth: 1 }]}
         >
-          <Text style={styles.anonymousLabel}>Post anonymously</Text>
+          <Text style={[styles.anonymousLabel, { color: theme.textPrimary }]}>Post anonymously</Text>
           <Switch
             value={isAnonymous}
             onValueChange={setIsAnonymous}
-            trackColor={{ false: '#767577', true: '#ff00ff' }}
+            trackColor={{ false: '#767577', true: theme.primaryAccent }}
             thumbColor={isAnonymous ? '#fff' : '#f4f3f4'}
           />
         </LinearGradient>

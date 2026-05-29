@@ -31,48 +31,50 @@ import { supabase } from '../lib/supabase';
 import * as FileSystem from 'expo-file-system';
 import { uploadToCloudinary, deleteFromCloudinary } from '../config/cloudinary';
 import ConfessionPersonCommentScreen from './ConfessionPersonCommentScreen'; // New import for person-specific comment screen
+import { useTheme } from '../context/ThemeContext';
 
 const { width: screenWidth } = Dimensions.get('window');
 
 
 // New PersonConfessionsHeader component (adapted from ConfessionsHeader)
 const PersonConfessionsHeader = React.memo(function PersonConfessionsHeaderComponent(props) {
+  const { isDarkMode, theme } = useTheme();
 
   return (
     <View>
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
         <TouchableOpacity 
           onPress={() => props.navigation.goBack()}
-          style={styles.backButton}
+          style={[styles.backButton, { backgroundColor: theme.surfaceElevated }]}
         >
-          <Ionicons name="arrow-back" size={24} color="#007AFF" />
+          <Ionicons name="arrow-back" size={24} color={theme.primaryAccent} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Person Confessions</Text>
+        <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>Person Confessions</Text>
       </View>
 
-      <View style={styles.searchContainer}>
-        <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
+      <View style={[styles.searchContainer, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
+        <Ionicons name="search" size={20} color={theme.textSecondary} style={styles.searchIcon} />
         <TextInput
-          style={styles.searchInput}
+          style={[styles.searchInput, { backgroundColor: theme.surfaceElevated, color: theme.textPrimary, borderColor: theme.border }]}
           placeholder="Search for a person..."
-          placeholderTextColor="#999"
+          placeholderTextColor={isDarkMode ? 'rgba(226, 232, 240, 0.4)' : 'rgba(15, 23, 42, 0.4)'}
           value={(props.searchQuery ?? '').toString()}
           onChangeText={(text) => props.setSearchQuery((text ?? '').toString())}
           autoCapitalize="none"
         />
         {(props.searchQuery || '').length > 0 && (
           <TouchableOpacity onPress={() => props.setSearchQuery('')}>
-            <Ionicons name="close-circle" size={20} color="#999" />
+            <Ionicons name="close-circle" size={20} color={theme.textSecondary} />
           </TouchableOpacity>
         )}
       </View>
 
       {props.searchResults.length > 0 ? (
-        <ScrollView style={styles.searchResultsList} nestedScrollEnabled={true} showsVerticalScrollIndicator={false}>
+        <ScrollView style={[styles.searchResultsList, { backgroundColor: theme.surfaceElevated }]} nestedScrollEnabled={true} showsVerticalScrollIndicator={false}>
          {props.searchResults.map((item) => (
   <TouchableOpacity 
     key={item.id.toString()}
-    style={styles.searchResultItem}
+    style={[styles.searchResultItem, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}
     onPress={() => props.selectPerson(item)}
   >
     <Image 
@@ -81,9 +83,9 @@ const PersonConfessionsHeader = React.memo(function PersonConfessionsHeaderCompo
     />
     <View style={styles.searchUserInfo}>
       <View style={styles.searchUsernameContainer}>
-        <Text style={styles.searchResultText}>{item.name}</Text>
+        <Text style={[styles.searchResultText, { color: theme.textPrimary }]}>{item.name}</Text>
         {item.isVerified && (
-          <Ionicons name="checkmark-circle" size={16} color="#007AFF" style={styles.verifiedBadge} />
+          <Ionicons name="checkmark-circle" size={16} color={theme.primaryAccent} style={styles.verifiedBadge} />
         )}
       </View>
     </View>
@@ -92,13 +94,13 @@ const PersonConfessionsHeader = React.memo(function PersonConfessionsHeaderCompo
         </ScrollView>
       ) : (
         (props.searchQuery || '').trim().length > 0 && !props.searchLoading && (
-          <View style={styles.noResultsContainer}>
-            <Text style={styles.noResultsText}>No persons found</Text>
+          <View style={[styles.noResultsContainer, { backgroundColor: theme.surfaceElevated }]}>
+            <Text style={[styles.noResultsText, { color: theme.textPrimary }]}>No persons found</Text>
             <TouchableOpacity 
-              style={styles.addPlaceButton}
+              style={[styles.addPlaceButton, { backgroundColor: theme.primaryAccent }]}
               onPress={() => props.setShowAddPersonModal(true)}
             >
-              <Text style={styles.addPlaceButtonText}>Add New Person</Text>
+              <Text style={[styles.addPlaceButtonText, { color: '#ffffff' }]}>Add New Person</Text>
             </TouchableOpacity>
           </View>
         )
@@ -118,8 +120,8 @@ const PersonConfessionsHeader = React.memo(function PersonConfessionsHeaderCompo
 
       {props.searchLoading && (
         <View style={styles.searchOverlayLoading}>
-          <ActivityIndicator size="small" color="#007AFF" />
-          <Text style={styles.searchOverlayLoadingText}>Searching...</Text>
+          <ActivityIndicator size="small" color={theme.primaryAccent} />
+          <Text style={[styles.searchOverlayLoadingText, { color: theme.textSecondary }]}>Searching...</Text>
         </View>
       )}
     </View>
@@ -134,6 +136,7 @@ const PersonConfessionsHeader = React.memo(function PersonConfessionsHeaderCompo
 const ConfessionPersonScreen = () => {
   const navigation = useNavigation();
   const route = useRoute(); // Add useRoute hook
+  const { isDarkMode, theme } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [selectedPerson, setSelectedPerson] = useState(null); // Changed from selectedLocation
@@ -1393,37 +1396,37 @@ const ConfessionPersonScreen = () => {
     if (!selectedPerson) return null;
 
     return (
-      <View style={styles.locationProfileContainer}> {/* Keep style name for now */}
+      <View style={[styles.locationProfileContainer, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}> {/* Keep style name for now */}
         <View style={styles.locationProfileHeader}>
           <TouchableOpacity onPress={() => setShowPersonProfileModal(true)}>
             <Image 
               source={{ 
                 uri: personProfile?.profile_image || 'https://via.placeholder.com/80x80?text=Add+Photo'
               }}
-              style={styles.locationProfileImage}
+              style={[styles.locationProfileImage, { borderColor: theme.primaryAccent }]}
             />
           </TouchableOpacity>
           <View style={styles.locationProfileInfo}>
-            <Text style={styles.locationProfileName} numberOfLines={2}>
+            <Text style={[styles.locationProfileName, { color: theme.textPrimary, textShadowColor: 'transparent' }]} numberOfLines={2}>
               {selectedPerson.name}
             </Text>
-            <Text style={styles.locationProfileBio} numberOfLines={3}>
+            <Text style={[styles.locationProfileBio, { color: theme.textSecondary }]} numberOfLines={3}>
               {personProfile?.bio || 'No description yet. Tap to add one!'}
             </Text>
           </View>
           <TouchableOpacity 
-            style={styles.editProfileButton}
+            style={[styles.editProfileButton, { backgroundColor: isDarkMode ? 'rgba(95, 115, 242, 0.15)' : 'rgba(79, 70, 229, 0.1)', shadowColor: theme.primaryAccent }]}
             onPress={() => {
               setProfileBio(personProfile?.bio || '');
               setShowPersonProfileModal(true);
             }}
           >
-            <Ionicons name="create-outline" size={20} color="#007AFF" />
+            <Ionicons name="create-outline" size={20} color={theme.primaryAccent} />
           </TouchableOpacity>
         </View>
       </View>
     );
-  }, [selectedPerson, personProfile, setProfileBio, setShowPersonProfileModal]); 
+  }, [selectedPerson, personProfile, setProfileBio, setShowPersonProfileModal, theme, isDarkMode]); 
 
   const renderConfessionItem = ({ item }) => {
     const isCurrentUserConfession = currentUser && (
@@ -1444,10 +1447,9 @@ const ConfessionPersonScreen = () => {
 
     const reactions = confessionReactions[item.id] || [];
     const verifications = confessionVerifications[item.id] || { correct: 0, incorrect: 0, userVote: null };
-    
     return (
       <TouchableOpacity 
-        style={styles.confessionCard}
+        style={[styles.confessionCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
         onLongPress={() => {
           setSelectedConfessionForReaction(item.id);
           setShowReactionModal(true);
@@ -1470,7 +1472,7 @@ const ConfessionPersonScreen = () => {
                 }
               }}
             >
-              <Text style={[styles.username, { color: '#007AFF' }]}>
+              <Text style={[styles.username, { color: theme.primaryAccent, textShadowColor: 'transparent' }]}>
                 {item.is_anonymous ? 'Anonymous' : (item.username || 'User')}
               </Text>
             </TouchableOpacity>
@@ -1486,9 +1488,9 @@ const ConfessionPersonScreen = () => {
             )}
           </View>
           <View style={styles.dateAndTagContainer}>
-            <Text style={styles.dateText}>{formattedDate}</Text>
+            <Text style={[styles.dateText, { color: theme.textSecondary }]}>{formattedDate}</Text>
             {item.is_tagged_in_content && (
-              <View style={styles.taggedBadge}>
+              <View style={[styles.taggedBadge, { backgroundColor: theme.secondaryAccent }]}>
                 <Ionicons name="pricetag" size={12} color="#fff" />
                 <Text style={styles.taggedText}>Tagged you</Text>
               </View>
@@ -1525,12 +1527,12 @@ const ConfessionPersonScreen = () => {
                 );
               }}
             >
-              <Ionicons name="ellipsis-vertical" size={20} color="#007AFF" />
+              <Ionicons name="ellipsis-vertical" size={20} color={theme.textSecondary} />
             </TouchableOpacity>
           )}
         </View>
         
-        <Text style={styles.confessionContent}>{renderConfessionContentWithMentions(item.content)}</Text>
+        <Text style={[styles.confessionContent, { color: theme.textPrimary }]}>{renderConfessionContentWithMentions(item.content)}</Text>
         
         {item.media && item.media.length > 0 && (
           <ScrollView horizontal style={styles.mediaContainer} showsHorizontalScrollIndicator={false}>
@@ -1544,7 +1546,7 @@ const ConfessionPersonScreen = () => {
                 {mediaItem.type === 'video' && (
                   <TouchableOpacity style={styles.playButton}>
                     <LinearGradient
-                      colors={['#FF00FF', '#8A2387']}
+                      colors={[theme.primaryAccent, theme.secondaryAccent]}
                       style={styles.gradientButton}
                     >
                       <Ionicons name="play-circle" size={40} color="#fff" />
@@ -1690,7 +1692,7 @@ const ConfessionPersonScreen = () => {
   }, [setShowAddPersonModal]); 
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.backgroundSolid }]}>
       <FlatList
         data={confessions}
         keyExtractor={(item) => item.id.toString()}
@@ -1720,15 +1722,15 @@ const ConfessionPersonScreen = () => {
         ListEmptyComponent={() => (
           !selectedPerson ? (
             <View style={styles.instructionContainer}>
-              <Ionicons name="search" size={60} color="#666" />
-              <Text style={styles.instructionText}>
+              <Ionicons name="search" size={60} color={theme.textSecondary} />
+              <Text style={[styles.instructionText, { color: theme.textSecondary }]}>
                 Search for a person or add a new one to see confessions
               </Text>
             </View>
           ) : (
             <View style={styles.emptyContainer}>
-              <Ionicons name="chatbubbles-outline" size={60} color="#666" />
-              <Text style={styles.emptyText}>No confessions yet. Be the first to share!</Text>
+              <Ionicons name="chatbubbles-outline" size={60} color={theme.textSecondary} />
+              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No confessions yet. Be the first to share!</Text>
             </View>
           )
         )}
@@ -1736,7 +1738,7 @@ const ConfessionPersonScreen = () => {
       
       {selectedPerson && (
         <TouchableOpacity 
-          style={styles.addButton}
+          style={[styles.addButton, { backgroundColor: theme.primaryAccent }]}
           onPress={() => setShowNewConfessionModal(true)}
         >
           <Ionicons name="add" size={30} color="#fff" />
@@ -1754,109 +1756,46 @@ const ConfessionPersonScreen = () => {
           style={styles.keyboardAvoidingContainer} 
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Add Person</Text> {/* Changed title */}
+          <View style={[styles.modalContent, { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1 }]}>
+            <Text style={[styles.modalTitle, { color: theme.textPrimary }]}>Add Person</Text> {/* Changed title */}
             
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollViewContent}>
-              {/* Removed Type selector */}
-              {/* <View style={styles.formGroup>
-                <Text style={styles.label}>Type</Text>
-                <View style={styles.typeSelector}>
-                  {['institute', 'office', 'place', 'building'].map((type) => (
-                    <TouchableOpacity
-                      key={type}
-                      style={[styles.typeButton, newPlace.type === type && styles.selectedType]}
-                      onPress={() => setNewPlace(prev => ({ ...prev, type }))}
-                    >
-                      <Text style={[styles.typeText, newPlace.type === type && styles.selectedTypeText]}>
-                        {type.charAt(0).toUpperCase() + type.slice(1)}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View> */}
-
               <View style={styles.formGroup}>
-                <Text style={styles.label}>Name</Text>
+                <Text style={[styles.label, { color: theme.textSecondary }]}>Name</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { backgroundColor: theme.surfaceElevated, color: theme.textPrimary, borderColor: theme.border }]}
                   value={newPerson.name}
                   onChangeText={(text) => setNewPerson(prev => ({ ...prev, name: text }))}
                   placeholder="Enter person's name"
-                  placeholderTextColor="#666"
+                  placeholderTextColor={isDarkMode ? 'rgba(226, 232, 240, 0.4)' : 'rgba(15, 23, 42, 0.4)'}
                 />
               </View>
 
               <View style={styles.formGroup}>
-                <Text style={styles.label}>Bio (Optional)</Text> {/* Added Bio field */}
+                <Text style={[styles.label, { color: theme.textSecondary }]}>Bio (Optional)</Text> {/* Added Bio field */}
                 <TextInput
-                  style={[styles.input, styles.bioInput]}
+                  style={[styles.input, styles.bioInput, { backgroundColor: theme.surfaceElevated, color: theme.textPrimary, borderColor: theme.border }]}
                   value={newPerson.bio}
                   onChangeText={(text) => setNewPerson(prev => ({ ...prev, bio: text }))}
                   placeholder="Tell something about this person..."
-                  placeholderTextColor="#666"
+                  placeholderTextColor={isDarkMode ? 'rgba(226, 232, 240, 0.4)' : 'rgba(15, 23, 42, 0.4)'}
                   multiline
                   numberOfLines={4}
                 />
               </View>
 
-              {/* Removed City, District, State, Country fields */}
-              {/* <View style={styles.formGroup}>
-                <Text style={styles.label}>City</Text>
-                <TextInput
-                  style={styles.input}
-                  value={newPlace.city}
-                  onChangeText={(text) => setNewPlace(prev => ({ ...prev, city: text }))}
-                  placeholder="Enter city"
-                  placeholderTextColor="#666"
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>District</Text>
-                <TextInput
-                  style={styles.input}
-                  value={newPlace.district}
-                  onChangeText={(text) => setNewPlace(prev => ({ ...prev, district: text }))}
-                  placeholder="Enter district"
-                  placeholderTextColor="#666"
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>State</Text>
-                <TextInput
-                  style={styles.input}
-                  value={newPlace.state}
-                  onChangeText={(text) => setNewPlace(prev => ({ ...prev, state: text }))}
-                  placeholder="Enter state"
-                  placeholderTextColor="#666"
-                />
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Country</Text>
-                <TextInput
-                  style={styles.input}
-                  value={newPlace.country}
-                  onChangeText={(text) => setNewPlace(prev => ({ ...prev, country: text }))}
-                  placeholder="Enter country"
-                  placeholderTextColor="#666"
-                />
-              </View> */}
-
               <View style={styles.modalButtons}>
                 <TouchableOpacity 
-                  style={[styles.modalButton, styles.cancelButton]}
+                  style={[styles.modalButton, styles.cancelButton, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}
                   onPress={() => setShowAddPersonModal(false)}
                 >
-                  <Text style={styles.buttonText}>Cancel</Text>
+                  <Text style={[styles.buttonText, { color: theme.textSecondary }]}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity 
-                  style={[styles.modalButton, styles.submitButton]}
+                  style={[styles.modalButton, styles.submitButton, { backgroundColor: theme.primaryAccent }]}
                   onPress={handleAddPerson} // Call handleAddPerson
                 >
-                  <Text style={styles.buttonText}>Add Person</Text> {/* Changed text */}
+                  <Text style={[styles.buttonText, { color: '#ffffff' }]}>Add Person</Text> {/* Changed text */}
                 </TouchableOpacity>
               </View>
             </ScrollView>

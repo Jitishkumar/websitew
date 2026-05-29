@@ -26,6 +26,7 @@ import { supabase } from '../lib/supabase';
 import { Alert } from 'react-native';
 import CommentScreen from '../screens/CommentScreen';
 import ZoomableImage from './ZoomableImage';
+import { useTheme } from '../context/ThemeContext';
 
 const { width } = Dimensions.get('window');
 
@@ -54,6 +55,7 @@ const formatTimestamp = (timestamp) => {
 };
 
 const PostItem = ({ post, onOptionsPress }) => {
+  const { isDarkMode, theme } = useTheme();
   const [isLiked, setIsLiked] = useState(post.is_liked || false);
   const [likesCount, setLikesCount] = useState(post.likes?.[0]?.count || 0);
   const [commentsCount, setCommentsCount] = useState(post.comments?.[0]?.count || 0);
@@ -606,12 +608,12 @@ const PostItem = ({ post, onOptionsPress }) => {
   };
   
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.surface, borderColor: theme.border }]}>
         {/* Post Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={handleProfilePress} style={styles.profileContainer}>
             <View style={styles.avatarContainer}>
-              <View style={styles.avatarBorder}>
+              <View style={[styles.avatarBorder, { borderColor: theme.border }]}>
                 <Image 
                   source={{ uri: getAvatarUrl() }}
                   style={styles.avatar}
@@ -619,8 +621,8 @@ const PostItem = ({ post, onOptionsPress }) => {
               </View>
             </View>
             <View style={styles.userInfo}>
-              <Text style={styles.username}>{post?.profiles?.username || 'Unknown'}</Text>
-              <Text style={styles.timestamp}>{formatTimestamp(post?.created_at)}</Text>
+              <Text style={[styles.username, { color: theme.textPrimary }]}>{post?.profiles?.username || 'Unknown'}</Text>
+              <Text style={[styles.timestamp, { color: theme.textSecondary }]}>{formatTimestamp(post?.created_at)}</Text>
             </View>
           </TouchableOpacity>
           {currentUser && currentUser.id === post?.user_id && (
@@ -639,7 +641,7 @@ const PostItem = ({ post, onOptionsPress }) => {
               }}
             >
               <View style={styles.optionsButtonGradient}>
-                <MaterialIcons name="more-vert" size={20} color="rgba(255, 255, 255, 0.7)" />
+                <MaterialIcons name="more-vert" size={20} color={theme.textSecondary} />
               </View>
             </TouchableOpacity>
           )}
@@ -648,12 +650,12 @@ const PostItem = ({ post, onOptionsPress }) => {
         {/* Post Caption */}
         {post.caption && (
           <View style={styles.captionContainer}>
-            <Text style={styles.caption}>
+            <Text style={[styles.caption, { color: theme.textPrimary }]}>
               {post.caption.split(/(https?:\/\/[^\s]+|#[\w\u00c0-\u024f\u1e00-\u1eff]+)/g).map((part, index) => {
                 if (part.match(/^https?:\/\//)) {
                   return (
                     <TouchableOpacity key={index} onPress={() => Linking.openURL(part)}>
-                      <Text style={styles.link}>{part}</Text>
+                      <Text style={[styles.link, { color: theme.secondaryAccent }]}>{part}</Text>
                     </TouchableOpacity>
                   );
                 } else if (part.match(/^#[\w\u00c0-\u024f\u1e00-\u1eff]+/)) {
@@ -665,7 +667,7 @@ const PostItem = ({ post, onOptionsPress }) => {
                         searchType: 'hashtag' 
                       })}
                     >
-                      <Text style={styles.hashtag}>{part}</Text>
+                      <Text style={[styles.hashtag, { color: theme.primaryAccent }]}>{part}</Text>
                     </TouchableOpacity>
                   );
                 }
@@ -688,8 +690,8 @@ const PostItem = ({ post, onOptionsPress }) => {
                 <View style={styles.videoContainer}>
                   {loading && (
                     <View style={styles.loadingContainer}>
-                      <ActivityIndicator size="large" color="#ff00ff" />
-                      <Text style={styles.loadingText}>Loading video...</Text>
+                      <ActivityIndicator size="large" color={theme.primaryAccent} />
+                      <Text style={[styles.loadingText, { color: theme.textPrimary }]}>Loading video...</Text>
                     </View>
                   )}
 
@@ -714,7 +716,7 @@ const PostItem = ({ post, onOptionsPress }) => {
                       if (activeVideoId === post.id && !isTouchHolding.current) {
                         try {
                           await videoRef.current?.playAsync();
-                          setPlaying(true);
+                           setPlaying(true);
                         } catch (error) {
                           console.warn('Error auto-playing video:', error);
                         }
@@ -757,7 +759,7 @@ const PostItem = ({ post, onOptionsPress }) => {
                       {/* Video seekbar with PanResponder */}
                       <View style={styles.seekbarContainer}>
                         <View style={styles.progressBackground} />
-                        <View style={[styles.progressBar, { width: `${progress * 100}%` }]} />
+                        <View style={[styles.progressBar, { width: `${progress * 100}%`, backgroundColor: theme.primaryAccent }]} />
                         <TouchableWithoutFeedback
                           onPress={(evt) => {
                             if (!seeking && duration > 0) {
@@ -770,7 +772,7 @@ const PostItem = ({ post, onOptionsPress }) => {
                         >
                           <View style={styles.seekbarTouchArea}>
                             <View {...panResponder.panHandlers} style={styles.seekbarTouchable}>
-                              <View style={[styles.seekKnob, { left: `${progress * 100}%` }]} />
+                              <View style={[styles.seekKnob, { left: `${progress * 100}%`, backgroundColor: theme.primaryAccent }]} />
                             </View>
                           </View>
                         </TouchableWithoutFeedback>
@@ -780,9 +782,9 @@ const PostItem = ({ post, onOptionsPress }) => {
 
                   {videoError && (
                     <View style={styles.errorContainer}>
-                      <Ionicons name="alert-circle" size={30} color="#ff00ff" />
-                      <Text style={styles.errorText}>Video unavailable</Text>
-                      <Text style={styles.errorSubText}>Tap to retry</Text>
+                      <Ionicons name="alert-circle" size={30} color={theme.error} />
+                      <Text style={[styles.errorText, { color: theme.textPrimary }]}>Video unavailable</Text>
+                      <Text style={[styles.errorSubText, { color: theme.textSecondary }]}>Tap to retry</Text>
                     </View>
                   )}
                 </View>
@@ -802,8 +804,8 @@ const PostItem = ({ post, onOptionsPress }) => {
                 />
                 {!imageLoaded && (
                   <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color="#ff00ff" />
-                    <Text style={styles.loadingText}>Loading image...</Text>
+                    <ActivityIndicator size="large" color={theme.primaryAccent} />
+                    <Text style={[styles.loadingText, { color: theme.textPrimary }]}>Loading image...</Text>
                   </View>
                 )}
               </TouchableOpacity>
@@ -827,23 +829,23 @@ const PostItem = ({ post, onOptionsPress }) => {
                 <Ionicons 
                   name={isLiked ? "heart" : "heart-outline"} 
                   size={26} 
-                  color={isLiked ? "#ff0050" : "#fff"} 
+                  color={isLiked ? "#F43F5E" : theme.textPrimary} 
                   style={isLiked && styles.likedIcon}
                 />
               </View>
-              {likesCount > 0 && <Text style={[styles.actionText, isLiked && styles.likedActionText]}>{likesCount}</Text>}
+              {likesCount > 0 && <Text style={[styles.actionText, { color: theme.textPrimary }, isLiked && { color: '#F43F5E', fontWeight: 'bold' }]}>{likesCount}</Text>}
             </TouchableOpacity>
 
           <TouchableOpacity style={styles.actionButton} onPress={handleComment}>
             <View style={styles.actionButtonGradient}>
-              <Ionicons name="chatbubble-outline" size={26} color="#fff" />
+              <Ionicons name="chatbubble-outline" size={26} color={theme.textPrimary} />
             </View>
-            {commentsCount > 0 && <Text style={styles.actionText}>{commentsCount}</Text>}
+            {commentsCount > 0 && <Text style={[styles.actionText, { color: theme.textPrimary }]}>{commentsCount}</Text>}
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.actionButton} onPress={handleShare}>
             <View style={styles.actionButtonGradient}>
-              <Ionicons name="paper-plane-outline" size={24} color="#fff" />
+              <Ionicons name="paper-plane-outline" size={24} color={theme.textPrimary} />
             </View>
           </TouchableOpacity>
 
@@ -851,7 +853,7 @@ const PostItem = ({ post, onOptionsPress }) => {
           {post.type === 'video' && (
             <View style={styles.actionButton}>
               <View style={styles.actionButtonGradient}>
-                <Ionicons name="bookmark-outline" size={24} color="#fff" />
+                <Ionicons name="bookmark-outline" size={24} color={theme.textPrimary} />
               </View>
             </View>
           )}
@@ -867,22 +869,22 @@ const PostItem = ({ post, onOptionsPress }) => {
           onRequestClose={() => setShowLikesModal(false)}
         >
           <View style={styles.modalContainer}>
-            <View style={styles.modalContent}>
+            <View style={[styles.modalContent, { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1 }]}>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Likes</Text>
+                <Text style={[styles.modalTitle, { color: theme.textPrimary }]}>Likes</Text>
                 <TouchableOpacity onPress={() => setShowLikesModal(false)}>
-                  <Ionicons name="close" size={24} color="#fff" />
+                  <Ionicons name="close" size={24} color={theme.textPrimary} />
                 </TouchableOpacity>
               </View>
               
               {loadingLikes ? (
-                <ActivityIndicator size="large" color="#ff00ff" style={styles.loadingIndicator} />
+                <ActivityIndicator size="large" color={theme.primaryAccent} style={styles.loadingIndicator} />
               ) : (
                 <ScrollView style={styles.likesList}>
                   {likesList.map((like, index) => (
                     <TouchableOpacity 
                       key={index}
-                      style={styles.likeItem}
+                      style={[styles.likeItem, { borderBottomColor: theme.border }]}
                       onPress={() => {
                         setShowLikesModal(false);
                         navigation.navigate('UserProfileScreen', { userId: like.user_id });
@@ -892,7 +894,7 @@ const PostItem = ({ post, onOptionsPress }) => {
                         source={{ uri: like.profiles.avatar_url || 'https://via.placeholder.com/150' }}
                         style={styles.likeAvatar}
                       />
-                      <Text style={styles.likeUsername}>{like.profiles.username}</Text>
+                      <Text style={[styles.likeUsername, { color: theme.textPrimary }]}>{like.profiles.username}</Text>
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
@@ -909,25 +911,25 @@ const PostItem = ({ post, onOptionsPress }) => {
           onRequestClose={() => setShowEditModal(false)}
         >
           <View style={styles.modalContainer}>
-            <View style={styles.modalContent}>
+            <View style={[styles.modalContent, { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1 }]}>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Edit Caption</Text>
+                <Text style={[styles.modalTitle, { color: theme.textPrimary }]}>Edit Caption</Text>
                 <TouchableOpacity onPress={() => setShowEditModal(false)}>
-                  <Ionicons name="close" size={24} color="#fff" />
+                  <Ionicons name="close" size={24} color={theme.textPrimary} />
                 </TouchableOpacity>
               </View>
               
               <TextInput
-                style={styles.editInput}
+                style={[styles.editInput, { backgroundColor: theme.surfaceElevated, borderColor: theme.border, borderWidth: 1, color: theme.textPrimary }]}
                 value={editCaption}
                 onChangeText={setEditCaption}
                 multiline
                 placeholder="Write a caption..."
-                placeholderTextColor="#666"
+                placeholderTextColor={theme.textSecondary}
               />
               
               <TouchableOpacity 
-                style={styles.editButton}
+                style={[styles.editButton, { backgroundColor: theme.primaryAccent }]}
                 onPress={handleEdit}
               >
                 <Text style={styles.editButtonText}>Save Changes</Text>

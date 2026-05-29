@@ -23,12 +23,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { Video } from 'expo-av';
 import { BlurView } from 'expo-blur';
+import { useTheme } from '../context/ThemeContext';
 
 const { width, height } = Dimensions.get('window');
 
 const TrendingScreen = () => {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const { isDarkMode, theme } = useTheme();
 
   // State management
   const [activeTab, setActiveTab] = useState('all');
@@ -615,19 +617,20 @@ const TrendingScreen = () => {
         ]}
       >
         <LinearGradient
-          colors={['#ff00ff', '#ff6b9d', '#00ffff', '#ff00ff']}
+          colors={[theme.primaryAccent, theme.secondaryAccent, theme.primaryAccent]}
           style={styles.glowGradient}
         />
       </Animated.View>
 
       <LinearGradient
-        colors={['rgba(30, 30, 30, 0.8)', 'rgba(40, 40, 40, 0.8)']}
+        colors={isDarkMode ? ['rgba(22, 22, 48, 0.8)', 'rgba(26, 26, 58, 0.8)'] : ['rgba(255, 255, 255, 0.9)', 'rgba(240, 244, 248, 0.9)']}
         style={styles.tabBackground}
       >
-        <BlurView intensity={80} tint="dark" style={styles.tabBlur}>
+        <BlurView intensity={80} tint={isDarkMode ? "dark" : "light"} style={[styles.tabBlur, { borderColor: theme.border }]}>
           <Animated.View style={[
             styles.tabIndicator,
             {
+              backgroundColor: isDarkMode ? 'rgba(95, 115, 242, 0.2)' : 'rgba(79, 70, 229, 0.15)',
               transform: [{
                 translateX: tabSlideAnim.interpolate({
                   inputRange: [0, 1, 2],
@@ -636,61 +639,69 @@ const TrendingScreen = () => {
               }]
             }
           ]} />
-          {tabs.map((tab, index) => (
-            <TouchableOpacity
-              key={tab.id}
-              style={[styles.tabButton]}
-              onPress={() => handleTabPress(tab.id)}
-            >
-              <LinearGradient
-                colors={activeTab === tab.id ? tab.gradient : ['transparent', 'transparent']}
-                style={styles.tabGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
+          {tabs.map((tab, index) => {
+            const activeTabGradient = tab.id === 'all'
+              ? [theme.primaryAccent, theme.secondaryAccent]
+              : tab.id === 'videos'
+                ? [theme.primaryAccent, '#3b82f6']
+                : [theme.secondaryAccent, theme.primaryAccent];
+            return (
+              <TouchableOpacity
+                key={tab.id}
+                style={[styles.tabButton]}
+                onPress={() => handleTabPress(tab.id)}
               >
-                <Animated.View 
-                  style={[
-                    styles.tabContent,
-                    activeTab === tab.id && { 
-                      transform: [{ scale: pulseAnim }, { translateY: floatAnim }] 
-                    }
-                  ]}
+                <LinearGradient
+                  colors={activeTab === tab.id ? activeTabGradient : ['transparent', 'transparent']}
+                  style={styles.tabGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
                 >
-                  <Ionicons
-                    name={tab.icon}
-                    size={20}
-                    color={activeTab === tab.id ? '#ffffff' : '#666666'}
-                    style={styles.tabIcon}
-                  />
-                  <Animated.Text style={[
-                    styles.tabText,
-                    activeTab === tab.id && styles.activeTabText,
-                    {
-                      transform: [
-                        { translateY: activeTab === tab.id ? floatAnim : 0 },
-                        { scale: activeTab === tab.id ? pulseAnim : 1 }
-                      ]
-                    }
-                  ]}>
-                    {tab.label}
-                  </Animated.Text>
-                  {activeTab === tab.id && (
-                    <Animated.View 
-                      style={[
-                        styles.sparkle,
-                        { opacity: sparkleAnim, transform: [{ rotate: sparkleAnim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: ['0deg', '360deg']
-                        })}] }
-                      ]}
-                    >
-                      <Ionicons name="sparkles" size={12} color="#FFD700" />
-                    </Animated.View>
-                  )}
-                </Animated.View>
-              </LinearGradient>
-            </TouchableOpacity>
-          ))}
+                  <Animated.View 
+                    style={[
+                      styles.tabContent,
+                      activeTab === tab.id && { 
+                        transform: [{ scale: pulseAnim }, { translateY: floatAnim }] 
+                      }
+                    ]}
+                  >
+                    <Ionicons
+                      name={tab.icon}
+                      size={20}
+                      color={activeTab === tab.id ? '#ffffff' : theme.textSecondary}
+                      style={styles.tabIcon}
+                    />
+                    <Animated.Text style={[
+                      styles.tabText,
+                      { color: activeTab === tab.id ? '#ffffff' : theme.textSecondary },
+                      activeTab === tab.id && styles.activeTabText,
+                      {
+                        transform: [
+                          { translateY: activeTab === tab.id ? floatAnim : 0 },
+                          { scale: activeTab === tab.id ? pulseAnim : 1 }
+                        ]
+                      }
+                    ]}>
+                      {tab.label}
+                    </Animated.Text>
+                    {activeTab === tab.id && (
+                      <Animated.View 
+                        style={[
+                          styles.sparkle,
+                          { opacity: sparkleAnim, transform: [{ rotate: sparkleAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: ['0deg', '360deg']
+                          })}] }
+                        ]}
+                      >
+                        <Ionicons name="sparkles" size={12} color={theme.secondaryAccent} />
+                      </Animated.View>
+                    )}
+                  </Animated.View>
+                </LinearGradient>
+              </TouchableOpacity>
+            );
+          })}
         </BlurView>
       </LinearGradient>
     </View>
@@ -698,10 +709,10 @@ const TrendingScreen = () => {
 
   const renderTrendingBadge = (rank) => {
     const getBadgeStyle = (rank) => {
-      if (rank >= 80) return { colors: ['#FF6B6B', '#FF8E8E'], icon: 'flame', label: 'HOT' };
-      if (rank >= 60) return { colors: ['#4ECDC4', '#45B7A8'], icon: 'trending-up', label: 'RISING' };
-      if (rank >= 40) return { colors: ['#FFE66D', '#FFD93D'], icon: 'flash', label: 'BUZZ' };
-      return { colors: ['#A8E6CF', '#7FCDCD'], icon: 'pulse', label: 'NEW' };
+      if (rank >= 80) return { colors: [theme.primaryAccent, theme.secondaryAccent], icon: 'flame', label: 'HOT' };
+      if (rank >= 60) return { colors: [theme.secondaryAccent, theme.primaryAccent], icon: 'trending-up', label: 'RISING' };
+      if (rank >= 40) return { colors: [theme.primaryAccent, theme.primaryAccent + 'cc'], icon: 'flash', label: 'BUZZ' };
+      return { colors: [theme.secondaryAccent, theme.secondaryAccent + 'cc'], icon: 'pulse', label: 'NEW' };
     };
 
     const badgeStyle = getBadgeStyle(rank);
@@ -745,7 +756,7 @@ const TrendingScreen = () => {
           activeOpacity={0.9}
         >
           <LinearGradient
-            colors={['rgba(30, 30, 30, 0.95)', 'rgba(40, 40, 40, 0.9)']}
+            colors={[theme.surface, theme.surfaceElevated]}
             style={styles.postCardGradient}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
@@ -755,6 +766,7 @@ const TrendingScreen = () => {
               style={[
                 styles.shimmerOverlay,
                 {
+                  backgroundColor: theme.border,
                   opacity: shimmerAnim.interpolate({
                     inputRange: [0, 0.5, 1],
                     outputRange: [0, 0.1, 0]
@@ -772,7 +784,7 @@ const TrendingScreen = () => {
                 <View style={styles.videoContainer}>
                   <Video
                     source={{ uri: item.media_url }}
-                    style={styles.postVideo}
+                    style={[styles.postVideo, { backgroundColor: isDarkMode ? '#1a1a1a' : '#eaeaea' }]}
                     resizeMode="cover"
                     shouldPlay={false}
                     isLooping={false}
@@ -786,7 +798,7 @@ const TrendingScreen = () => {
                     ]}
                   >
                     <LinearGradient
-                      colors={['rgba(59, 130, 246, 0.8)', 'rgba(147, 51, 234, 0.8)']}
+                      colors={[theme.primaryAccent, theme.secondaryAccent]}
                       style={styles.playButton}
                     >
                       <Ionicons name="play" size={30} color="#ffffff" />
@@ -794,7 +806,7 @@ const TrendingScreen = () => {
                   </Animated.View>
                 </View>
               ) : (
-                <Image source={{ uri: item.media_url }} style={styles.postImage} />
+                <Image source={{ uri: item.media_url }} style={[styles.postImage, { backgroundColor: isDarkMode ? '#1a1a1a' : '#eaeaea' }]} />
               )}
 
               {/* Post Info */}
@@ -805,25 +817,25 @@ const TrendingScreen = () => {
                       source={{
                         uri: item.avatar_url || 'https://via.placeholder.com/40x40.png?text=User'
                       }}
-                      style={styles.userAvatar}
+                      style={[styles.userAvatar, { borderColor: theme.primaryAccent }]}
                     />
-                    <View style={styles.onlineIndicator} />
+                    <View style={[styles.onlineIndicator, { borderColor: theme.surface }]} />
                   </View>
                   
                   <TouchableOpacity
                     onPress={() => handleUsernamePress(item.user_id, item.username)}
                     style={styles.usernameContainer}
                   >
-                    <Text style={styles.username}>@{item.username}</Text>
-                    <Text style={styles.trendingText}>Trending Creator</Text>
+                    <Text style={[styles.username, { color: theme.textPrimary }]}>@{item.username}</Text>
+                    <Text style={[styles.trendingText, { color: theme.primaryAccent }]}>Trending Creator</Text>
                   </TouchableOpacity>
                   
-                  <View style={styles.rankBadge}>
-                    <Text style={styles.rankText}>#{index + 1}</Text>
+                  <View style={[styles.rankBadge, { backgroundColor: theme.border, borderColor: theme.primaryAccent }]}>
+                    <Text style={[styles.rankText, { color: theme.primaryAccent }]}>#{index + 1}</Text>
                   </View>
                 </View>
 
-                <Text style={styles.postCaption} numberOfLines={2}>
+                <Text style={[styles.postCaption, { color: theme.textPrimary }]} numberOfLines={2}>
                   {item.caption}
                 </Text>
 
@@ -836,12 +848,12 @@ const TrendingScreen = () => {
                     ]}
                   >
                     <LinearGradient
-                      colors={['#FF6B6B', '#FF8E8E']}
+                      colors={['#F43F5E', '#FDA4AF']}
                       style={styles.statGradient}
                     >
                       <Ionicons name="heart" size={14} color="#fff" />
                     </LinearGradient>
-                    <Text style={styles.statText}>{item.likes_count || 0}</Text>
+                    <Text style={[styles.statText, { color: theme.textSecondary }]}>{item.likes_count || 0}</Text>
                   </Animated.View>
                   
                   <Animated.View 
@@ -851,12 +863,12 @@ const TrendingScreen = () => {
                     ]}
                   >
                     <LinearGradient
-                      colors={['#4ECDC4', '#45B7A8']}
+                      colors={[theme.secondaryAccent, theme.secondaryAccent + 'cc']}
                       style={styles.statGradient}
                     >
                       <Ionicons name="chatbubble" size={14} color="#fff" />
                     </LinearGradient>
-                    <Text style={styles.statText}>{item.comments_count || 0}</Text>
+                    <Text style={[styles.statText, { color: theme.textSecondary }]}>{item.comments_count || 0}</Text>
                   </Animated.View>
                   
                   <Animated.View 
@@ -866,17 +878,17 @@ const TrendingScreen = () => {
                     ]}
                   >
                     <LinearGradient
-                      colors={['#FFE66D', '#FFD93D']}
+                      colors={[theme.primaryAccent, theme.primaryAccent + 'cc']}
                       style={styles.statGradient}
                     >
                       <Ionicons name="share-social" size={14} color="#fff" />
                     </LinearGradient>
-                    <Text style={styles.statText}>Share</Text>
+                    <Text style={[styles.statText, { color: theme.textSecondary }]}>Share</Text>
                   </Animated.View>
 
                   <View style={styles.timeContainer}>
-                    <Ionicons name="time" size={12} color="#888888" />
-                    <Text style={styles.timeText}>
+                    <Ionicons name="time" size={12} color={theme.textSecondary} />
+                    <Text style={[styles.timeText, { color: theme.textSecondary }]}>
                       {new Date(item.created_at).toLocaleDateString()}
                     </Text>
                   </View>
@@ -910,7 +922,7 @@ const TrendingScreen = () => {
           activeOpacity={0.9}
         >
           <LinearGradient
-            colors={['rgba(30, 30, 30, 0.9)', 'rgba(40, 40, 40, 0.85)']}
+            colors={[theme.surface, theme.surfaceElevated]}
             style={styles.topicCardGradient}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
@@ -919,7 +931,7 @@ const TrendingScreen = () => {
               <View style={styles.topicHeader}>
                 <View style={styles.topicRank}>
                   <LinearGradient
-                    colors={index < 3 ? ['#FFD700', '#FFA500'] : ['#667eea', '#764ba2']}
+                    colors={index < 3 ? [theme.secondaryAccent, theme.primaryAccent] : [theme.surfaceElevated, theme.border]}
                     style={styles.rankCircle}
                   >
                     <Text style={styles.topicRankText}>#{index + 1}</Text>
@@ -927,8 +939,8 @@ const TrendingScreen = () => {
                 </View>
                 
                 <View style={styles.topicInfo}>
-                  <Text style={styles.topicHashtag}>{item.hashtag}</Text>
-                  <Text style={styles.topicStats}>
+                  <Text style={[styles.topicHashtag, { color: theme.textPrimary }]}>{item.hashtag}</Text>
+                  <Text style={[styles.topicStats, { color: theme.textSecondary }]}>
                     {item.display_text} • {item.velocity}% velocity
                   </Text>
                 </View>
@@ -938,7 +950,7 @@ const TrendingScreen = () => {
                   { transform: [{ scale: pulseAnim }] }
                 ]}>
                   <LinearGradient
-                    colors={['#FF6B6B', '#FF8E8E']}
+                    colors={[theme.primaryAccent, theme.secondaryAccent]}
                     style={styles.trendingDot}
                   >
                     <Ionicons name="trending-up" size={16} color="#fff" />
@@ -950,9 +962,9 @@ const TrendingScreen = () => {
               {item.recent_posts && item.recent_posts.length > 0 && (
                 <View style={styles.recentPosts}>
                   {item.recent_posts.slice(0, 2).map((post, postIndex) => (
-                    <View key={post.id} style={styles.recentPostItem}>
-                      <Text style={styles.recentPostUsername}>@{post.username}</Text>
-                      <Text style={styles.recentPostCaption} numberOfLines={1}>
+                    <View key={post.id} style={[styles.recentPostItem, { backgroundColor: theme.primaryAccent + '15' }]}>
+                      <Text style={[styles.recentPostUsername, { color: theme.primaryAccent }]}>@{post.username}</Text>
+                      <Text style={[styles.recentPostCaption, { color: theme.textPrimary }]} numberOfLines={1}>
                         {post.caption}
                       </Text>
                     </View>
@@ -969,12 +981,12 @@ const TrendingScreen = () => {
                   ]}
                 >
                   <LinearGradient
-                    colors={['#4ECDC4', '#45B7A8']}
+                    colors={[theme.secondaryAccent, theme.primaryAccent]}
                     style={styles.metricGradient}
                   >
                     <Ionicons name="pulse" size={12} color="#fff" />
                   </LinearGradient>
-                  <Text style={styles.metricText}>{item.trending_rank} Score</Text>
+                  <Text style={[styles.metricText, { color: theme.textSecondary }]}>{item.trending_rank} Score</Text>
                 </Animated.View>
                 
                 <Animated.View 
@@ -984,12 +996,12 @@ const TrendingScreen = () => {
                   ]}
                 >
                   <LinearGradient
-                    colors={['#FFE66D', '#FFD93D']}
+                    colors={[theme.primaryAccent, theme.secondaryAccent]}
                     style={styles.metricGradient}
                   >
                     <Ionicons name="chatbubbles" size={12} color="#fff" />
                   </LinearGradient>
-                  <Text style={styles.metricText}>{item.engagement_score} Engagement</Text>
+                  <Text style={[styles.metricText, { color: theme.textSecondary }]}>{item.engagement_score} Engagement</Text>
                 </Animated.View>
               </View>
             </View>
@@ -1006,14 +1018,14 @@ const TrendingScreen = () => {
         { transform: [{ scale: pulseAnim }] }
       ]}>
         <LinearGradient
-          colors={['#667eea', '#764ba2']}
+          colors={[theme.primaryAccent, theme.secondaryAccent]}
           style={styles.loadingGradient}
         >
           <ActivityIndicator size="large" color="#ffffff" />
         </LinearGradient>
       </Animated.View>
       
-      <Text style={styles.loadingText}>
+      <Text style={[styles.loadingText, { color: theme.textPrimary }]}>
         {activeTab === 'topics' ? 'Discovering trending topics...' : 'Loading trending content...'}
       </Text>
       
@@ -1023,6 +1035,7 @@ const TrendingScreen = () => {
             key={index}
             style={[
               styles.loadingDot,
+              { backgroundColor: theme.primaryAccent },
               {
                 opacity: shimmerAnim.interpolate({
                   inputRange: [0, 0.5, 1],
@@ -1043,22 +1056,22 @@ const TrendingScreen = () => {
         { transform: [{ scale: breatheAnim }] }
       ]}>
         <LinearGradient
-          colors={['rgba(102, 126, 234, 0.2)', 'rgba(118, 75, 162, 0.2)']}
-          style={styles.emptyGradient}
+          colors={[theme.primaryAccent + '20', theme.secondaryAccent + '20']}
+          style={[styles.emptyGradient, { borderColor: theme.border }]}
         >
           <Ionicons 
             name={activeTab === 'topics' ? 'trending-down' : 'search'} 
             size={60} 
-            color="#667eea" 
+            color={theme.primaryAccent} 
           />
         </LinearGradient>
       </Animated.View>
       
-      <Text style={styles.emptyTitle}>
+      <Text style={[styles.emptyTitle, { color: theme.textPrimary }]}>
         {isSearching ? 'No results found' : 'No trending content'}
       </Text>
       
-      <Text style={styles.emptySubtitle}>
+      <Text style={[styles.emptySubtitle, { color: theme.textSecondary }]}>
         {isSearching 
           ? 'Try adjusting your search terms'
           : activeTab === 'topics'
@@ -1072,13 +1085,14 @@ const TrendingScreen = () => {
   return (
     <Animated.View style={[
       styles.container,
+      { backgroundColor: theme.backgroundSolid },
       { transform: [{ scale: breatheAnim }] }
     ]}>
-      <StatusBar barStyle="light-content" backgroundColor="#000000" />
+      <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} backgroundColor={theme.backgroundSolid} />
       
       {/* Animated Background */}
       <LinearGradient
-        colors={['#000000', '#1a1a1a', '#000000']}
+        colors={theme.backgrounds}
         style={styles.backgroundGradient}
       />
       
@@ -1094,7 +1108,7 @@ const TrendingScreen = () => {
         }
       ]}>
         <LinearGradient
-          colors={['rgba(102, 126, 234, 0.05)', 'transparent', 'rgba(118, 75, 162, 0.05)']}
+          colors={[theme.primaryAccent + '0C', 'transparent', theme.secondaryAccent + '0C']}
           style={styles.waveGradient}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
@@ -1113,6 +1127,7 @@ const TrendingScreen = () => {
         <Animated.View style={[
           styles.headerGlow,
           {
+            backgroundColor: theme.primaryAccent + '15',
             opacity: glowAnim.interpolate({
               inputRange: [0, 1],
               outputRange: [0.1, 0.3]
@@ -1126,19 +1141,19 @@ const TrendingScreen = () => {
             onPress={() => navigation.goBack()}
           >
             <LinearGradient
-              colors={['rgba(102, 126, 234, 0.8)', 'rgba(118, 75, 162, 0.8)']}
-              style={styles.backGradient}
+              colors={[theme.surfaceElevated, theme.surface]}
+              style={[styles.backGradient, { borderColor: theme.border, borderWidth: 1 }]}
             >
-              <Ionicons name="arrow-back" size={24} color="#ffffff" />
+              <Ionicons name="arrow-back" size={24} color={theme.primaryAccent} />
             </LinearGradient>
           </TouchableOpacity>
 
           <View style={styles.headerTitleContainer}>
             <Text style={styles.headerTitle}>
-              <Text style={styles.trendingWord}>Trending</Text>{' '}
-              <Text style={styles.nowWord}>Now</Text>
+              <Text style={[styles.trendingWord, { color: theme.textPrimary }]}>Trending</Text>{' '}
+              <Text style={[styles.nowWord, { color: theme.primaryAccent }]}>Now</Text>
             </Text>
-            <Text style={styles.headerSubtitle}>
+            <Text style={[styles.headerSubtitle, { color: theme.textSecondary }]}>
               Discover what's popular
             </Text>
           </View>
@@ -1148,7 +1163,7 @@ const TrendingScreen = () => {
             { transform: [{ scale: pulseAnim }] }
           ]}>
             <LinearGradient
-              colors={['#FF6B6B', '#FF8E8E']}
+              colors={[theme.primaryAccent, theme.secondaryAccent]}
               style={styles.betaGradient}
             >
               <Ionicons name="flame" size={12} color="#ffffff" />
@@ -1160,24 +1175,24 @@ const TrendingScreen = () => {
         {/* Search Bar */}
         <View style={styles.searchContainer}>
           <LinearGradient
-            colors={['rgba(30, 30, 30, 0.8)', 'rgba(40, 40, 40, 0.8)']}
+            colors={isDarkMode ? ['rgba(22, 22, 48, 0.8)', 'rgba(26, 26, 58, 0.8)'] : ['rgba(255, 255, 255, 0.9)', 'rgba(240, 244, 248, 0.9)']}
             style={styles.searchGradient}
           >
-            <BlurView intensity={80} tint="dark" style={styles.searchBlur}>
+            <BlurView intensity={80} tint={isDarkMode ? "dark" : "light"} style={[styles.searchBlur, { borderColor: theme.border }]}>
               <Ionicons
                 name="search"
                 size={20}
-                color="#667eea"
+                color={theme.primaryAccent}
                 style={styles.searchIcon}
               />
               <TextInput
-                style={styles.searchInput}
+                style={[styles.searchInput, { color: theme.textPrimary }]}
                 placeholder={
                   activeTab === 'topics' 
                     ? "Search trending topics..." 
                     : "Search trending posts..."
                 }
-                placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                placeholderTextColor={theme.textSecondary}
                 value={searchQuery}
                 onChangeText={handleSearch}
                 returnKeyType="search"
@@ -1189,7 +1204,7 @@ const TrendingScreen = () => {
                   onPress={() => handleSearch('')}
                 >
                   <LinearGradient
-                    colors={['rgba(102, 126, 234, 0.6)', 'rgba(118, 75, 162, 0.6)']}
+                    colors={[theme.primaryAccent, theme.secondaryAccent]}
                     style={styles.clearGradient}
                   >
                     <Ionicons name="close" size={16} color="#ffffff" />
@@ -1202,7 +1217,7 @@ const TrendingScreen = () => {
                   styles.searchSuggestion,
                   { opacity: sparkleAnim }
                 ]}>
-                  <Ionicons name="sparkles" size={12} color="#667eea" />
+                  <Ionicons name="sparkles" size={12} color={theme.primaryAccent} />
                 </Animated.View>
               )}
             </BlurView>
@@ -1233,9 +1248,9 @@ const TrendingScreen = () => {
                     <RefreshControl
                       refreshing={refreshing}
                       onRefresh={onRefresh}
-                      colors={['#667eea', '#764ba2']}
-                      tintColor="#667eea"
-                      progressBackgroundColor="#1a1a1a"
+                      colors={[theme.primaryAccent, theme.secondaryAccent]}
+                      tintColor={theme.primaryAccent}
+                      progressBackgroundColor={theme.surfaceElevated}
                     />
                   }
                 />
@@ -1254,9 +1269,9 @@ const TrendingScreen = () => {
                     <RefreshControl
                       refreshing={refreshing}
                       onRefresh={onRefresh}
-                      colors={['#667eea', '#764ba2']}
-                      tintColor="#667eea"
-                      progressBackgroundColor="#1a1a1a"
+                      colors={[theme.primaryAccent, theme.secondaryAccent]}
+                      tintColor={theme.primaryAccent}
+                      progressBackgroundColor={theme.surfaceElevated}
                     />
                   }
                 />

@@ -7,8 +7,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { GroupsService } from '../services/GroupsService';
+import { useTheme } from '../context/ThemeContext';
 
 const CreateGroupScreen = () => {
+  const { isDarkMode, theme } = useTheme();
   const [groupName, setGroupName] = useState('');
   const [groupDescription, setGroupDescription] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -238,7 +240,11 @@ const CreateGroupScreen = () => {
     
     return (
       <TouchableOpacity 
-        style={[styles.userItem, isSelected && styles.selectedUserItem]}
+        style={[
+          styles.userItem, 
+          { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1 },
+          isSelected && [styles.selectedUserItem, { backgroundColor: isDarkMode ? 'rgba(95, 115, 242, 0.2)' : 'rgba(79, 70, 229, 0.1)', borderColor: theme.primaryAccent }]
+        ]}
         onPress={() => toggleMemberSelection(item)}
       >
         <Image 
@@ -247,45 +253,45 @@ const CreateGroupScreen = () => {
         />
         <View style={styles.userInfo}>
           <View style={styles.usernameContainer}>
-            <Text style={styles.username}>{item.username}</Text>
+            <Text style={[styles.username, { color: theme.textPrimary }]}>{item.username}</Text>
             {item.isVerified && (
-              <Ionicons name="checkmark-circle" size={16} color="#ff0000" style={styles.verifiedBadge} />
+              <Ionicons name="checkmark-circle" size={16} color={theme.secondaryAccent} style={styles.verifiedBadge} />
             )}
           </View>
-          <Text style={styles.fullName}>{item.full_name || ''}</Text>
+          <Text style={[styles.fullName, { color: theme.textSecondary }]}>{item.full_name || ''}</Text>
         </View>
         {isSelected && (
-          <Ionicons name="checkmark-circle" size={24} color="#00ff88" />
+          <Ionicons name="checkmark-circle" size={24} color={theme.success} />
         )}
       </TouchableOpacity>
     );
   };
 
   const renderSelectedMember = ({ item }) => (
-    <View style={styles.selectedMemberChip}>
+    <View style={[styles.selectedMemberChip, { backgroundColor: isDarkMode ? 'rgba(95, 115, 242, 0.2)' : 'rgba(79, 70, 229, 0.1)', borderColor: theme.border, borderWidth: 1 }]}>
       <Image 
         source={{ uri: item.avatar_url || 'https://via.placeholder.com/150' }}
         style={styles.chipAvatar}
       />
-      <Text style={styles.chipUsername}>{item.username}</Text>
+      <Text style={[styles.chipUsername, { color: theme.textPrimary }]}>{item.username}</Text>
       <TouchableOpacity onPress={() => toggleMemberSelection(item)}>
-        <Ionicons name="close-circle" size={20} color="#ff6b6b" />
+        <Ionicons name="close-circle" size={20} color={theme.error} />
       </TouchableOpacity>
     </View>
   );
 
   return (
     <LinearGradient
-      colors={['#1a1a2e', '#16213e', '#0f3460']}
+      colors={theme.backgrounds}
       style={styles.container}
     >
-      <View style={[styles.header, { paddingTop: insets.top > 0 ? insets.top : 50 }]}>
+      <View style={[styles.header, { paddingTop: insets.top > 0 ? insets.top : 50, borderBottomColor: theme.border }]}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color="#fff" />
+          <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
         </TouchableOpacity>
         <View style={styles.avatarPickerContainer}>
           <TouchableOpacity
-            style={styles.avatarPicker}
+            style={[styles.avatarPicker, { backgroundColor: theme.surface, borderColor: theme.border }]}
             onPress={pickImage}
             activeOpacity={0.7}
           >
@@ -296,7 +302,7 @@ const CreateGroupScreen = () => {
                 resizeMode="cover"
               />
             ) : (
-              <Ionicons name="camera" size={32} color="#fff" />
+              <Ionicons name="camera" size={32} color={theme.textSecondary} />
             )}
           </TouchableOpacity>
           {avatar && (
@@ -304,16 +310,20 @@ const CreateGroupScreen = () => {
               style={styles.removeAvatarButton}
               onPress={removeAvatar}
             >
-              <Ionicons name="close-circle" size={24} color="#ff6b6b" />
+              <Ionicons name="close-circle" size={24} color={theme.error} />
             </TouchableOpacity>
           )}
-          <Text style={styles.avatarLabel}>Group Photo</Text>
+          <Text style={[styles.avatarLabel, { color: theme.textSecondary }]}>Group Photo</Text>
         </View>
-        <Text style={styles.modalTitle}>Create Group</Text>
+        <Text style={[styles.modalTitle, { color: theme.textPrimary }]}>Create Group</Text>
         <TouchableOpacity
           onPress={createGroup}
           disabled={creating || !groupName.trim() || selectedMembers.length === 0}
-          style={[styles.createButton, (creating || !groupName.trim() || selectedMembers.length === 0) && styles.createButtonDisabled]}
+          style={[
+            styles.createButton, 
+            { backgroundColor: theme.primaryAccent },
+            (creating || !groupName.trim() || selectedMembers.length === 0) && { backgroundColor: isDarkMode ? 'rgba(95, 115, 242, 0.3)' : 'rgba(79, 70, 229, 0.2)' }
+          ]}
         >
           {creating ? (
             <ActivityIndicator size="small" color="#fff" />
@@ -326,14 +336,14 @@ const CreateGroupScreen = () => {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Group Info Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Group Information</Text>
+          <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Group Information</Text>
 
           <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Group Name *</Text>
+            <Text style={[styles.inputLabel, { color: theme.textPrimary }]}>Group Name *</Text>
             <TextInput
-              style={styles.textInput}
+              style={[styles.textInput, { backgroundColor: theme.surface, color: theme.textPrimary, borderColor: theme.border }]}
               placeholder="Enter group name"
-              placeholderTextColor="rgba(255,255,255,0.4)"
+              placeholderTextColor={theme.textSecondary + '80'}
               value={groupName}
               onChangeText={setGroupName}
               maxLength={50}
@@ -341,11 +351,11 @@ const CreateGroupScreen = () => {
           </View>
 
           <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Description (Optional)</Text>
+            <Text style={[styles.inputLabel, { color: theme.textPrimary }]}>Description (Optional)</Text>
             <TextInput
-              style={[styles.textInput, styles.textArea]}
+              style={[styles.textInput, styles.textArea, { backgroundColor: theme.surface, color: theme.textPrimary, borderColor: theme.border }]}
               placeholder="Enter group description"
-              placeholderTextColor="rgba(255,255,255,0.4)"
+              placeholderTextColor={theme.textSecondary + '80'}
               value={groupDescription}
               onChangeText={setGroupDescription}
               multiline
@@ -358,7 +368,7 @@ const CreateGroupScreen = () => {
         {/* Selected Members Section */}
         {selectedMembers.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Selected Members ({selectedMembers.length})</Text>
+            <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Selected Members ({selectedMembers.length})</Text>
             <FlatList
               data={selectedMembers}
               renderItem={renderSelectedMember}
@@ -372,27 +382,27 @@ const CreateGroupScreen = () => {
 
         {/* Search Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Add Members</Text>
+          <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Add Members</Text>
 
-          <View style={styles.searchContainer}>
-            <Ionicons name="search" size={20} color="rgba(255,255,255,0.6)" style={styles.searchIcon} />
+          <View style={[styles.searchContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <Ionicons name="search" size={20} color={theme.textSecondary} style={styles.searchIcon} />
             <TextInput
-              style={styles.searchInput}
+              style={[styles.searchInput, { color: theme.textPrimary }]}
               placeholder="Search for users..."
-              placeholderTextColor="rgba(255,255,255,0.4)"
+              placeholderTextColor={theme.textSecondary + '80'}
               value={searchQuery}
               onChangeText={setSearchQuery}
               autoCapitalize="none"
             />
             {searchQuery.length > 0 && (
               <TouchableOpacity onPress={() => setSearchQuery('')}>
-                <Ionicons name="close-circle" size={20} color="rgba(255,255,255,0.6)" />
+                <Ionicons name="close-circle" size={20} color={theme.textSecondary} />
               </TouchableOpacity>
             )}
           </View>
 
           {loading ? (
-            <ActivityIndicator size="large" color="#ff6b6b" style={styles.loader} />
+            <ActivityIndicator size="large" color={theme.primaryAccent} style={styles.loader} />
           ) : (
             <FlatList
               data={searchResults}
@@ -400,9 +410,9 @@ const CreateGroupScreen = () => {
               keyExtractor={(item) => item.id}
               ListEmptyComponent={
                 searchQuery.length > 0 ? (
-                  <Text style={styles.emptyText}>No users found</Text>
+                  <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No users found</Text>
                 ) : (
-                  <Text style={styles.emptyText}>Search for users to add to your group</Text>
+                  <Text style={[styles.emptyText, { color: theme.textSecondary }]}>Search for users to add to your group</Text>
                 )
               }
               style={styles.searchResultsList}

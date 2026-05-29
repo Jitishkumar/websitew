@@ -22,10 +22,12 @@ import { supabase } from '../lib/supabase';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Audio } from 'expo-av';
+import { useTheme } from '../context/ThemeContext';
 import { uploadToCloudinary } from '../config/cloudinary';
 
 // Audio Player Component for Messages
 const AudioPlayer = ({ audioUrl, duration }) => {
+  const { theme } = useTheme();
   const [sound, setSound] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [position, setPosition] = useState(0);
@@ -82,18 +84,18 @@ const AudioPlayer = ({ audioUrl, duration }) => {
   };
 
   return (
-    <View style={styles.audioPlayerContainer}>
+    <View style={[styles.audioPlayerContainer, { backgroundColor: theme.isDarkMode ? 'rgba(95, 115, 242, 0.08)' : 'rgba(79, 70, 229, 0.05)' }]}>
       <TouchableOpacity onPress={playPauseAudio} style={styles.audioPlayButton}>
         <Ionicons 
           name={isPlaying ? 'pause' : 'play'} 
           size={16} 
-          color="#ff00ff" 
+          color={theme.secondaryAccent} 
         />
       </TouchableOpacity>
-      <View style={styles.audioWaveform}>
-        <View style={[styles.audioProgress, { width: `${(position / audioDuration) * 100}%` }]} />
+      <View style={[styles.audioWaveform, { backgroundColor: theme.border }]}>
+        <View style={[styles.audioProgress, { backgroundColor: theme.secondaryAccent, width: `${(position / audioDuration) * 100}%` }]} />
       </View>
-      <Text style={styles.audioDuration}>
+      <Text style={[styles.audioDuration, { color: theme.textSecondary }]}>
         {formatTime(position)} / {formatTime(audioDuration)}
       </Text>
     </View>
@@ -101,6 +103,7 @@ const AudioPlayer = ({ audioUrl, duration }) => {
 };
 
 const GroupChatScreen = () => {
+  const { isDarkMode, theme } = useTheme();
   const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
@@ -402,13 +405,18 @@ const GroupChatScreen = () => {
             style={styles.messageAvatar}
           />
         )}
-        <View style={[styles.messageBubble, isOwnMessage ? styles.ownBubble : styles.otherBubble]}>
+        <View style={[
+          styles.messageBubble, 
+          isOwnMessage ? 
+            [styles.ownBubble, { backgroundColor: isDarkMode ? 'rgba(95, 115, 242, 0.25)' : 'rgba(79, 70, 229, 0.15)' }] : 
+            [styles.otherBubble, { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1 }]
+        ]}>
           {!isOwnMessage && (
-            <Text style={styles.senderName}>
+            <Text style={[styles.senderName, { color: theme.textSecondary }]}>
               {senderInfo?.username || senderInfo?.full_name || 'User'}
             </Text>
           )}
-          <Text style={[styles.messageText, isOwnMessage ? styles.ownMessageText : styles.otherMessageText]}>
+          <Text style={[styles.messageText, { color: theme.textPrimary }]}>
             {item.content}
           </Text>
           
@@ -420,7 +428,7 @@ const GroupChatScreen = () => {
             />
           )}
           
-          <Text style={[styles.messageTime, isOwnMessage ? styles.ownMessageTime : styles.otherMessageTime]}>
+          <Text style={[styles.messageTime, { color: theme.textSecondary }]}>
             {formatTime(item.created_at)}
           </Text>
         </View>
@@ -429,17 +437,17 @@ const GroupChatScreen = () => {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: '#111' }]}>
-      <StatusBar style="light" />
+    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: theme.backgroundSolid }]}>
+      <StatusBar style={isDarkMode ? "light" : "dark"} />
       
       {/* Header */}
       <LinearGradient
-        colors={['rgba(102, 126, 234, 0.3)', 'rgba(156, 136, 255, 0.2)', 'transparent']}
-        style={styles.header}
+        colors={isDarkMode ? ['rgba(95, 115, 242, 0.15)', 'rgba(95, 115, 242, 0.05)', 'transparent'] : ['rgba(79, 70, 229, 0.08)', 'rgba(79, 70, 229, 0.02)', 'transparent']}
+        style={[styles.header, { borderBottomColor: theme.border }]}
       >
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <LinearGradient
-            colors={['rgba(102, 126, 234, 0.8)', 'rgba(156, 136, 255, 0.6)']}
+            colors={[theme.primaryAccent, theme.secondaryAccent]}
             style={styles.backButtonGradient}
           >
             <Ionicons name="arrow-back" size={20} color="#fff" />
@@ -453,16 +461,16 @@ const GroupChatScreen = () => {
           });
         }}>
           <LinearGradient
-            colors={['rgba(255, 107, 107, 0.8)', 'rgba(255, 82, 82, 0.6)']}
+            colors={isDarkMode ? ['rgba(95, 115, 242, 0.8)', 'rgba(56, 189, 248, 0.6)'] : [theme.primaryAccent, theme.secondaryAccent]}
             style={styles.groupAvatar}
           >
             <Ionicons name="people" size={20} color="#fff" />
           </LinearGradient>
           <View>
-            <Text style={styles.headerTitle} numberOfLines={1} ellipsizeMode="tail">
+            <Text style={[styles.headerTitle, { color: theme.textPrimary }]} numberOfLines={1} ellipsizeMode="tail">
               {groupName || 'Group Chat'}
             </Text>
-            <Text style={styles.memberCountText}>
+            <Text style={[styles.memberCountText, { color: theme.textSecondary }]}>
               {groupMembers.length} members
             </Text>
           </View>
@@ -475,7 +483,7 @@ const GroupChatScreen = () => {
           });
         }}>
           <LinearGradient
-            colors={['rgba(255, 107, 107, 0.8)', 'rgba(255, 82, 82, 0.6)']}
+            colors={isDarkMode ? ['rgba(95, 115, 242, 0.8)', 'rgba(56, 189, 248, 0.6)'] : [theme.primaryAccent, theme.secondaryAccent]}
             style={styles.headerIconGradient}
           >
             <Ionicons name="information-circle" size={20} color="#fff" />
@@ -513,40 +521,39 @@ const GroupChatScreen = () => {
 
         {/* Input Area */}
         <LinearGradient
-          colors={['rgba(102, 126, 234, 0.1)', 'rgba(156, 136, 255, 0.05)']}
-          style={styles.inputContainer}
+          colors={isDarkMode ? ['rgba(95, 115, 242, 0.1)', 'rgba(56, 189, 248, 0.05)'] : ['rgba(79, 70, 229, 0.05)', 'rgba(2, 132, 199, 0.02)']}
+          style={[styles.inputContainer, { borderTopColor: theme.border }]}
         >
           {/* Audio Recording Preview */}
           {audioUri && !isRecording && (
-            <View style={styles.audioPreviewContainer}>
+            <View style={[styles.audioPreviewContainer, { backgroundColor: isDarkMode ? 'rgba(95, 115, 242, 0.15)' : 'rgba(79, 70, 229, 0.08)' }]}>
               <TouchableOpacity onPress={playPreview} style={styles.audioPreviewButton}>
                 <Ionicons 
                   name={isPlayingPreview ? 'pause-circle' : 'play-circle'} 
                   size={32} 
-                  color="#ff00ff" 
+                  color={theme.secondaryAccent} 
                 />
               </TouchableOpacity>
               <View style={styles.audioPreviewInfo}>
-                <Text style={styles.audioPreviewText}>Audio recorded</Text>
-                <Text style={styles.audioPreviewDuration}>{formatDuration(recordingDuration)}</Text>
+                <Text style={[styles.audioPreviewText, { color: theme.textPrimary }]}>Audio recorded</Text>
+                <Text style={[styles.audioPreviewDuration, { color: theme.textSecondary }]}>{formatDuration(recordingDuration)}</Text>
               </View>
               <TouchableOpacity onPress={deleteAudioRecording} style={styles.audioDeleteButton}>
-                <Ionicons name="trash-outline" size={20} color="#ff4444" />
+                <Ionicons name="trash-outline" size={20} color={theme.error} />
               </TouchableOpacity>
             </View>
           )}
           
           {/* Recording Indicator */}
           {isRecording && (
-            <View style={styles.recordingIndicator}>
-              <View style={styles.recordingDot} />
-              <Text style={styles.recordingText}>Recording... {formatDuration(recordingDuration)}</Text>
+            <View style={[styles.recordingIndicator, { backgroundColor: isDarkMode ? 'rgba(239, 68, 68, 0.15)' : 'rgba(220, 38, 38, 0.08)' }]}>
+              <View style={[styles.recordingDot, { backgroundColor: theme.error }]} />
+              <Text style={[styles.recordingText, { color: theme.error }]}>Recording... {formatDuration(recordingDuration)}</Text>
             </View>
           )}
           
-          <LinearGradient
-            colors={['rgba(255, 255, 255, 0.08)', 'rgba(255, 255, 255, 0.04)']}
-            style={styles.inputWrapper}
+          <View
+            style={[styles.inputWrapper, { backgroundColor: theme.surface, borderColor: theme.border }]}
           >
             {/* Audio Record Button */}
             <TouchableOpacity
@@ -556,14 +563,14 @@ const GroupChatScreen = () => {
               <Ionicons 
                 name={isRecording ? 'stop' : 'mic'} 
                 size={24} 
-                color={isRecording ? '#ff4444' : '#ff00ff'} 
+                color={isRecording ? theme.error : theme.secondaryAccent} 
               />
             </TouchableOpacity>
             
             <TextInput
-              style={styles.textInput}
+              style={[styles.textInput, { color: theme.textPrimary }]}
               placeholder="Type a message..."
-              placeholderTextColor="rgba(255,255,255,0.4)"
+              placeholderTextColor={theme.textSecondary + '80'}
               value={inputText}
               onChangeText={setInputText}
               multiline
@@ -577,8 +584,8 @@ const GroupChatScreen = () => {
             >
               <LinearGradient
                 colors={(inputText.trim() || audioUri) ? 
-                  ['rgba(255, 107, 107, 0.9)', 'rgba(255, 82, 82, 0.8)'] :
-                  ['rgba(255, 255, 255, 0.1)', 'rgba(255, 255, 255, 0.05)']}
+                  [theme.primaryAccent, theme.secondaryAccent] :
+                  (isDarkMode ? ['rgba(255, 255, 255, 0.05)', 'rgba(255, 255, 255, 0.02)'] : ['rgba(0, 0, 0, 0.05)', 'rgba(0, 0, 0, 0.02)'])}
                 style={styles.sendButtonGradient}
               >
                 <Ionicons 
@@ -588,7 +595,7 @@ const GroupChatScreen = () => {
                 />
               </LinearGradient>
             </TouchableOpacity>
-          </LinearGradient>
+          </View>
         </LinearGradient>
       </KeyboardAvoidingView>
     </View>
@@ -606,7 +613,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(102, 126, 234, 0.3)',
   },
   backButtonGradient: {
     width: 36,
@@ -632,12 +638,10 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#fff',
     maxWidth: 150,
   },
   memberCountText: {
     fontSize: 12,
-    color: 'rgba(255,107,107,0.8)',
     marginTop: 2,
   },
   headerIconGradient: {
@@ -692,17 +696,14 @@ const styles = StyleSheet.create({
     marginHorizontal: 5,
   },
   ownBubble: {
-    backgroundColor: 'rgba(156, 136, 255, 0.4)',
     borderBottomRightRadius: 5,
   },
   otherBubble: {
-    backgroundColor: 'rgba(102, 126, 234, 0.3)',
     borderBottomLeftRadius: 5,
   },
   senderName: {
     fontSize: 12,
     fontWeight: '600',
-    color: 'rgba(255,255,255,0.8)',
     marginBottom: 4,
   },
   messageText: {
@@ -720,17 +721,14 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   ownMessageTime: {
-    color: 'rgba(255,255,255,0.7)',
     textAlign: 'right',
   },
   otherMessageTime: {
-    color: 'rgba(255,255,255,0.6)',
   },
   inputContainer: {
     paddingHorizontal: 20,
     paddingVertical: 15,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(102, 126, 234, 0.3)',
   },
   inputWrapper: {
     flexDirection: 'row',
@@ -739,7 +737,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingVertical: 10,
     borderWidth: 1,
-    borderColor: 'rgba(102, 126, 234, 0.3)',
   },
   textInput: {
     flex: 1,
@@ -766,7 +763,6 @@ const styles = StyleSheet.create({
   audioPreviewContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 0, 255, 0.1)',
     borderRadius: 15,
     padding: 10,
     marginBottom: 10,
@@ -778,12 +774,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   audioPreviewText: {
-    color: '#fff',
     fontSize: 14,
     fontWeight: 'bold',
   },
   audioPreviewDuration: {
-    color: '#999',
     fontSize: 12,
     marginTop: 2,
   },
@@ -793,7 +787,6 @@ const styles = StyleSheet.create({
   recordingIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 68, 68, 0.1)',
     borderRadius: 15,
     padding: 10,
     marginBottom: 10,
@@ -802,11 +795,9 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#ff4444',
     marginRight: 10,
   },
   recordingText: {
-    color: '#ff4444',
     fontSize: 14,
     fontWeight: 'bold',
   },
@@ -814,7 +805,6 @@ const styles = StyleSheet.create({
   audioPlayerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 0, 255, 0.05)',
     borderRadius: 12,
     padding: 8,
     marginTop: 8,
@@ -826,18 +816,15 @@ const styles = StyleSheet.create({
   audioWaveform: {
     flex: 1,
     height: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: 2,
     overflow: 'hidden',
     marginRight: 10,
   },
   audioProgress: {
     height: '100%',
-    backgroundColor: '#ff00ff',
     borderRadius: 2,
   },
   audioDuration: {
-    color: '#999',
     fontSize: 11,
     minWidth: 60,
     textAlign: 'right',

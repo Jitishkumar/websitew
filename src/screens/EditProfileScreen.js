@@ -5,8 +5,10 @@ import { supabase } from '../lib/supabase';
 import * as ImagePicker from 'expo-image-picker';
 import { Video } from 'expo-av';
 import { decode } from 'base64-arraybuffer';
+import { useTheme } from '../context/ThemeContext';
 
 const EditProfileScreen = ({ navigation }) => {
+  const { isDarkMode, theme } = useTheme();
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
   const [bio, setBio] = useState('');
@@ -265,9 +267,9 @@ const EditProfileScreen = ({ navigation }) => {
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={[styles.container, { backgroundColor: theme.backgroundSolid }]}>
       {/* Cover Photo */}
-      <TouchableOpacity onPress={() => pickImage('cover')} style={styles.coverContainer}>
+      <TouchableOpacity onPress={() => pickImage('cover')} style={[styles.coverContainer, { backgroundColor: theme.surfaceElevated, borderColor: theme.border, borderBottomWidth: 1 }]}>
         {(tempCoverUrl || coverUrl) ? (
           <View style={styles.coverPhotoContainer}>
             {/* Show temp preview immediately, then replace with uploaded URL */}
@@ -301,9 +303,9 @@ const EditProfileScreen = ({ navigation }) => {
           </View>
         ) : (
           <View style={styles.coverPlaceholder}>
-            <Ionicons name="image-outline" size={40} color="#666" />
-            <Ionicons name="videocam-outline" size={40} color="#666" style={{ marginLeft: 10 }} />
-            <Text style={styles.placeholderText}>Add Cover Photo or Video</Text>
+            <Ionicons name="image-outline" size={40} color={theme.textSecondary} />
+            <Ionicons name="videocam-outline" size={40} color={theme.textSecondary} style={{ marginLeft: 10 }} />
+            <Text style={[styles.placeholderText, { color: theme.textSecondary }]}>Add Cover Photo or Video</Text>
           </View>
         )}
       </TouchableOpacity>
@@ -311,24 +313,24 @@ const EditProfileScreen = ({ navigation }) => {
       {/* Profile Photo */}
       <TouchableOpacity onPress={() => pickImage('avatar')} style={styles.avatarContainer}>
         {avatarUrl ? (
-          <Image source={{ uri: avatarUrl }} style={styles.avatar} />
+          <Image source={{ uri: avatarUrl }} style={[styles.avatar, { borderColor: theme.backgroundSolid }]} />
         ) : (
-          <View style={styles.avatarPlaceholder}>
-            <Ionicons name="person-outline" size={40} color="#666" />
+          <View style={[styles.avatarPlaceholder, { backgroundColor: theme.surfaceElevated, borderColor: theme.backgroundSolid }]}>
+            <Ionicons name="person-outline" size={40} color={theme.textSecondary} />
           </View>
         )}
-        <View style={styles.editIconContainer}>
+        <View style={[styles.editIconContainer, { backgroundColor: theme.primaryAccent, borderColor: theme.backgroundSolid }]}>
           <Ionicons name="camera" size={20} color="#fff" />
         </View>
       </TouchableOpacity>
 
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color="#ff00ff" />
+          <Ionicons name="arrow-back" size={24} color={theme.primaryAccent} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Edit Profile</Text>
+        <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>Edit Profile</Text>
         <TouchableOpacity onPress={handleSave} disabled={loading}>
-          <Text style={[styles.saveButton, loading && styles.saveButtonDisabled]}>
+          <Text style={[styles.saveButton, { color: theme.primaryAccent }, loading && styles.saveButtonDisabled]}>
             {loading ? 'Saving...' : 'Save'}
           </Text>
         </TouchableOpacity>
@@ -336,34 +338,34 @@ const EditProfileScreen = ({ navigation }) => {
 
       <View style={styles.form}>
         <View style={styles.inputContainer}>
-          <Text style={styles.label}>Name</Text>
+          <Text style={[styles.label, { color: theme.primaryAccent }]}>Name</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { backgroundColor: theme.surfaceElevated, borderColor: theme.border, borderWidth: 1, color: theme.textPrimary }]}
             value={name}
             onChangeText={setName}
             placeholder="Enter your name"
-            placeholderTextColor="#666"
+            placeholderTextColor={theme.textSecondary}
           />
         </View>
 
         <View style={styles.inputContainer}>
-          <Text style={styles.label}>Username</Text>
+          <Text style={[styles.label, { color: theme.primaryAccent }]}>Username</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { backgroundColor: theme.surfaceElevated, borderColor: theme.border, borderWidth: 1, color: theme.textPrimary }]}
             value={username}
             onChangeText={setUsername}
             placeholder="Enter username"
-            placeholderTextColor="#666"
+            placeholderTextColor={theme.textSecondary}
           />
         </View>
 
         <View style={styles.inputContainer}>
-          <Text style={styles.label}>Gender (Optional)</Text>
+          <Text style={[styles.label, { color: theme.primaryAccent }]}>Gender (Optional)</Text>
           <TouchableOpacity
-            style={styles.input}
+            style={[styles.input, { backgroundColor: theme.surfaceElevated, borderColor: theme.border, borderWidth: 1 }]}
             onPress={() => setShowGenderModal(true)}
           >
-            <Text style={[styles.genderText, !gender && styles.placeholderText]}>
+            <Text style={[styles.genderText, { color: gender ? theme.textPrimary : theme.textSecondary }]}>
               {gender ? (
                 gender === 'male' ? 'Male' :
                 gender === 'female' ? 'Female' :
@@ -374,13 +376,13 @@ const EditProfileScreen = ({ navigation }) => {
         </View>
 
         <View style={styles.inputContainer}>
-          <Text style={styles.label}>Bio</Text>
+          <Text style={[styles.label, { color: theme.primaryAccent }]}>Bio</Text>
           <TextInput
-            style={[styles.input, styles.bioInput]}
+            style={[styles.input, styles.bioInput, { backgroundColor: theme.surfaceElevated, borderColor: theme.border, borderWidth: 1, color: theme.textPrimary }]}
             value={bio}
             onChangeText={setBio}
             placeholder="Write something about yourself"
-            placeholderTextColor="#666"
+            placeholderTextColor={theme.textSecondary}
             multiline
             numberOfLines={4}
           />
@@ -394,54 +396,54 @@ const EditProfileScreen = ({ navigation }) => {
           onRequestClose={() => setShowGenderModal(false)}
         >
           <View style={styles.modalContainer}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Select Gender</Text>
+            <View style={[styles.modalContent, { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1 }]}>
+              <Text style={[styles.modalTitle, { color: theme.primaryAccent }]}>Select Gender</Text>
               
               <TouchableOpacity 
-                style={styles.genderOption}
+                style={[styles.genderOption, { backgroundColor: theme.surfaceElevated, borderColor: theme.border, borderWidth: 1 }]}
                 onPress={() => {
                   setGender('male');
                   setShowGenderModal(false);
                 }}
               >
-                <Text style={styles.genderOptionText}>Male</Text>
+                <Text style={[styles.genderOptionText, { color: theme.textPrimary }]}>Male</Text>
               </TouchableOpacity>
 
               <TouchableOpacity 
-                style={styles.genderOption}
+                style={[styles.genderOption, { backgroundColor: theme.surfaceElevated, borderColor: theme.border, borderWidth: 1 }]}
                 onPress={() => {
                   setGender('female');
                   setShowGenderModal(false);
                 }}
               >
-                <Text style={styles.genderOptionText}>Female</Text>
+                <Text style={[styles.genderOptionText, { color: theme.textPrimary }]}>Female</Text>
               </TouchableOpacity>
 
               <TouchableOpacity 
-                style={styles.genderOption}
+                style={[styles.genderOption, { backgroundColor: theme.surfaceElevated, borderColor: theme.border, borderWidth: 1 }]}
                 onPress={() => {
                   setGender('third');
                   setShowGenderModal(false);
                 }}
               >
-                <Text style={styles.genderOptionText}>Third gender</Text>
+                <Text style={[styles.genderOptionText, { color: theme.textPrimary }]}>Third gender</Text>
               </TouchableOpacity>
 
               <TouchableOpacity 
-                style={[styles.genderOption, styles.clearOption]}
+                style={[styles.genderOption, styles.clearOption, { borderColor: theme.primaryAccent }]}
                 onPress={() => {
                   setGender('');
                   setShowGenderModal(false);
                 }}
               >
-                <Text style={[styles.genderOptionText, styles.clearOptionText]}>Clear Selection</Text>
+                <Text style={[styles.genderOptionText, styles.clearOptionText, { color: theme.primaryAccent }]}>Clear Selection</Text>
               </TouchableOpacity>
 
               <TouchableOpacity 
                 style={styles.closeButton}
                 onPress={() => setShowGenderModal(false)}
               >
-                <Text style={styles.closeButtonText}>Close</Text>
+                <Text style={[styles.closeButtonText, { color: theme.primaryAccent }]}>Close</Text>
               </TouchableOpacity>
             </View>
           </View>

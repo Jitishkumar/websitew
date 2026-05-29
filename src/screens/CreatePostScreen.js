@@ -21,8 +21,10 @@ import { PostsService } from '../services/PostsService';
 import { supabase } from '../lib/supabase';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTheme } from '../context/ThemeContext';
 
 const CreatePostScreen = () => {
+  const { isDarkMode, theme } = useTheme();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const [uploading, setUploading] = useState(false);
@@ -188,16 +190,16 @@ const CreatePostScreen = () => {
     
     return (
       <LinearGradient
-        colors={['rgba(102, 126, 234, 0.2)', 'rgba(156, 136, 255, 0.1)']}
+        colors={isDarkMode ? ['rgba(95, 115, 242, 0.2)', 'rgba(56, 189, 248, 0.1)'] : ['rgba(79, 70, 229, 0.15)', 'rgba(2, 132, 199, 0.08)']}
         style={styles.progressContainer}
       >
-        <View style={styles.progressBarContainer}>
+        <View style={[styles.progressBarContainer, { backgroundColor: theme.border }]} >
           <LinearGradient
-            colors={['#667eea', '#9c88ff']}
+            colors={[theme.primaryAccent, theme.secondaryAccent]}
             style={[styles.progressBar, { width: `${uploadProgress * 100}%` }]}
           />
         </View>
-        <Text style={styles.progressText}>
+        <Text style={[styles.progressText, { color: theme.textSecondary }]} >
           ⏳ {uploadProgress < 1 ? 'Uploading...' : 'Processing...'}
         </Text>
       </LinearGradient>
@@ -206,7 +208,7 @@ const CreatePostScreen = () => {
 
   return (
     <LinearGradient
-      colors={['#1a1a2e', '#16213e', '#0f3460']}
+      colors={theme.backgrounds}
       style={styles.container}
     >
       <KeyboardAvoidingView
@@ -214,19 +216,19 @@ const CreatePostScreen = () => {
         style={styles.keyboardContainer}
       >
         <LinearGradient
-          colors={['rgba(102, 126, 234, 0.15)', 'rgba(156, 136, 255, 0.1)']}
-          style={[styles.header, { paddingTop: insets.top > 0 ? insets.top : 15 }]}
+          colors={isDarkMode ? ['rgba(95, 115, 242, 0.15)', 'rgba(95, 115, 242, 0.05)'] : ['rgba(79, 70, 229, 0.08)', 'rgba(79, 70, 229, 0.03)']}
+          style={[styles.header, { paddingTop: insets.top > 0 ? insets.top : 15, borderBottomColor: theme.border }]}
         >
           <TouchableOpacity onPress={() => navigation.goBack()}>
             <LinearGradient
-              colors={['rgba(255, 107, 107, 0.8)', 'rgba(255, 82, 82, 0.6)']}
+              colors={['#EF4444', '#DC2626']}
               style={styles.closeButtonGradient}
             >
               <Ionicons name="close" size={20} color="#fff" />
             </LinearGradient>
           </TouchableOpacity>
           
-          <Text style={styles.headerTitle}>✨ Create Post</Text>
+          <Text style={[styles.headerTitle, { color: theme.textPrimary, textShadowColor: theme.border }]}>✨ Create Post</Text>
           
           <TouchableOpacity 
             onPress={handleCreatePost}
@@ -234,8 +236,8 @@ const CreatePostScreen = () => {
           >
             <LinearGradient
               colors={(!selectedMedia && !postText.trim()) || uploading ? 
-                ['rgba(102, 102, 102, 0.6)', 'rgba(85, 85, 85, 0.4)'] :
-                ['rgba(102, 126, 234, 0.9)', 'rgba(156, 136, 255, 0.8)']}
+                (isDarkMode ? ['rgba(102, 102, 102, 0.4)', 'rgba(85, 85, 85, 0.2)'] : ['rgba(200, 200, 200, 0.5)', 'rgba(180, 180, 180, 0.3)']) :
+                [theme.primaryAccent, theme.secondaryAccent]}
               style={styles.postButton}
             >
               {uploading ? (
@@ -251,35 +253,34 @@ const CreatePostScreen = () => {
       
         {errorMessage ? (
           <LinearGradient
-            colors={['rgba(255, 107, 107, 0.2)', 'rgba(255, 82, 82, 0.1)']}
-            style={styles.errorContainer}
+            colors={isDarkMode ? ['rgba(239, 68, 68, 0.2)', 'rgba(239, 68, 68, 0.1)'] : ['rgba(220, 38, 38, 0.15)', 'rgba(220, 38, 38, 0.05)']}
+            style={[styles.errorContainer, { borderLeftColor: theme.error }]}
           >
-            <Ionicons name="warning" size={16} color="#ff6b6b" style={styles.errorIcon} />
-            <Text style={styles.errorText}>{errorMessage}</Text>
+            <Ionicons name="warning" size={16} color={theme.error} style={styles.errorIcon} />
+            <Text style={[styles.errorText, { color: theme.error }]}>{errorMessage}</Text>
           </LinearGradient>
         ) : null}
 
         <ScrollView style={styles.content}>
-          <LinearGradient
-            colors={['rgba(255, 255, 255, 0.08)', 'rgba(255, 255, 255, 0.04)']}
-            style={styles.inputContainer}
+          <View
+            style={[styles.inputContainer, { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1 }]}
           >
             <TextInput
-              style={styles.input}
+              style={[styles.input, { color: theme.textPrimary }]}
               placeholder="💭 What's on your mind?"
-              placeholderTextColor="rgba(255,255,255,0.4)"
+              placeholderTextColor={theme.textSecondary + '80'}
               multiline
               value={postText}
               onChangeText={setPostText}
-              color="#ffffff"
+              color={theme.textPrimary}
               editable={!uploading}
             />
-          </LinearGradient>
+          </View>
 
           {selectedMedia && (
             <LinearGradient
-              colors={['rgba(102, 126, 234, 0.1)', 'rgba(156, 136, 255, 0.05)']}
-              style={styles.mediaPreview}
+              colors={isDarkMode ? ['rgba(95, 115, 242, 0.1)', 'rgba(56, 189, 248, 0.05)'] : ['rgba(79, 70, 229, 0.05)', 'rgba(2, 132, 199, 0.02)']}
+              style={[styles.mediaPreview, { borderColor: theme.border, backgroundColor: theme.surface }]}
             >
               {selectedMedia.type === 'video' ? (
                 <Video
@@ -309,7 +310,7 @@ const CreatePostScreen = () => {
                 disabled={uploading}
               >
                 <LinearGradient
-                  colors={['rgba(255, 107, 107, 0.9)', 'rgba(255, 82, 82, 0.7)']}
+                  colors={['#EF4444', '#DC2626']}
                   style={styles.removeMediaButton}
                 >
                   <Ionicons name="close-circle" size={20} color="#fff" />
@@ -320,8 +321,8 @@ const CreatePostScreen = () => {
         </ScrollView>
 
         <LinearGradient
-          colors={['rgba(102, 126, 234, 0.15)', 'rgba(156, 136, 255, 0.1)']}
-          style={[styles.footer, { paddingBottom: insets.bottom > 0 ? insets.bottom : 15 }]}
+          colors={isDarkMode ? ['rgba(95, 115, 242, 0.15)', 'rgba(95, 115, 242, 0.05)'] : ['rgba(79, 70, 229, 0.08)', 'rgba(79, 70, 229, 0.03)']}
+          style={[styles.footer, { paddingBottom: insets.bottom > 0 ? insets.bottom : 15, borderTopColor: theme.border }]}
         >
           <TouchableOpacity 
             onPress={handleMediaPicker}
@@ -329,8 +330,8 @@ const CreatePostScreen = () => {
           >
             <LinearGradient
               colors={uploading ? 
-                ['rgba(102, 102, 102, 0.4)', 'rgba(85, 85, 85, 0.2)'] :
-                ['rgba(255, 107, 107, 0.8)', 'rgba(255, 82, 82, 0.6)']}
+                (isDarkMode ? ['rgba(102, 102, 102, 0.4)', 'rgba(85, 85, 85, 0.2)'] : ['rgba(200, 200, 200, 0.5)', 'rgba(180, 180, 180, 0.3)']) :
+                [theme.primaryAccent, theme.secondaryAccent]}
               style={styles.mediaButton}
             >
               <Ionicons name="images" size={20} color="#fff" />
@@ -364,7 +365,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#ff6b6b',
+    shadowColor: '#EF4444',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
@@ -373,10 +374,8 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#fff',
     textAlign: 'center',
     flex: 1,
-    textShadowColor: 'rgba(102, 126, 234, 0.5)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
   },
@@ -384,7 +383,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 20,
-    shadowColor: '#667eea',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.4,
     shadowRadius: 4,
@@ -408,7 +406,6 @@ const styles = StyleSheet.create({
     margin: 15,
     borderRadius: 15,
     overflow: 'hidden',
-    shadowColor: '#667eea',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
@@ -418,7 +415,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     minHeight: 100,
     textAlignVertical: 'top',
-    color: '#fff',
     padding: 15,
     lineHeight: 22,
   },
@@ -426,11 +422,8 @@ const styles = StyleSheet.create({
     margin: 15,
     borderRadius: 16,
     overflow: 'hidden',
-    backgroundColor: '#1a1a3a',
     position: 'relative',
     borderWidth: 1,
-    borderColor: 'rgba(102, 126, 234, 0.3)',
-    shadowColor: '#667eea',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 12,
@@ -451,7 +444,7 @@ const styles = StyleSheet.create({
     right: 10,
     borderRadius: 15,
     padding: 5,
-    shadowColor: '#ff6b6b',
+    shadowColor: '#EF4444',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.4,
     shadowRadius: 3,
@@ -459,7 +452,6 @@ const styles = StyleSheet.create({
   },
   footer: {
     borderTopWidth: 1,
-    borderTopColor: 'rgba(102, 126, 234, 0.3)',
     padding: 15,
   },
   mediaButton: {
@@ -469,7 +461,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 25,
-    shadowColor: '#ff6b6b',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.4,
     shadowRadius: 4,

@@ -17,8 +17,10 @@ import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../config/supabase';
+import { useTheme } from '../context/ThemeContext';
 
 const ConfessionButtonScreen = () => {
+  const { isDarkMode, theme } = useTheme();
   const navigation = useNavigation();
   const [randomConfessions, setRandomConfessions] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -265,7 +267,7 @@ const ConfessionButtonScreen = () => {
 
     return (
       <TouchableOpacity 
-        style={styles.confessionCard}
+        style={[styles.confessionCard, { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1 }]}
         onPress={() => navigateToConfession(item)}
       >
         <View style={styles.confessionHeader}>
@@ -277,10 +279,10 @@ const ConfessionButtonScreen = () => {
             style={styles.avatar}
           />
           <View style={styles.userInfoContainer}>
-            <Text style={styles.username}>
+            <Text style={[styles.username, { color: theme.primaryAccent }]}>
               {item.is_anonymous ? 'Anonymous' : (item.username || 'User')}
             </Text>
-            <Text style={styles.locationText} numberOfLines={1}>
+            <Text style={[styles.locationText, { color: theme.textSecondary }]} numberOfLines={1}>
               {item.location_name || 'Unknown location'}
             </Text>
           </View>
@@ -295,22 +297,22 @@ const ConfessionButtonScreen = () => {
                 {item.type === 'person' ? 'Person' : 'Place'}
               </Text>
             </View>
-            <Text style={styles.dateText}>{formattedDate}</Text>
+            <Text style={[styles.dateText, { color: theme.textSecondary }]}>{formattedDate}</Text>
           </View>
         </View>
         
-        <Text style={styles.confessionContent} numberOfLines={4}>
+        <Text style={[styles.confessionContent, { color: theme.textPrimary }]} numberOfLines={4}>
           {item.content}
         </Text>
         
         {item.media && item.media.length > 0 && (
           <View style={styles.mediaIndicator}>
-            <Ionicons name="image" size={12} color="#ff00ff" />
-            <Text style={styles.mediaText}>{item.media.length} media</Text>
+            <Ionicons name="image" size={12} color={theme.secondaryAccent} />
+            <Text style={[styles.mediaText, { color: theme.secondaryAccent }]}>{item.media.length} media</Text>
           </View>
         )}
         
-        <View style={styles.actionBar}>
+        <View style={[styles.actionBar, { borderTopColor: theme.border }]}>
           <TouchableOpacity 
             style={styles.actionButton} 
             onPress={(e) => {
@@ -321,16 +323,16 @@ const ConfessionButtonScreen = () => {
             <Ionicons 
               name={item.is_liked ? 'heart' : 'heart-outline'} 
               size={16} 
-              color={item.is_liked ? '#ff00ff' : '#999'} 
+              color={item.is_liked ? '#F43F5E' : theme.textSecondary} 
             />
-            <Text style={[styles.actionText, item.is_liked && styles.likedText]}>
+            <Text style={[styles.actionText, { color: theme.textSecondary }, item.is_liked && { color: '#F43F5E' }]}>
               {item.likes_count || 0}
             </Text>
           </TouchableOpacity>
           
           <TouchableOpacity style={styles.actionButton}>
-            <Ionicons name="chatbubble-outline" size={16} color="#999" />
-            <Text style={styles.actionText}>{item.comments_count || 0}</Text>
+            <Ionicons name="chatbubble-outline" size={16} color={theme.textSecondary} />
+            <Text style={[styles.actionText, { color: theme.textSecondary }]}>{item.comments_count || 0}</Text>
           </TouchableOpacity>
         </View>
       </TouchableOpacity>
@@ -338,15 +340,15 @@ const ConfessionButtonScreen = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.backgroundSolid }]}>
+      <View style={[styles.header, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
         <TouchableOpacity 
           onPress={() => navigation.goBack()}
-          style={styles.backButton}
+          style={[styles.backButton, { backgroundColor: theme.border }]}
         >
-          <Ionicons name="arrow-back" size={24} color="#007AFF" />
+          <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Post a Confession</Text>
+        <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>Post a Confession</Text>
       </View>
 
       <FlatList
@@ -354,28 +356,34 @@ const ConfessionButtonScreen = () => {
         keyExtractor={(item) => `${item.type}-${item.id}`}
         renderItem={renderConfessionItem}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#ff00ff" />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primaryAccent} />
         }
         ListHeaderComponent={() => (
           <View style={styles.buttonContainer}>
-            <TouchableOpacity style={[styles.button, styles.personButton]} onPress={handlePersonConfession}>
-              <View style={styles.simpleButton}>
+            <TouchableOpacity style={styles.button} onPress={handlePersonConfession}>
+              <LinearGradient
+                colors={isDarkMode ? ['rgba(95, 115, 242, 0.9)', 'rgba(56, 189, 248, 0.8)'] : [theme.primaryAccent, theme.secondaryAccent]}
+                style={styles.simpleButton}
+              >
                 <Ionicons name="person" size={42} color="#fff" />
                 <Text style={styles.buttonText}>Person</Text>
-              </View>
+              </LinearGradient>
             </TouchableOpacity>
 
-            <TouchableOpacity style={[styles.button, styles.placeButton]} onPress={handlePlaceConfession}>
-              <View style={styles.simpleButton}>
+            <TouchableOpacity style={styles.button} onPress={handlePlaceConfession}>
+              <LinearGradient
+                colors={isDarkMode ? ['rgba(56, 189, 248, 0.9)', 'rgba(95, 115, 242, 0.8)'] : [theme.secondaryAccent, theme.primaryAccent]}
+                style={styles.simpleButton}
+              >
                 <Ionicons name="business" size={42} color="#fff" />
                 <Text style={styles.buttonText}>Colleges/Offices/Places</Text>
-              </View>
+              </LinearGradient>
             </TouchableOpacity>
             
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Recent Confessions</Text>
-              <TouchableOpacity onPress={onRefresh} style={styles.refreshButton}>
-                <Ionicons name="refresh" size={20} color="#ff00ff" />
+              <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Recent Confessions</Text>
+              <TouchableOpacity onPress={onRefresh} style={[styles.refreshButton, { backgroundColor: theme.border }]}>
+                <Ionicons name="refresh" size={20} color={theme.primaryAccent} />
               </TouchableOpacity>
             </View>
           </View>
@@ -385,13 +393,13 @@ const ConfessionButtonScreen = () => {
         ListEmptyComponent={() => (
           loading ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#ff00ff" />
-              <Text style={styles.loadingText}>Loading confessions...</Text>
+              <ActivityIndicator size="large" color={theme.primaryAccent} />
+              <Text style={[styles.loadingText, { color: theme.textSecondary }]}>Loading confessions...</Text>
             </View>
           ) : (
             <View style={styles.emptyContainer}>
-              <Ionicons name="chatbubbles-outline" size={60} color="#ff00ff" />
-              <Text style={styles.emptyText}>No confessions available</Text>
+              <Ionicons name="chatbubbles-outline" size={60} color={theme.secondaryAccent} />
+              <Text style={[styles.emptyText, { color: theme.secondaryAccent }]}>No confessions available</Text>
             </View>
           )
         )}

@@ -4,11 +4,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../lib/supabase';
 import { useNavigation } from '@react-navigation/native';
+import { useTheme } from '../context/ThemeContext';
 
 const StoryCircle = ({ user, onAddStory }) => {
   const [hasStory, setHasStory] = useState(false);
   const [currentUserId, setCurrentUserId] = useState(null);
   const navigation = useNavigation();
+  const { isDarkMode, theme } = useTheme();
 
   useEffect(() => {
     getCurrentUser();
@@ -89,10 +91,10 @@ const StoryCircle = ({ user, onAddStory }) => {
         {hasStory ? (
           // Story exists - show gradient border
           <LinearGradient
-            colors={['#ff00ff', '#00ffff', '#ff00ff']}
+            colors={[theme.primaryAccent, theme.secondaryAccent]}
             style={styles.gradientBorder}
           >
-            <View style={styles.imageContainer}>
+            <View style={[styles.imageContainer, { borderColor: theme.surface }]} >
               <Image
                 source={{ uri: user.avatar_url || 'https://via.placeholder.com/60' }}
                 style={styles.avatar}
@@ -101,7 +103,7 @@ const StoryCircle = ({ user, onAddStory }) => {
           </LinearGradient>
         ) : (
           // No story - show regular avatar
-          <View style={styles.regularBorder}>
+          <View style={[styles.regularBorder, { borderColor: theme.border }]}>
             <Image
               source={{ uri: user.avatar_url || 'https://via.placeholder.com/60' }}
               style={styles.avatar}
@@ -111,9 +113,9 @@ const StoryCircle = ({ user, onAddStory }) => {
         
         {/* Plus icon for current user */}
         {isCurrentUser && (
-          <View style={styles.plusContainer}>
+          <View style={[styles.plusContainer, { backgroundColor: theme.surfaceElevated }]}>
             <LinearGradient
-              colors={['#ff00ff', '#00ffff']}
+              colors={[theme.primaryAccent, theme.secondaryAccent]}
               style={styles.plusGradient}
             >
               <Ionicons name="add" size={16} color="#fff" />
@@ -122,7 +124,7 @@ const StoryCircle = ({ user, onAddStory }) => {
         )}
       </TouchableOpacity>
       
-      <Text style={styles.username} numberOfLines={1}>
+      <Text style={[styles.username, { color: theme.textPrimary }]} numberOfLines={1}>
         {isCurrentUser ? 'Your Story' : user.username || 'User'}
       </Text>
     </View>

@@ -29,6 +29,7 @@ import * as Location from 'expo-location';
 import * as FileSystem from 'expo-file-system';
 import { uploadToCloudinary, deleteFromCloudinary } from '../config/cloudinary';
 import ConfessionCommentScreen from './ConfessionCommentScreen'; // Added import for ConfessionCommentScreen
+import { useTheme } from '../context/ThemeContext';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -53,23 +54,25 @@ const ConfessionsHeader = React.memo(({
   userLocation,
   getMapUrl,
 }) => {
+  const { isDarkMode, theme } = useTheme();
+
   return (
     <View>
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
         <TouchableOpacity 
           onPress={() => navigation.goBack()}
-          style={styles.backButton}
+          style={[styles.backButton, { backgroundColor: theme.surfaceElevated }]}
         >
-          <Ionicons name="arrow-back" size={24} color="#007AFF" />
+          <Ionicons name="arrow-back" size={24} color={theme.primaryAccent} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Confessions</Text>
+        <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>Confessions</Text>
       </View>
 
-      <View style={styles.searchContainer}>
+      <View style={[styles.searchContainer, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
         <TextInput
-          style={styles.searchInput}
+          style={[styles.searchInput, { backgroundColor: theme.surfaceElevated, color: theme.textPrimary, borderColor: theme.border }]}
           placeholder="🔍 Search for a place, institution, company..."
-          placeholderTextColor="rgba(255,255,255,0.4)"
+          placeholderTextColor={isDarkMode ? 'rgba(226, 232, 240, 0.4)' : 'rgba(15, 23, 42, 0.4)'}
           value={searchQuery}
           onChangeText={(text) => {
             setSearchQuery(text);
@@ -96,39 +99,39 @@ const ConfessionsHeader = React.memo(({
         />
         {searchQuery.length > 0 && (
           <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <Ionicons name="close-circle" size={20} color="#999" />
+            <Ionicons name="close-circle" size={20} color={theme.textSecondary} />
           </TouchableOpacity>
         )}
         <TouchableOpacity 
-          style={styles.mapButton}
+          style={[styles.mapButton, { backgroundColor: theme.surfaceElevated }]}
           onPress={() => setShowMap(!showMap)}
         >
-          <Ionicons name={showMap ? "map" : "map-outline"} size={20} color="#007AFF" />
+          <Ionicons name={showMap ? "map" : "map-outline"} size={20} color={theme.primaryAccent} />
         </TouchableOpacity>
       </View>
 
       {searchResults.length > 0 ? (
-        <ScrollView style={styles.searchResultsList} nestedScrollEnabled={true} showsVerticalScrollIndicator={false}>
+        <ScrollView style={[styles.searchResultsList, { backgroundColor: theme.surfaceElevated }]} nestedScrollEnabled={true} showsVerticalScrollIndicator={false}>
           {searchResults.map((item) => (
             <TouchableOpacity 
               key={item.place_id.toString()}
-              style={styles.searchResultItem}
+              style={[styles.searchResultItem, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}
               onPress={() => selectLocation(item)}
             >
-              <Ionicons name="location" size={20} color="#007AFF" />
-              <Text style={styles.searchResultText}>{item.display_name}</Text>
+              <Ionicons name="location" size={20} color={theme.primaryAccent} />
+              <Text style={[styles.searchResultText, { color: theme.textPrimary }]}>{item.display_name}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
       ) : (
         searchQuery.length >= 3 && !searchLoading && (
-          <View style={styles.noResultsContainer}>
-            <Text style={styles.noResultsText}>No locations found</Text>
+          <View style={[styles.noResultsContainer, { backgroundColor: theme.surfaceElevated }]}>
+            <Text style={[styles.noResultsText, { color: theme.textPrimary }]}>No locations found</Text>
             <TouchableOpacity 
-              style={styles.addPlaceButton}
+              style={[styles.addPlaceButton, { backgroundColor: theme.primaryAccent }]}
               onPress={() => setShowAddPlaceModal(true)}
             >
-              <Text style={styles.addPlaceButtonText}>Add New Place</Text>
+              <Text style={[styles.addPlaceButtonText, { color: '#ffffff' }]}>Add New Place</Text>
             </TouchableOpacity>
           </View>
         )
@@ -191,6 +194,7 @@ const ConfessionsHeader = React.memo(({
 const ConfessionScreen = () => {
   const navigation = useNavigation();
   const route = useRoute(); // Import useRoute hook
+  const { isDarkMode, theme } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [selectedLocation, setSelectedLocation] = useState(null);
@@ -1216,37 +1220,37 @@ const ConfessionScreen = () => {
     if (!selectedLocation) return null;
 
     return (
-      <View style={styles.locationProfileContainer}>
+      <View style={[styles.locationProfileContainer, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}>
         <View style={styles.locationProfileHeader}>
           <TouchableOpacity onPress={() => setShowLocationProfileModal(true)}>
             <Image 
               source={{ 
                 uri: locationProfile?.profile_image || 'https://via.placeholder.com/80x80?text=Add+Photo'
               }}
-              style={styles.locationProfileImage}
+              style={[styles.locationProfileImage, { borderColor: theme.primaryAccent }]}
             />
           </TouchableOpacity>
           <View style={styles.locationProfileInfo}>
-            <Text style={styles.locationProfileName} numberOfLines={2}>
+            <Text style={[styles.locationProfileName, { color: theme.textPrimary, textShadowColor: 'transparent' }]} numberOfLines={2}>
               {selectedLocation.display_name}
             </Text>
-            <Text style={styles.locationProfileBio} numberOfLines={3}>
+            <Text style={[styles.locationProfileBio, { color: theme.textSecondary }]} numberOfLines={3}>
               {locationProfile?.bio || 'No description yet. Tap to add one!'}
             </Text>
           </View>
           <TouchableOpacity 
-            style={styles.editProfileButton}
+            style={[styles.editProfileButton, { backgroundColor: isDarkMode ? 'rgba(95, 115, 242, 0.15)' : 'rgba(79, 70, 229, 0.1)', shadowColor: theme.primaryAccent }]}
             onPress={() => {
               setProfileBio(locationProfile?.bio || '');
               setShowLocationProfileModal(true);
             }}
           >
-            <Ionicons name="create-outline" size={20} color="#007AFF" />
+            <Ionicons name="create-outline" size={20} color={theme.primaryAccent} />
           </TouchableOpacity>
         </View>
       </View>
     );
-  }, [selectedLocation, locationProfile, setProfileBio, setShowLocationProfileModal]); // Dependencies for useCallback
+  }, [selectedLocation, locationProfile, setProfileBio, setShowLocationProfileModal, theme, isDarkMode]); // Dependencies for useCallback
 
   const renderConfessionItem = ({ item }) => {
     const isCurrentUserConfession = currentUser && (
@@ -1270,7 +1274,7 @@ const ConfessionScreen = () => {
     
     return (
       <TouchableOpacity 
-        style={styles.confessionCard}
+        style={[styles.confessionCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
         onLongPress={() => {
           setSelectedConfessionForReaction(item.id);
           setShowReactionModal(true);
@@ -1293,15 +1297,15 @@ const ConfessionScreen = () => {
                 }
               }}
             >
-              <Text style={[styles.username, { color: '#007AFF' }]}>
+              <Text style={[styles.username, { color: theme.primaryAccent, textShadowColor: 'transparent' }]}>
                 {item.is_anonymous ? 'Anonymous' : (item.username || 'User')}
               </Text>
             </TouchableOpacity>
           </View>
           <View style={styles.dateAndTagContainer}>
-            <Text style={styles.dateText}>{formattedDate}</Text>
+            <Text style={[styles.dateText, { color: theme.textSecondary }]}>{formattedDate}</Text>
             {item.is_tagged_in_content && (
-              <View style={styles.taggedBadge}>
+              <View style={[styles.taggedBadge, { backgroundColor: theme.secondaryAccent }]}>
                 <Ionicons name="pricetag" size={12} color="#fff" />
                 <Text style={styles.taggedText}>Tagged you</Text>
               </View>
@@ -1338,12 +1342,12 @@ const ConfessionScreen = () => {
                 );
               }}
             >
-              <Ionicons name="ellipsis-vertical" size={20} color="#007AFF" />
+              <Ionicons name="ellipsis-vertical" size={20} color={theme.textSecondary} />
             </TouchableOpacity>
           )}
         </View>
         
-        <Text style={styles.confessionContent}>{renderConfessionContentWithMentions(item.content)}</Text>
+        <Text style={[styles.confessionContent, { color: theme.textPrimary }]}>{renderConfessionContentWithMentions(item.content)}</Text>
         
         {item.media && item.media.length > 0 && (
           <ScrollView horizontal style={styles.mediaContainer} showsHorizontalScrollIndicator={false}>
@@ -1523,7 +1527,7 @@ const ConfessionScreen = () => {
   }, [setShowAddPlaceModal]); // Dependencies for useCallback
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.backgroundSolid }]}>
       <FlatList
         data={confessions}
         keyExtractor={(item) => item.id.toString()}
@@ -1558,15 +1562,15 @@ const ConfessionScreen = () => {
         ListEmptyComponent={() => (
           !selectedLocation ? (
             <View style={styles.instructionContainer}>
-              <Ionicons name="search" size={60} color="#666" />
-              <Text style={styles.instructionText}>
+              <Ionicons name="search" size={60} color={theme.textSecondary} />
+              <Text style={[styles.instructionText, { color: theme.textSecondary }]}>
                 Search for a place/Person or select a location on the map to see confessions
               </Text>
             </View>
           ) : (
             <View style={styles.emptyContainer}>
-              <Ionicons name="chatbubbles-outline" size={60} color="#666" />
-              <Text style={styles.emptyText}>No confessions yet. Be the first to share!</Text>
+              <Ionicons name="chatbubbles-outline" size={60} color={theme.textSecondary} />
+              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No confessions yet. Be the first to share!</Text>
             </View>
           )
         )}
@@ -1574,7 +1578,7 @@ const ConfessionScreen = () => {
       
       {selectedLocation && (
         <TouchableOpacity 
-          style={styles.addButton}
+          style={[styles.addButton, { backgroundColor: theme.primaryAccent }]}
           onPress={() => setShowNewConfessionModal(true)}
         >
           <Ionicons name="add" size={30} color="#fff" />
@@ -1592,20 +1596,28 @@ const ConfessionScreen = () => {
           style={styles.keyboardAvoidingContainer} 
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Add Place</Text>
+          <View style={[styles.modalContent, { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1 }]}>
+            <Text style={[styles.modalTitle, { color: theme.textPrimary }]}>Add Place</Text>
             
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollViewContent}>
               <View style={styles.formGroup}>
-                <Text style={styles.label}>Type</Text>
+                <Text style={[styles.label, { color: theme.textSecondary }]}>Type</Text>
                 <View style={styles.typeSelector}>
                   {['institute', 'office', 'place', 'building'].map((type) => (
                     <TouchableOpacity
                       key={type}
-                      style={[styles.typeButton, newPlace.type === type && styles.selectedType]}
+                      style={[
+                        styles.typeButton, 
+                        { backgroundColor: theme.surfaceElevated, borderColor: theme.border },
+                        newPlace.type === type && { backgroundColor: theme.primaryAccent, borderColor: theme.primaryAccent }
+                      ]}
                       onPress={() => setNewPlace(prev => ({ ...prev, type }))}
                     >
-                      <Text style={[styles.typeText, newPlace.type === type && styles.selectedTypeText]}>
+                      <Text style={[
+                        styles.typeText, 
+                        { color: theme.textSecondary },
+                        newPlace.type === type && { color: '#ffffff', fontWeight: 'bold' }
+                      ]}>
                         {type.charAt(0).toUpperCase() + type.slice(1)}
                       </Text>
                     </TouchableOpacity>
@@ -1614,72 +1626,72 @@ const ConfessionScreen = () => {
               </View>
 
               <View style={styles.formGroup}>
-                <Text style={styles.label}>Name</Text>
+                <Text style={[styles.label, { color: theme.textSecondary }]}>Name</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { backgroundColor: theme.surfaceElevated, color: theme.textPrimary, borderColor: theme.border }]}
                   value={newPlace.name}
                   onChangeText={(text) => setNewPlace(prev => ({ ...prev, name: text }))}
                   placeholder="Enter place name"
-                  placeholderTextColor="#666"
+                  placeholderTextColor={isDarkMode ? 'rgba(226, 232, 240, 0.4)' : 'rgba(15, 23, 42, 0.4)'}
                 />
               </View>
 
               <View style={styles.formGroup}>
-                <Text style={styles.label}>City</Text>
+                <Text style={[styles.label, { color: theme.textSecondary }]}>City</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { backgroundColor: theme.surfaceElevated, color: theme.textPrimary, borderColor: theme.border }]}
                   value={newPlace.city}
                   onChangeText={(text) => setNewPlace(prev => ({ ...prev, city: text }))}
                   placeholder="Enter city"
-                  placeholderTextColor="#666"
+                  placeholderTextColor={isDarkMode ? 'rgba(226, 232, 240, 0.4)' : 'rgba(15, 23, 42, 0.4)'}
                 />
               </View>
 
               <View style={styles.formGroup}>
-                <Text style={styles.label}>District</Text>
+                <Text style={[styles.label, { color: theme.textSecondary }]}>District</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { backgroundColor: theme.surfaceElevated, color: theme.textPrimary, borderColor: theme.border }]}
                   value={newPlace.district}
                   onChangeText={(text) => setNewPlace(prev => ({ ...prev, district: text }))}
                   placeholder="Enter district"
-                  placeholderTextColor="#666"
+                  placeholderTextColor={isDarkMode ? 'rgba(226, 232, 240, 0.4)' : 'rgba(15, 23, 42, 0.4)'}
                 />
               </View>
 
               <View style={styles.formGroup}>
-                <Text style={styles.label}>State</Text>
+                <Text style={[styles.label, { color: theme.textSecondary }]}>State</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { backgroundColor: theme.surfaceElevated, color: theme.textPrimary, borderColor: theme.border }]}
                   value={newPlace.state}
                   onChangeText={(text) => setNewPlace(prev => ({ ...prev, state: text }))}
                   placeholder="Enter state"
-                  placeholderTextColor="#666"
+                  placeholderTextColor={isDarkMode ? 'rgba(226, 232, 240, 0.4)' : 'rgba(15, 23, 42, 0.4)'}
                 />
               </View>
 
               <View style={styles.formGroup}>
-                <Text style={styles.label}>Country</Text>
+                <Text style={[styles.label, { color: theme.textSecondary }]}>Country</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { backgroundColor: theme.surfaceElevated, color: theme.textPrimary, borderColor: theme.border }]}
                   value={newPlace.country}
                   onChangeText={(text) => setNewPlace(prev => ({ ...prev, country: text }))}
                   placeholder="Enter country"
-                  placeholderTextColor="#666"
+                  placeholderTextColor={isDarkMode ? 'rgba(226, 232, 240, 0.4)' : 'rgba(15, 23, 42, 0.4)'}
                 />
               </View>
 
               <View style={styles.modalButtons}>
                 <TouchableOpacity 
-                  style={[styles.modalButton, styles.cancelButton]}
+                  style={[styles.modalButton, styles.cancelButton, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}
                   onPress={() => setShowAddPlaceModal(false)}
                 >
-                  <Text style={styles.buttonText}>Cancel</Text>
+                  <Text style={[styles.buttonText, { color: theme.textSecondary }]}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity 
-                  style={[styles.modalButton, styles.submitButton]}
+                  style={[styles.modalButton, styles.submitButton, { backgroundColor: theme.primaryAccent }]}
                   onPress={handleAddPlace}
                 >
-                  <Text style={styles.buttonText}>Add Place</Text>
+                  <Text style={[styles.buttonText, { color: '#ffffff' }]}>Add Place</Text>
                 </TouchableOpacity>
               </View>
             </ScrollView>

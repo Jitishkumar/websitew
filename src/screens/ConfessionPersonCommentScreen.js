@@ -23,6 +23,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
 import { uploadToCloudinary } from '../config/cloudinary';
+import { useTheme } from '../context/ThemeContext';
 const { height } = Dimensions.get('window');
 
 
@@ -30,6 +31,7 @@ const { height } = Dimensions.get('window');
 
 // Audio Player Component
 const AudioPlayer = ({ audioUrl, duration }) => {
+  const { theme } = useTheme();
   const [sound, setSound] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [position, setPosition] = useState(0);
@@ -86,18 +88,18 @@ const AudioPlayer = ({ audioUrl, duration }) => {
   };
 
   return (
-    <View style={styles.audioPlayerContainer}>
+    <View style={[styles.audioPlayerContainer, { backgroundColor: theme.isDarkMode ? 'rgba(95, 115, 242, 0.08)' : 'rgba(79, 70, 229, 0.05)' }]}>
       <TouchableOpacity onPress={playPauseAudio} style={styles.audioPlayButton}>
         <Ionicons 
           name={isPlaying ? 'pause' : 'play'} 
           size={20} 
-          color="#ff00ff" 
+          color={theme.secondaryAccent} 
         />
       </TouchableOpacity>
-      <View style={styles.audioWaveform}>
-        <View style={[styles.audioProgress, { width: `${(position / audioDuration) * 100}%` }]} />
+      <View style={[styles.audioWaveform, { backgroundColor: theme.border }]}>
+        <View style={[styles.audioProgress, { backgroundColor: theme.secondaryAccent, width: `${(position / audioDuration) * 100}%` }]} />
       </View>
-      <Text style={styles.audioDuration}>
+      <Text style={[styles.audioDuration, { color: theme.textSecondary }]}>
         {formatTime(position)} / {formatTime(audioDuration)}
       </Text>
     </View>
@@ -106,6 +108,7 @@ const AudioPlayer = ({ audioUrl, duration }) => {
 
 
 const ConfessionPersonCommentScreen = ({ visible, onClose, confessionId: propConfessionId, onCommentPosted, cameFromNotifications }) => {
+  const { isDarkMode, theme } = useTheme();
   const navigation = useNavigation();
   const route = useRoute();
 
@@ -283,11 +286,11 @@ const ConfessionPersonCommentScreen = ({ visible, onClose, confessionId: propCon
 
     content.replace(mentionRegex, (match, username, offset) => {
       if (offset > lastIndex) {
-        parts.push(<Text key={`text-${lastIndex}`}>{content.substring(lastIndex, offset)}</Text>);
+        parts.push(<Text key={`text-${lastIndex}`} style={{ color: theme.textPrimary }} >{content.substring(lastIndex, offset)}</Text>);
       }
       parts.push(
         <TouchableOpacity key={`mention-${offset}`} onPress={() => handleMentionPress(username)}>
-          <Text style={styles.mentionText}>@{username}</Text>
+          <Text style={[styles.mentionText, { color: theme.primaryAccent }]}>@{username}</Text>
         </TouchableOpacity>
       );
       lastIndex = offset + match.length;
@@ -295,9 +298,9 @@ const ConfessionPersonCommentScreen = ({ visible, onClose, confessionId: propCon
     });
 
     if (lastIndex < content.length) {
-      parts.push(<Text key={`text-${lastIndex}`}>{content.substring(lastIndex)}</Text>);
+      parts.push(<Text key={`text-${lastIndex}`} style={{ color: theme.textPrimary }} >{content.substring(lastIndex)}</Text>);
     }
-    return <Text style={styles.commentText}>{parts}</Text>;
+    return <Text style={[styles.commentText, { color: theme.textPrimary }]}>{parts}</Text>;
   };
 
   const loadComments = async () => {
@@ -709,21 +712,21 @@ const ConfessionPersonCommentScreen = ({ visible, onClose, confessionId: propCon
     const defaultAvatar = 'https://via.placeholder.com/40';
 
     return (
-      <View style={[styles.commentContainer, item.parent_comment_id && styles.replyContainer]}>
+      <View style={[styles.commentContainer, item.parent_comment_id && [styles.replyContainer, { borderLeftColor: theme.border }]]}>
         <TouchableOpacity onPress={() => !isAnonymousComment && navigateToUserProfile(item.user_id)}>
           <LinearGradient
-            colors={['#ff00ff', '#00ffff']}
+            colors={[theme.primaryAccent, theme.secondaryAccent]}
             style={styles.avatarBorder}
           >
             <Image
               source={{ uri: isAnonymousComment ? defaultAvatar : (item.profiles?.avatar_url || defaultAvatar) }}
-              style={styles.avatar}
+              style={[styles.avatar, { borderColor: theme.backgroundSolid }]}
             />
           </LinearGradient>
         </TouchableOpacity>
-        <View style={styles.commentContent}>
+        <View style={[styles.commentContent, { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1 }]}>
           <TouchableOpacity onPress={() => !isAnonymousComment && navigateToUserProfile(item.user_id)}>
-            <Text style={styles.username}>
+            <Text style={[styles.username, { color: theme.primaryAccent }]}>
               {isAnonymousComment ? 'Anonymous' : (item.profiles?.username || 'User')}
             </Text>
           </TouchableOpacity>
@@ -738,7 +741,7 @@ const ConfessionPersonCommentScreen = ({ visible, onClose, confessionId: propCon
           )}
           
           <View style={styles.commentActions}>
-            <Text style={styles.timestamp}>{formatTimestamp(item.created_at)}</Text>
+            <Text style={[styles.timestamp, { color: theme.textSecondary }]}>{formatTimestamp(item.created_at)}</Text>
             <TouchableOpacity
               onPress={() => {
                 setReplyingTo(item.id);
@@ -746,14 +749,14 @@ const ConfessionPersonCommentScreen = ({ visible, onClose, confessionId: propCon
               }}
               style={styles.replyButton}
             >
-              <Text style={styles.replyButtonText}>Reply</Text>
+              <Text style={[styles.replyButtonText, { color: theme.primaryAccent }]}>Reply</Text>
             </TouchableOpacity>
             {hasReplies && (
               <TouchableOpacity
                 onPress={() => toggleExpanded(item.id)}
                 style={styles.toggleRepliesButton}
               >
-                <Text style={styles.toggleRepliesText}>
+                <Text style={[styles.toggleRepliesText, { color: theme.secondaryAccent }]}>
                   {isExpanded ? 'Hide Replies' : `Show ${replies.length} ${replies.length === 1 ? 'Reply' : 'Replies'}`}
                 </Text>
               </TouchableOpacity>
@@ -763,7 +766,7 @@ const ConfessionPersonCommentScreen = ({ visible, onClose, confessionId: propCon
                 onPress={() => handleDeleteComment(item.id)}
                 style={styles.deleteButton}
               >
-                <Text style={styles.deleteButtonText}>Delete</Text>
+                <Text style={[styles.deleteButtonText, { color: theme.error }]}>Delete</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -782,17 +785,17 @@ const ConfessionPersonCommentScreen = ({ visible, onClose, confessionId: propCon
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.headerBar}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.backgroundSolid }]}>
+      <View style={[styles.headerBar, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backChevron}>
-          <Ionicons name="chevron-back" size={24} color="#fff" />
+          <Ionicons name="chevron-back" size={24} color={theme.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Comments</Text>
+        <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>Comments</Text>
         <View style={{ width: 24 }} />
       </View>
 
       {loading ? (
-        <ActivityIndicator size="large" color="#ff00ff" style={styles.loading} />
+        <ActivityIndicator size="large" color={theme.primaryAccent} style={styles.loading} />
       ) : (
         <FlatList
           ref={flatListRef}
@@ -801,60 +804,60 @@ const ConfessionPersonCommentScreen = ({ visible, onClose, confessionId: propCon
           keyExtractor={(item) => item.id.toString()}
           contentContainerStyle={[styles.commentsList, { paddingBottom: insets.bottom }]}
           ListEmptyComponent={
-            <Text style={styles.emptyText}>No comments yet. Be the first to comment!</Text>
+            <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No comments yet. Be the first to comment!</Text>
           }
         />
       )}
 
       <LinearGradient
-        colors={['#1a1a3a', '#0d0d2a']}
-        style={[styles.inputContainer, { paddingBottom: insets.bottom > 0 ? insets.bottom : 10 }]}
+        colors={isDarkMode ? ['rgba(95, 115, 242, 0.15)', 'rgba(95, 115, 242, 0.05)'] : ['rgba(79, 70, 229, 0.08)', 'rgba(79, 70, 229, 0.03)']}
+        style={[styles.inputContainer, { paddingBottom: insets.bottom > 0 ? insets.bottom : 10, borderTopColor: theme.border }]}
       >
         <View style={styles.anonymousOption}>
-          <Text style={styles.anonymousText}>Anonymous</Text>
+          <Text style={[styles.anonymousText, { color: theme.textPrimary }]}>Anonymous</Text>
           <Switch
             value={isAnonymous}
             onValueChange={setIsAnonymous}
-            trackColor={{ false: "#767577", true: "#ff00ff" }}
+            trackColor={{ false: "#767577", true: theme.primaryAccent }}
             thumbColor={isAnonymous ? "#f4f3f4" : "#f4f3f4"}
           />
         </View>
         {replyingTo && (
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-            <Text style={{ color: '#00ffff' }}>
+            <Text style={{ color: theme.secondaryAccent }}>
               Replying to {(() => { const c = comments.find(cm => cm.id === replyingTo); return c?.is_anonymous ? 'Anonymous' : (c?.profiles?.username || 'User'); })()}
             </Text>
             <TouchableOpacity onPress={() => setReplyingTo(null)} style={{ marginLeft: 10 }}>
-              <Ionicons name="close-circle" size={16} color="#fff" />
+              <Ionicons name="close-circle" size={16} color={theme.textPrimary} />
             </TouchableOpacity>
           </View>
         )}
         
         {/* Audio Recording Preview */}
         {audioUri && !isRecording && (
-          <View style={styles.audioPreviewContainer}>
+          <View style={[styles.audioPreviewContainer, { backgroundColor: isDarkMode ? 'rgba(95, 115, 242, 0.15)' : 'rgba(79, 70, 229, 0.08)' }]}>
             <TouchableOpacity onPress={playPreview} style={styles.audioPreviewButton}>
               <Ionicons 
                 name={isPlayingPreview ? 'pause-circle' : 'play-circle'} 
                 size={32} 
-                color="#ff00ff" 
+                color={theme.secondaryAccent} 
               />
             </TouchableOpacity>
             <View style={styles.audioPreviewInfo}>
-              <Text style={styles.audioPreviewText}>Audio recorded</Text>
-              <Text style={styles.audioPreviewDuration}>{formatDuration(recordingDuration)}</Text>
+              <Text style={[styles.audioPreviewText, { color: theme.textPrimary }]}>Audio recorded</Text>
+              <Text style={[styles.audioPreviewDuration, { color: theme.textSecondary }]}>{formatDuration(recordingDuration)}</Text>
             </View>
             <TouchableOpacity onPress={deleteAudioRecording} style={styles.audioDeleteButton}>
-              <Ionicons name="trash-outline" size={20} color="#ff4444" />
+              <Ionicons name="trash-outline" size={20} color={theme.error} />
             </TouchableOpacity>
           </View>
         )}
         
         {/* Recording Indicator */}
         {isRecording && (
-          <View style={styles.recordingIndicator}>
-            <View style={styles.recordingDot} />
-            <Text style={styles.recordingText}>Recording... {formatDuration(recordingDuration)}</Text>
+          <View style={[styles.recordingIndicator, { backgroundColor: isDarkMode ? 'rgba(239, 68, 68, 0.15)' : 'rgba(220, 38, 38, 0.08)' }]}>
+            <View style={[styles.recordingDot, { backgroundColor: theme.error }]} />
+            <Text style={[styles.recordingText, { color: theme.error }]}>Recording... {formatDuration(recordingDuration)}</Text>
           </View>
         )}
         
@@ -868,32 +871,39 @@ const ConfessionPersonCommentScreen = ({ visible, onClose, confessionId: propCon
             <Ionicons 
               name={isRecording ? 'stop' : 'mic'} 
               size={24} 
-              color={isRecording ? '#ff4444' : '#ff00ff'} 
+              color={isRecording ? theme.error : theme.secondaryAccent} 
             />
           </TouchableOpacity>
           
           <TextInput
-            style={styles.input}
+            style={[styles.input, { backgroundColor: theme.surface, color: theme.textPrimary, borderColor: theme.border, borderWidth: 1 }]}
             placeholder="Add a comment..."
-            placeholderTextColor="#666"
+            placeholderTextColor={theme.textSecondary + '80'}
             value={commentText}
             onChangeText={setCommentText}
             multiline
             maxLength={500}
-            color="#ffffff"
+            color={theme.textPrimary}
             autoFocus={false}
             editable={!isRecording}
           />
           <TouchableOpacity
-            style={[styles.sendButton, (!commentText.trim() && !audioUri) && styles.disabledButton]}
+            style={styles.sendButton}
             onPress={replyingTo ? handleReply : handleAddComment}
             disabled={(!commentText.trim() && !audioUri) || submitting || isRecording}
           >
-            {submitting ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Ionicons name="send" size={24} color="#fff" />
-            )}
+            <LinearGradient
+              colors={(!commentText.trim() && !audioUri) ? 
+                (isDarkMode ? ['rgba(255, 255, 255, 0.05)', 'rgba(255, 255, 255, 0.02)'] : ['rgba(0, 0, 0, 0.05)', 'rgba(0, 0, 0, 0.02)']) :
+                [theme.primaryAccent, theme.secondaryAccent]}
+              style={[styles.sendButton, { width: '100%', height: '100%' }]}
+            >
+              {submitting ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Ionicons name="send" size={20} color="#fff" />
+              )}
+            </LinearGradient>
           </TouchableOpacity>
         </View>
       </LinearGradient>

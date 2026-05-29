@@ -2068,7 +2068,7 @@ const MessageScreen = () => {
                       {shouldBlur && (
                         <View style={styles.viewOnceBlurOverlay}>
                           <LinearGradient
-                            colors={['rgba(0,0,0,0.8)', 'rgba(0,0,0,0.9)']}
+                            colors={['rgba(0,0,0,0.95)', 'rgba(0,0,0,0.95)']}
                             style={styles.viewOnceBlurGradient}
                           >
                             <Ionicons name="eye-off" size={40} color="#fff" />
@@ -2125,15 +2125,15 @@ const MessageScreen = () => {
                         source={{ uri: item.media_url }} 
                         style={[
                           styles.messageImage,
-                          shouldBlur && { opacity: 0.3 }
+                          shouldBlur && { opacity: 0.1 }
                         ]}
                         resizeMode="cover"
-                        blurRadius={shouldBlur ? 50 : 0}
+                        blurRadius={shouldBlur ? 100 : 0}
                       />
                       {shouldBlur && (
                         <View style={styles.viewOnceBlurOverlay}>
                           <LinearGradient
-                            colors={['rgba(0,0,0,0.7)', 'rgba(0,0,0,0.8)']}
+                            colors={['rgba(0,0,0,0.95)', 'rgba(0,0,0,0.95)']}
                             style={styles.viewOnceBlurGradient}
                           >
                             <Ionicons name="eye-off" size={40} color="#fff" />
@@ -2831,7 +2831,6 @@ const MessageScreen = () => {
                 </LinearGradient>
               </View>
             </Modal>
-          </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
     </View>

@@ -10,8 +10,10 @@ import { Video } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CacheManager, CACHE_KEYS, CACHE_TTL } from '../utils/cache';
 import PostItem from '../components/PostItem';
+import { useTheme } from '../context/ThemeContext';
 
 const UserProfileScreen = () => {
+  const { isDarkMode, theme } = useTheme();
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showFullBio, setShowFullBio] = useState(false);
@@ -234,11 +236,11 @@ const UserProfileScreen = () => {
 
     textToRender.replace(mentionRegex, (match, username, offset) => {
       if (offset > lastIndex) {
-        parts.push(<Text key={`text-${lastIndex}`} style={styles.bioText}>{textToRender.substring(lastIndex, offset)}</Text>);
+        parts.push(<Text key={`text-${lastIndex}`} style={[styles.bioText, { color: theme.textPrimary }]}>{textToRender.substring(lastIndex, offset)}</Text>);
       }
       parts.push(
         <TouchableOpacity key={`mention-${offset}`} onPress={() => handleMentionPress(username)}>
-          <Text style={styles.mentionText}>@{username}</Text>
+          <Text style={[styles.mentionText, { color: theme.secondaryAccent }]}>@{username}</Text>
         </TouchableOpacity>
       );
       lastIndex = offset + match.length;
@@ -246,9 +248,9 @@ const UserProfileScreen = () => {
     });
 
     if (lastIndex < textToRender.length) {
-      parts.push(<Text key={`text-${lastIndex}`} style={styles.bioText}>{textToRender.substring(lastIndex)}</Text>);
+      parts.push(<Text key={`text-${lastIndex}`} style={[styles.bioText, { color: theme.textPrimary }]}>{textToRender.substring(lastIndex)}</Text>);
     }
-    return <Text style={styles.bioText}>{parts}</Text>;
+    return <Text style={[styles.bioText, { color: theme.textPrimary }]}>{parts}</Text>;
   };
 
   // OPTIMIZED: Load profile with caching
@@ -1035,19 +1037,19 @@ const UserProfileScreen = () => {
     if (item.type === 'text' || !item.media_url) {
       return (
         <TouchableOpacity 
-          style={[styles.gridItem, styles.textGridItem]} 
+          style={[styles.gridItem, styles.textGridItem, { backgroundColor: theme.surfaceElevated, borderColor: theme.border, borderWidth: 1 }]} 
           onPress={() => handlePostPress(index)}
         >
           <View style={styles.textPostContent}>
-            <Text style={styles.gridTextContent} numberOfLines={4}>
+            <Text style={[styles.gridTextContent, { color: theme.textPrimary }]} numberOfLines={4}>
               {item.caption || item.content}
             </Text>
             <View style={styles.gridItemFooter}>
               <View style={styles.gridItemStats}>
-                <Ionicons name="heart" size={14} color="#ff00ff" />
-                <Text style={styles.gridItemStatsText}>{item.likes?.[0]?.count || 0}</Text>
-                <Ionicons name="chatbubble" size={14} color="#ff00ff" style={{ marginLeft: 8 }} />
-                <Text style={styles.gridItemStatsText}>{item.comments?.[0]?.count || 0}</Text>
+                <Ionicons name="heart" size={14} color={theme.primaryAccent} />
+                <Text style={[styles.gridItemStatsText, { color: theme.textSecondary }]}>{item.likes?.[0]?.count || 0}</Text>
+                <Ionicons name="chatbubble" size={14} color={theme.primaryAccent} style={{ marginLeft: 8 }} />
+                <Text style={[styles.gridItemStatsText, { color: theme.textSecondary }]}>{item.comments?.[0]?.count || 0}</Text>
               </View>
             </View>
           </View>
@@ -1105,7 +1107,7 @@ const UserProfileScreen = () => {
     if (loadingContent) {
       return (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#ff00ff" />
+          <ActivityIndicator size="large" color={theme.primaryAccent} />
         </View>
       );
     }
@@ -1182,10 +1184,11 @@ const UserProfileScreen = () => {
   };
 
   // Separate component for profile header to avoid nesting ScrollView and FlatList
+  // Separate component for profile header to avoid nesting ScrollView and FlatList
   const ProfileHeader = () => (
     <View style={styles.profileSection}>
       {/* Cover Photo */}
-      <View style={styles.coverPhotoContainer}>
+      <View style={[styles.coverPhotoContainer, { borderColor: theme.border }]}>
         {console.log('Rendering cover with URL:', userProfile?.cover_url)}
         <Image
           style={styles.coverPhoto}
@@ -1201,7 +1204,7 @@ const UserProfileScreen = () => {
       
       {console.log('Rendering avatar with URL:', userProfile?.avatar_url)}
       <Image
-        style={styles.profileImage}
+        style={[styles.profileImage, { borderColor: theme.backgroundSolid }]}
         source={userProfile?.avatar_url 
           ? { uri: userProfile.avatar_url, cache: 'reload' } 
           : require('../../assets/defaultavatar.png')
@@ -1210,16 +1213,16 @@ const UserProfileScreen = () => {
           console.log('Avatar photo error:', e.nativeEvent.error);
         }}
       />
-      <Text style={styles.name}>{userProfile?.full_name || 'No name set'}</Text>
+      <Text style={[styles.name, { color: theme.textPrimary }]}>{userProfile?.full_name || 'No name set'}</Text>
       <View style={styles.usernameContainer}>
-        <Text style={styles.username}>@{userProfile?.username || 'username'}</Text>
+        <Text style={[styles.username, { color: theme.textSecondary }]}>@{userProfile?.username || 'username'}</Text>
         {userProfile?.isVerified && (
-          <Ionicons name="checkmark-circle" size={20} color="#ff0000" style={styles.verifiedBadge} />
+          <Ionicons name="checkmark-circle" size={20} color={theme.secondaryAccent} style={styles.verifiedBadge} />
         )}
       </View>
-      <View style={styles.rankBadge}>
-        <Ionicons name="trophy-outline" size={16} color="#FFD700" />
-        <Text style={styles.rankNumber}>
+      <View style={[styles.rankBadge, { backgroundColor: theme.secondaryAccent + '15' }]}>
+        <Ionicons name="trophy-outline" size={16} color={theme.secondaryAccent} />
+        <Text style={[styles.rankNumber, { color: theme.secondaryAccent }]}>
           {userProfile?.rank 
             ? `Rank #${userProfile.rank} ${userProfile.rank === 1 ? '(First Member!)' : ''}`
             : 'Rank not assigned'}
@@ -1231,10 +1234,10 @@ const UserProfileScreen = () => {
         {/* Show follow button for all accounts, but handle private accounts differently */}
         {followRequestStatus === 'pending' ? (
           <TouchableOpacity 
-            style={[styles.followButton, styles.pendingButton]}
+            style={[styles.followButton, styles.pendingButton, { backgroundColor: theme.border, borderColor: theme.border }]}
             disabled={true}
           >
-            <Text style={styles.followButtonText}>
+            <Text style={[styles.followButtonText, { color: theme.textSecondary }]}>
               REQUEST SENT
             </Text>
           </TouchableOpacity>
@@ -1242,39 +1245,40 @@ const UserProfileScreen = () => {
           <TouchableOpacity 
             style={[
               styles.followButton,
-              isFollowing ? styles.followingButton : {}
+              { backgroundColor: theme.primaryAccent },
+              isFollowing ? [styles.followingButton, { backgroundColor: 'transparent', borderColor: theme.primaryAccent, borderWidth: 1 }] : {}
             ]}
             onPress={handleFollow}
           >
-            <Text style={styles.followButtonText}>
+            <Text style={[styles.followButtonText, { color: isFollowing ? theme.primaryAccent : '#fff' }]}>
               {isFollowing ? 'FOLLOWING' : 'FOLLOW'}
             </Text>
           </TouchableOpacity>
         )}
         <TouchableOpacity 
-          style={styles.messageButton}
+          style={[styles.messageButton, { backgroundColor: theme.surfaceElevated, borderColor: theme.primaryAccent }]}
           onPress={handleMessage}
         >
-          <Ionicons name="chatbubble-outline" size={24} color="#ff00ff" />
+          <Ionicons name="chatbubble-outline" size={24} color={theme.primaryAccent} />
         </TouchableOpacity>
       </View>
 
-      <View style={styles.statsContainer}>
+      <View style={[styles.statsContainer, { borderColor: theme.border }]}>
         <View style={styles.stat}>
-          <Text style={styles.statNumber}>{canViewPrivateContent ? postsCount : hasPrivateAccount ? '•••' : postsCount}</Text>
-          <Text style={styles.statLabel}>Post</Text>
+          <Text style={[styles.statNumber, { color: theme.textPrimary }]}>{canViewPrivateContent ? postsCount : hasPrivateAccount ? '•••' : postsCount}</Text>
+          <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Post</Text>
         </View>
         <View style={styles.stat}>
-          <Text style={styles.statNumber}>{canViewPrivateContent ? shortsCount : hasPrivateAccount ? '•••' : shortsCount}</Text>
-          <Text style={styles.statLabel}>Shorts</Text>
+          <Text style={[styles.statNumber, { color: theme.textPrimary }]}>{canViewPrivateContent ? shortsCount : hasPrivateAccount ? '•••' : shortsCount}</Text>
+          <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Shorts</Text>
         </View>
         <TouchableOpacity style={styles.stat} onPress={handleFollowersPress}>
-          <Text style={styles.statNumber}>{canViewPrivateContent ? followersCount : hasPrivateAccount ? '•••' : followersCount}</Text>
-          <Text style={styles.statLabel}>Followers</Text>
+          <Text style={[styles.statNumber, { color: theme.textPrimary }]}>{canViewPrivateContent ? followersCount : hasPrivateAccount ? '•••' : followersCount}</Text>
+          <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Followers</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.stat} onPress={handleFollowingPress}>
-          <Text style={styles.statNumber}>{canViewPrivateContent ? followingCount : hasPrivateAccount ? '•••' : followingCount}</Text>
-          <Text style={styles.statLabel}>Following</Text>
+          <Text style={[styles.statNumber, { color: theme.textPrimary }]}>{canViewPrivateContent ? followingCount : hasPrivateAccount ? '•••' : followingCount}</Text>
+          <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Following</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -1282,9 +1286,9 @@ const UserProfileScreen = () => {
 
   // Tabs component
   const TabsSection = () => (
-    <View style={styles.tabsContainer}>
+    <View style={[styles.tabsContainer, { borderBottomColor: theme.border }]}>
       <TouchableOpacity 
-        style={[styles.tabButton, activeTab === 'Post' && styles.activeTab]}
+        style={[styles.tabButton, activeTab === 'Post' && [styles.activeTab, { borderBottomColor: theme.primaryAccent }]]}
         onPress={() => {
           if (hasPrivateAccount && !canViewPrivateContent) {
             Alert.alert(
@@ -1297,10 +1301,10 @@ const UserProfileScreen = () => {
           setActiveTab('Post');
         }}
       >
-        <Text style={[styles.tabButtonText, activeTab === 'Post' && styles.activeTabText]}>Posts</Text>
+        <Text style={[styles.tabButtonText, { color: activeTab === 'Post' ? theme.primaryAccent : theme.textSecondary }]}>Posts</Text>
       </TouchableOpacity>
       <TouchableOpacity 
-        style={[styles.tabButton, activeTab === 'Tweets' && styles.activeTab]}
+        style={[styles.tabButton, activeTab === 'Tweets' && [styles.activeTab, { borderBottomColor: theme.primaryAccent }]]}
         onPress={() => {
           if (hasPrivateAccount && !canViewPrivateContent) {
             Alert.alert(
@@ -1313,10 +1317,10 @@ const UserProfileScreen = () => {
           setActiveTab('Tweets');
         }}
       >
-        <Text style={[styles.tabButtonText, activeTab === 'Tweets' && styles.activeTabText, styles.italicText]}>Snips</Text>
+        <Text style={[styles.tabButtonText, { color: activeTab === 'Tweets' ? theme.primaryAccent : theme.textSecondary }, styles.italicText]}>Snips</Text>
       </TouchableOpacity>
       <TouchableOpacity 
-        style={[styles.tabButton, activeTab === 'Short' && styles.activeTab]}
+        style={[styles.tabButton, activeTab === 'Short' && [styles.activeTab, { borderBottomColor: theme.primaryAccent }]]}
         onPress={() => {
           if (hasPrivateAccount && !canViewPrivateContent) {
             Alert.alert(
@@ -1329,17 +1333,18 @@ const UserProfileScreen = () => {
           setActiveTab('Short');
         }}
       >
-        <Text style={[styles.tabButtonText, activeTab === 'Short' && styles.activeTabText]}>Shorts</Text>
+        <Text style={[styles.tabButtonText, { color: activeTab === 'Short' ? theme.primaryAccent : theme.textSecondary }]}>Shorts</Text>
       </TouchableOpacity>
       <TouchableOpacity 
-        style={[styles.tabButton, activeTab === 'Details' && styles.activeTab]}
+        style={[styles.tabButton, activeTab === 'Details' && [styles.activeTab, { borderBottomColor: theme.primaryAccent }]]}
         onPress={() => setActiveTab('Details')}
       >
-        <Text style={[styles.tabButtonText, activeTab === 'Details' && styles.activeTabText]}>Details</Text>
+        <Text style={[styles.tabButtonText, { color: activeTab === 'Details' ? theme.primaryAccent : theme.textSecondary }]}>Details</Text>
       </TouchableOpacity>
     </View>
   );
 
+  // Connections Modal (moved from ProfileScreen.js)
   // Connections Modal (moved from ProfileScreen.js)
   const ConnectionsModal = ({ visible, onClose, title, connections, isLoading }) => {
     return (
@@ -1350,11 +1355,11 @@ const UserProfileScreen = () => {
         onRequestClose={onClose}
       >
         <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>{title}</Text>
+          <View style={[styles.modalContent, { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1 }]}>
+            <Text style={[styles.modalTitle, { color: theme.textPrimary }]}>{title}</Text>
             {isLoading ? (
               <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#ff00ff" />
+                <ActivityIndicator size="large" color={theme.primaryAccent} />
               </View>
             ) : connections.length > 0 ? (
               <FlatList
@@ -1362,7 +1367,7 @@ const UserProfileScreen = () => {
                 keyExtractor={(item, index) => item.id ? item.id.toString() : index.toString()}
                 renderItem={({ item }) => (
                   <TouchableOpacity 
-                    style={styles.connectionItem}
+                    style={[styles.connectionItem, { borderBottomColor: theme.border }]}
                     onPress={() => {
                       onClose();
                       navigation.navigate('UserProfile', { userId: item.id });
@@ -1373,21 +1378,21 @@ const UserProfileScreen = () => {
                       style={styles.connectionAvatar}
                     />
                     <View style={styles.connectionInfo}>
-                      <Text style={styles.connectionName}>{item.full_name || 'No name'}</Text>
-                      <Text style={styles.connectionUsername}>@{item.username || 'username'}</Text>
+                      <Text style={[styles.connectionName, { color: theme.textPrimary }]}>{item.full_name || 'No name'}</Text>
+                      <Text style={[styles.connectionUsername, { color: theme.textSecondary }]}>@{item.username || 'username'}</Text>
                     </View>
                   </TouchableOpacity>
                 )}
                 style={styles.connectionsList}
               />
             ) : (
-              <View style={styles.emptyContainer}>
-                <Ionicons name="people-outline" size={50} color="#666" />
-                <Text style={styles.emptyText}>No {title.toLowerCase()} yet</Text>
+              <View style={[styles.emptyContainer, { backgroundColor: 'transparent' }]}>
+                <Ionicons name="people-outline" size={50} color={theme.textSecondary} />
+                <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No {title.toLowerCase()} yet</Text>
               </View>
             )}
             <TouchableOpacity 
-              style={styles.closeButton}
+              style={[styles.closeButton, { backgroundColor: theme.primaryAccent }]}
               onPress={onClose}
             >
               <Text style={styles.closeText}>Close</Text>
@@ -1405,20 +1410,20 @@ const UserProfileScreen = () => {
         <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom }}>
           <View style={styles.detailsSection}>
             <View style={styles.detailItem}>
-              <Ionicons name="person-outline" size={24} color="#666" />
+              <Ionicons name="person-outline" size={24} color={theme.textSecondary} />
               <View style={styles.detailContent}>
-                <Text style={styles.detailTitle}>About me</Text>
-                <Text style={styles.detailText}>
+                <Text style={[styles.detailTitle, { color: theme.textPrimary }]}>About me</Text>
+                <Text style={[styles.detailText, { color: theme.textSecondary }]}>
                   {userProfile?.bio || 'No bio added yet'}
                 </Text>
               </View>
             </View>
 
             <View style={styles.detailItem}>
-              <Ionicons name="trophy-outline" size={24} color="#FFD700" />
+              <Ionicons name="trophy-outline" size={24} color={theme.secondaryAccent} />
               <View style={styles.detailContent}>
-                <Text style={styles.detailTitle}>Member Rank</Text>
-                <Text style={styles.detailText}>
+                <Text style={[styles.detailTitle, { color: theme.textPrimary }]}>Member Rank</Text>
+                <Text style={[styles.detailText, { color: theme.textSecondary }]}>
                   {userProfile?.rank 
                     ? `Member #${userProfile.rank} on Flexx`
                     : 'Rank not assigned yet'}
@@ -1437,7 +1442,7 @@ const UserProfileScreen = () => {
     if (loadingContent) {
       return (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#ff00ff" />
+          <ActivityIndicator size="large" color={theme.primaryAccent} />
         </View>
       );
     }
@@ -1451,24 +1456,14 @@ const UserProfileScreen = () => {
           keyExtractor={item => item.id.toString()}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: insets.bottom }}
-          ListHeaderComponent={<>
-            <ProfileHeader />
-            <TabsSection />
-            {hasPrivateAccount && !canViewPrivateContent && (
-              <View style={styles.privateAccountMessage}>
-                <Ionicons name="lock-closed" size={40} color="#ff00ff" />
-                <Text style={styles.privateAccountTitle}>This Account is Private</Text>
-                <Text style={styles.privateAccountText}>Follow this account to see their snips.</Text>
-              </View>
-            )}
-          </>}
+          ListHeaderComponent={< packageComponentHeaderPropsForTheme />}
         />
       ) : (
         <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom }}>
           <ProfileHeader />
           <TabsSection />
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No snips yet</Text>
+            <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No snips yet</Text>
           </View>
         </ScrollView>
       );
@@ -1484,24 +1479,14 @@ const UserProfileScreen = () => {
         columnWrapperStyle={styles.gridRow}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.gridContainer, { paddingBottom: insets.bottom }]}
-        ListHeaderComponent={<>
-          <ProfileHeader />
-          <TabsSection />
-          {hasPrivateAccount && !canViewPrivateContent && (
-            <View style={styles.privateAccountMessage}>
-              <Ionicons name="lock-closed" size={40} color="#ff00ff" />
-              <Text style={styles.privateAccountTitle}>This Account is Private</Text>
-              <Text style={styles.privateAccountText}>Follow this account to see their posts and shorts.</Text>
-            </View>
-          )}
-        </>}
+        ListHeaderComponent={< packageComponentHeaderPropsForTheme />}
       />
     ) : (
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom }}>
         <ProfileHeader />
         <TabsSection />
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>
+          <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
             {activeTab === 'Post' ? 'No posts yet' : 'No shorts yet'}
           </Text>
         </View>
@@ -1509,34 +1494,50 @@ const UserProfileScreen = () => {
     );
   };
 
+  const packageComponentHeaderPropsForTheme = () => (
+    <>
+      <ProfileHeader />
+      <TabsSection />
+      {hasPrivateAccount && !canViewPrivateContent && (
+        <View style={[styles.privateAccountMessage, { backgroundColor: theme.surfaceElevated, borderColor: theme.border, borderWidth: 1 }]}>
+          <Ionicons name="lock-closed" size={40} color={theme.primaryAccent} />
+          <Text style={[styles.privateAccountTitle, { color: theme.textPrimary }]}>This Account is Private</Text>
+          <Text style={[styles.privateAccountText, { color: theme.textSecondary }]}>
+            {activeTab === 'Tweets' ? 'Follow this account to see their snips.' : 'Follow this account to see their posts and shorts.'}
+          </Text>
+        </View>
+      )}
+    </>
+  );
+
   return (
-    <LinearGradient colors={['#1a1a2e', '#16213e', '#0f3460']} style={styles.container}>
+    <LinearGradient colors={theme.backgrounds} style={[styles.container, { backgroundColor: theme.backgroundSolid }]}>
       <ProfileViewBlinker 
         gender={userProfile?.gender} 
         viewerGender={viewerGender} 
       />
       {/* Add back button at the top */}
       <LinearGradient
-        colors={['rgba(102, 126, 234, 0.3)', 'rgba(156, 136, 255, 0.2)', 'transparent']}
+        colors={isDarkMode ? ['rgba(95, 115, 242, 0.15)', 'rgba(95, 115, 242, 0.05)', 'transparent'] : ['rgba(79, 70, 229, 0.08)', 'rgba(79, 70, 229, 0.03)', 'transparent']}
         style={[styles.header, { paddingTop: insets.top + 10 }]}
       >
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color="white" />
+          <Ionicons name="arrow-back" size={24} color={theme.primaryAccent} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Profile</Text>
+        <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>Profile</Text>
       </LinearGradient>
       
       {loading ? (
-        <View style={[styles.container, styles.centered]}>
-          <ActivityIndicator size="large" color="#ff00ff" />
+        <View style={[styles.container, { backgroundColor: 'transparent' }, styles.centered]}>
+          <ActivityIndicator size="large" color={theme.primaryAccent} />
         </View>
       ) : isBlocked ? (
-        <View style={[styles.container, styles.centered]}>
-          <Ionicons name="ban" size={60} color="#ff00ff" />
-          <Text style={styles.blockedTitle}>Profile Unavailable</Text>
-          <Text style={styles.blockedText}>{blockReason}</Text>
+        <View style={[styles.container, { backgroundColor: 'transparent' }, styles.centered]}>
+          <Ionicons name="ban" size={60} color={theme.error} />
+          <Text style={[styles.blockedTitle, { color: theme.textPrimary }]}>Profile Unavailable</Text>
+          <Text style={[styles.blockedText, { color: theme.textSecondary }]}>{blockReason}</Text>
           <TouchableOpacity 
-            style={styles.backButton}
+            style={[styles.backButton, { backgroundColor: theme.primaryAccent }]}
             onPress={() => navigation.goBack()}
           >
             <Text style={styles.backButtonText}>Go Back</Text>
@@ -1549,20 +1550,20 @@ const UserProfileScreen = () => {
             <TabsSection />
             <View style={styles.detailsSection}>
               <View style={styles.detailItem}>
-                <Ionicons name="person-outline" size={24} color="#666" />
+                <Ionicons name="person-outline" size={24} color={theme.textSecondary} />
                 <View style={styles.detailContent}>
-                  <Text style={styles.detailTitle}>About me</Text>
-                  <Text style={styles.detailText}>
+                  <Text style={[styles.detailTitle, { color: theme.textPrimary }]}>About me</Text>
+                  <Text style={[styles.detailText, { color: theme.textSecondary }]}>
                     {userProfile?.bio || 'No bio added yet'}
                   </Text>
                 </View>
               </View>
 
               <View style={styles.detailItem}>
-                <Ionicons name="trophy-outline" size={24} color="#FFD700" />
+                <Ionicons name="trophy-outline" size={24} color={theme.secondaryAccent} />
                 <View style={styles.detailContent}>
-                  <Text style={styles.detailTitle}>Member Rank</Text>
-                  <Text style={styles.detailText}>
+                  <Text style={[styles.detailTitle, { color: theme.textPrimary }]}>Member Rank</Text>
+                  <Text style={[styles.detailText, { color: theme.textSecondary }]}>
                     {userProfile?.rank 
                       ? `Member #${userProfile.rank} on Flexx`
                       : 'Rank not assigned yet'}
@@ -1578,19 +1579,19 @@ const UserProfileScreen = () => {
             <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom }}>
               <ProfileHeader />
               <TabsSection />
-              <View style={styles.privateAccountMessage}>
-                <Ionicons name="lock-closed" size={40} color="#ff00ff" />
-                <Text style={styles.privateAccountTitle}>This Account is Private</Text>
-                <Text style={styles.privateAccountText}>Follow this account to see their posts and shorts.</Text>
+              <View style={[styles.privateAccountMessage, { backgroundColor: theme.surfaceElevated, borderColor: theme.border, borderWidth: 1 }]}>
+                <Ionicons name="lock-closed" size={40} color={theme.primaryAccent} />
+                <Text style={[styles.privateAccountTitle, { color: theme.textPrimary }]}>This Account is Private</Text>
+                <Text style={[styles.privateAccountText, { color: theme.textSecondary }]}>Follow this account to see their posts and shorts.</Text>
               </View>
             </ScrollView>
           )
         )
       ) : (
-        <View style={[styles.container, styles.centered]}>
-          <Text style={styles.errorText}>Could not load profile</Text>
+        <View style={[styles.container, { backgroundColor: 'transparent' }, styles.centered]}>
+          <Text style={[styles.errorText, { color: theme.textPrimary }]}>Could not load profile</Text>
           <TouchableOpacity 
-            style={styles.backButton}
+            style={[styles.backButton, { backgroundColor: theme.primaryAccent }]}
             onPress={() => navigation.goBack()}
           >
             <Text style={styles.backButtonText}>Go Back</Text>

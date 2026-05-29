@@ -8,8 +8,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GroupsService } from '../services/GroupsService';
 import { uploadToCloudinary, deleteFromCloudinary } from '../config/cloudinary';
+import { useTheme } from '../context/ThemeContext';
 
 const GroupInfoScreen = () => {
+  const { isDarkMode, theme } = useTheme();
   const navigation = useNavigation();
   const route = useRoute();
   const insets = useSafeAreaInsets();
@@ -723,7 +725,7 @@ const GroupInfoScreen = () => {
 
     return (
       <TouchableOpacity 
-        style={styles.memberItem}
+        style={[styles.memberItem, { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1 }]}
         onLongPress={() => {
           if (canChangeRole) {
             setShowMemberOptions({
@@ -741,19 +743,19 @@ const GroupInfoScreen = () => {
         />
         <View style={styles.memberInfo}>
           <View style={styles.usernameContainer}>
-            <Text style={styles.memberName}>{user.username}</Text>
+            <Text style={[styles.memberName, { color: theme.textPrimary }]}>{user.username}</Text>
             {user.isVerified && (
-              <Ionicons name="checkmark-circle" size={16} color="#ff0000" style={styles.verifiedBadge} />
+              <Ionicons name="checkmark-circle" size={16} color={theme.secondaryAccent} style={styles.verifiedBadge} />
             )}
           </View>
-          <Text style={styles.memberRole}>{item.role}</Text>
+          <Text style={[styles.memberRole, { color: theme.textSecondary }]}>{item.role}</Text>
         </View>
         {canRemove && (
           <TouchableOpacity 
             onPress={() => removeMember(item.user_id, user.username)}
             style={styles.removeButton}
           >
-            <Ionicons name="remove-circle" size={24} color="#ff6b6b" />
+            <Ionicons name="remove-circle" size={24} color={theme.error} />
           </TouchableOpacity>
         )}
       </TouchableOpacity>
@@ -762,7 +764,7 @@ const GroupInfoScreen = () => {
 
   const renderSearchResult = ({ item }) => (
     <TouchableOpacity 
-      style={styles.searchResultItem}
+      style={[styles.searchResultItem, { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1 }]}
       onPress={() => addMember(item)}
     >
       <Image 
@@ -771,49 +773,49 @@ const GroupInfoScreen = () => {
       />
       <View style={styles.searchUserInfo}>
         <View style={styles.usernameContainer}>
-          <Text style={styles.searchUsername}>{item.username}</Text>
+          <Text style={[styles.searchUsername, { color: theme.textPrimary }]}>{item.username}</Text>
           {item.isVerified && (
-            <Ionicons name="checkmark-circle" size={16} color="#ff0000" style={styles.verifiedBadge} />
+            <Ionicons name="checkmark-circle" size={16} color={theme.secondaryAccent} style={styles.verifiedBadge} />
           )}
         </View>
-        <Text style={styles.searchFullName}>{item.full_name || ''}</Text>
+        <Text style={[styles.searchFullName, { color: theme.textSecondary }]}>{item.full_name || ''}</Text>
       </View>
-      <Ionicons name="add-circle" size={24} color="#00ff88" />
+      <Ionicons name="add-circle" size={24} color={theme.success} />
     </TouchableOpacity>
   );
 
   if (loading) {
     return (
-      <LinearGradient colors={['#1a1a2e', '#16213e', '#0f3460']} style={styles.container}>
-        <ActivityIndicator size="large" color="#ff6b6b" style={styles.loader} />
+      <LinearGradient colors={theme.backgrounds} style={styles.container}>
+        <ActivityIndicator size="large" color={theme.primaryAccent} style={styles.loader} />
       </LinearGradient>
     );
   }
 
   return (
-    <LinearGradient colors={['#1a1a2e', '#16213e', '#0f3460']} style={styles.container}>
-      <View style={[styles.header, { paddingTop: insets.top > 0 ? insets.top : 50 }]}>
+    <LinearGradient colors={theme.backgrounds} style={styles.container}>
+      <View style={[styles.header, { paddingTop: insets.top > 0 ? insets.top : 50, borderBottomColor: theme.border }]}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color="#fff" />
+          <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Group Info</Text>
+        <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>Group Info</Text>
         <View style={styles.headerRight} />
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Group Avatar Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Group Avatar</Text>
+        <View style={[styles.section, { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1 }]}>
+          <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Group Avatar</Text>
           <View style={styles.avatarSection}>
             <TouchableOpacity 
               onPress={isAdmin ? handleAvatarPress : null}
-              style={[styles.groupAvatarContainer, isAdmin && styles.editableAvatar]}
+              style={[styles.groupAvatarContainer, isAdmin && [styles.editableAvatar, { borderColor: theme.primaryAccent }]]}
               disabled={!isAdmin || uploadingAvatar}
               activeOpacity={isAdmin ? 0.7 : 1}
             >
               {uploadingAvatar ? (
-                <View style={styles.groupAvatarPlaceholder}>
-                  <ActivityIndicator size="small" color="#fff" />
+                <View style={[styles.groupAvatarPlaceholder, { backgroundColor: theme.surfaceElevated }]}>
+                  <ActivityIndicator size="small" color={theme.primaryAccent} />
                 </View>
               ) : group?.avatar_url ? (
                 <Image 
@@ -822,7 +824,7 @@ const GroupInfoScreen = () => {
                 />
               ) : (
                 <LinearGradient
-                  colors={['rgba(102, 126, 234, 0.8)', 'rgba(156, 136, 255, 0.8)']}
+                  colors={[theme.primaryAccent, theme.secondaryAccent]}
                   style={styles.groupAvatarPlaceholder}
                 >
                   <Ionicons name="people" size={40} color="#fff" />
@@ -835,22 +837,22 @@ const GroupInfoScreen = () => {
               )}
             </TouchableOpacity>
             {isAdmin && (
-              <Text style={styles.avatarHint}>Tap to change group photo</Text>
+              <Text style={[styles.avatarHint, { color: theme.textSecondary }]}>Tap to change group photo</Text>
             )}
           </View>
         </View>
 
         {/* Group Name Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Group Name</Text>
+        <View style={[styles.section, { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1 }]}>
+          <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Group Name</Text>
           {editingName ? (
             <View style={styles.editContainer}>
               <TextInput
-                style={styles.editInput}
+                style={[styles.editInput, { backgroundColor: theme.surfaceElevated, color: theme.textPrimary, borderColor: theme.border, borderWidth: 1 }]}
                 value={newGroupName}
                 onChangeText={setNewGroupName}
                 placeholder="Enter group name"
-                placeholderTextColor="rgba(255,255,255,0.4)"
+                placeholderTextColor={theme.textSecondary + '80'}
                 maxLength={50}
               />
               <View style={styles.editButtons}>
@@ -861,19 +863,19 @@ const GroupInfoScreen = () => {
                   }}
                   style={styles.cancelEditButton}
                 >
-                  <Text style={styles.cancelEditText}>Cancel</Text>
+                  <Text style={[styles.cancelEditText, { color: theme.error }]}>Cancel</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={updateGroupName} style={styles.saveEditButton}>
+                <TouchableOpacity onPress={updateGroupName} style={[styles.saveEditButton, { backgroundColor: theme.primaryAccent }]}>
                   <Text style={styles.saveEditText}>Save</Text>
                 </TouchableOpacity>
               </View>
             </View>
           ) : (
             <View style={styles.groupNameContainer}>
-              <Text style={styles.groupName}>{group?.name}</Text>
+              <Text style={[styles.groupName, { color: theme.textPrimary }]}>{group?.name}</Text>
               {isAdmin && (
                 <TouchableOpacity onPress={() => setEditingName(true)}>
-                  <Ionicons name="pencil" size={20} color="#ff6b6b" />
+                  <Ionicons name="pencil" size={20} color={theme.secondaryAccent} />
                 </TouchableOpacity>
               )}
             </View>
@@ -881,16 +883,16 @@ const GroupInfoScreen = () => {
         </View>
 
         {/* Members Section */}
-        <View style={styles.section}>
+        <View style={[styles.section, { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1 }]}>
           <View style={styles.membersHeader}>
-            <Text style={styles.sectionTitle}>Members ({members.length})</Text>
+            <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Members ({members.length})</Text>
             {isAdmin && (
               <TouchableOpacity 
                 onPress={() => setShowAddMembers(!showAddMembers)}
-                style={styles.addMemberButton}
+                style={[styles.addMemberButton, { backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.2)' : 'rgba(5, 150, 105, 0.1)' }]}
               >
-                <Ionicons name={showAddMembers ? "close" : "add"} size={20} color="#00ff88" />
-                <Text style={styles.addMemberText}>
+                <Ionicons name={showAddMembers ? "close" : "add"} size={20} color={theme.success} />
+                <Text style={[styles.addMemberText, { color: theme.success }]}>
                   {showAddMembers ? "Cancel" : "Add"}
                 </Text>
               </TouchableOpacity>
@@ -900,12 +902,12 @@ const GroupInfoScreen = () => {
           {/* Add Members Search */}
           {showAddMembers && isAdmin && (
             <View style={styles.addMembersSection}>
-              <View style={styles.searchContainer}>
-                <Ionicons name="search" size={20} color="rgba(255,255,255,0.6)" style={styles.searchIcon} />
+              <View style={[styles.searchContainer, { backgroundColor: theme.surfaceElevated, borderColor: theme.border, borderWidth: 1 }]}>
+                <Ionicons name="search" size={20} color={theme.textSecondary} style={styles.searchIcon} />
                 <TextInput
-                  style={styles.searchInput}
+                  style={[styles.searchInput, { color: theme.textPrimary }]}
                   placeholder="Search for users to add..."
-                  placeholderTextColor="rgba(255,255,255,0.4)"
+                  placeholderTextColor={theme.textSecondary + '80'}
                   value={searchQuery}
                   onChangeText={setSearchQuery}
                   autoCapitalize="none"
@@ -913,7 +915,7 @@ const GroupInfoScreen = () => {
               </View>
 
               {searchLoading ? (
-                <ActivityIndicator size="small" color="#ff6b6b" style={styles.searchLoader} />
+                <ActivityIndicator size="small" color={theme.primaryAccent} style={styles.searchLoader} />
               ) : (
                 <FlatList
                   data={searchResults}
@@ -921,7 +923,7 @@ const GroupInfoScreen = () => {
                   keyExtractor={(item) => item.id}
                   ListEmptyComponent={
                     searchQuery.length > 0 ? (
-                      <Text style={styles.emptyText}>No users found</Text>
+                      <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No users found</Text>
                     ) : null
                   }
                   style={styles.searchResults}
@@ -943,36 +945,52 @@ const GroupInfoScreen = () => {
 
         {/* Privacy Settings */}
         {isAdmin && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Privacy Settings</Text>
+          <View style={[styles.section, { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1 }]}>
+            <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Privacy Settings</Text>
             
-            <View style={styles.settingItem}>
+            <View style={[styles.settingItem, { backgroundColor: 'transparent' }]}>
               <View style={styles.settingInfo}>
-                <Text style={styles.settingTitle}>Private Group</Text>
-                <Text style={styles.settingDescription}>
+                <Text style={[styles.settingTitle, { color: theme.textPrimary }]}>Private Group</Text>
+                <Text style={[styles.settingDescription, { color: theme.textSecondary }]}>
                   Only members can see this group in search
                 </Text>
               </View>
               <TouchableOpacity 
                 onPress={togglePrivacy}
-                style={[styles.toggle, group?.is_private && styles.toggleActive]}
+                style={[
+                  styles.toggle, 
+                  { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' },
+                  group?.is_private && [styles.toggleActive, { backgroundColor: theme.success }]
+                ]}
               >
-                <View style={[styles.toggleCircle, group?.is_private && styles.toggleCircleActive]} />
+                <View style={[
+                  styles.toggleCircle, 
+                  { backgroundColor: '#fff' },
+                  group?.is_private && styles.toggleCircleActive
+                ]} />
               </TouchableOpacity>
             </View>
 
-            <View style={styles.settingItem}>
+            <View style={[styles.settingItem, { backgroundColor: 'transparent' }]}>
               <View style={styles.settingInfo}>
-                <Text style={styles.settingTitle}>Auto Join</Text>
-                <Text style={styles.settingDescription}>
+                <Text style={[styles.settingTitle, { color: theme.textPrimary }]}>Auto Join</Text>
+                <Text style={[styles.settingDescription, { color: theme.textSecondary }]}>
                   Users can join automatically without approval
                 </Text>
               </View>
               <TouchableOpacity 
                 onPress={toggleAutoJoin}
-                style={[styles.toggle, group?.auto_join && styles.toggleActive]}
+                style={[
+                  styles.toggle, 
+                  { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' },
+                  group?.auto_join && [styles.toggleActive, { backgroundColor: theme.success }]
+                ]}
               >
-                <View style={[styles.toggleCircle, group?.auto_join && styles.toggleCircleActive]} />
+                <View style={[
+                  styles.toggleCircle, 
+                  { backgroundColor: '#fff' },
+                  group?.auto_join && styles.toggleCircleActive
+                ]} />
               </TouchableOpacity>
             </View>
           </View>
@@ -980,41 +998,41 @@ const GroupInfoScreen = () => {
 
         {/* Join Requests */}
         {isAdmin && !group?.auto_join && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Join Requests ({joinRequests.length})</Text>
+          <View style={[styles.section, { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1 }]}>
+            <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Join Requests ({joinRequests.length})</Text>
             
             {loadingJoinRequests ? (
-              <ActivityIndicator size="small" color="#ff6b6b" style={styles.loader} />
+              <ActivityIndicator size="small" color={theme.primaryAccent} style={styles.loader} />
             ) : joinRequests.length > 0 ? (
               <FlatList
                 data={joinRequests}
                 keyExtractor={(item) => item.id}
                 scrollEnabled={false}
                 renderItem={({ item }) => (
-                  <View style={styles.joinRequestItem}>
+                  <View style={[styles.joinRequestItem, { backgroundColor: theme.surfaceElevated, borderColor: theme.border, borderWidth: 1 }]}>
                     <Image 
                       source={{ uri: item.avatar_url || 'https://via.placeholder.com/150' }}
                       style={styles.requestAvatar}
                     />
                     <View style={styles.requestInfo}>
-                      <Text style={styles.requestUsername}>{item.username || 'Unknown User'}</Text>
-                      <Text style={styles.requestTime}>
+                      <Text style={[styles.requestUsername, { color: theme.textPrimary }]}>{item.username || 'Unknown User'}</Text>
+                      <Text style={[styles.requestTime, { color: theme.textSecondary }]}>
                         {new Date(item.created_at).toLocaleDateString()}
                       </Text>
                       {item.message && (
-                        <Text style={styles.requestMessage}>{item.message}</Text>
+                        <Text style={[styles.requestMessage, { color: theme.textPrimary }]}>{item.message}</Text>
                       )}
                     </View>
                     <View style={styles.requestActions}>
                       <TouchableOpacity
                         onPress={() => handleJoinRequest(item.id, 'approved', item.username)}
-                        style={styles.approveButton}
+                        style={[styles.approveButton, { backgroundColor: theme.success }]}
                       >
                         <Ionicons name="checkmark" size={20} color="#fff" />
                       </TouchableOpacity>
                       <TouchableOpacity
                         onPress={() => handleJoinRequest(item.id, 'rejected', item.username)}
-                        style={styles.rejectButton}
+                        style={[styles.rejectButton, { backgroundColor: theme.error }]}
                       >
                         <Ionicons name="close" size={20} color="#fff" />
                       </TouchableOpacity>
@@ -1023,24 +1041,24 @@ const GroupInfoScreen = () => {
                 )}
               />
             ) : (
-              <Text style={styles.emptyText}>No pending join requests</Text>
+              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No pending join requests</Text>
             )}
           </View>
         )}
 
         {/* Group Actions */}
-        <View style={[styles.section, styles.lastSection]}>
-          <Text style={styles.sectionTitle}>Group Actions</Text>
+        <View style={[styles.section, styles.lastSection, { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1 }]}>
+          <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Group Actions</Text>
           
           {/* Leave Group - Available to all members */}
-          <TouchableOpacity onPress={leaveGroup} style={styles.leaveButton}>
+          <TouchableOpacity onPress={leaveGroup} style={[styles.leaveButton, { backgroundColor: theme.error }]}>
             <Ionicons name="exit-outline" size={20} color="#fff" />
             <Text style={styles.leaveButtonText}>Leave Group</Text>
           </TouchableOpacity>
           
           {/* Delete Group - Admin only */}
           {isAdmin && (
-            <TouchableOpacity onPress={deleteGroup} style={styles.deleteButton}>
+            <TouchableOpacity onPress={deleteGroup} style={[styles.deleteButton, { backgroundColor: theme.error }]}>
               <Ionicons name="trash" size={20} color="#fff" />
               <Text style={styles.deleteButtonText}>Delete Group</Text>
             </TouchableOpacity>
@@ -1056,8 +1074,8 @@ const GroupInfoScreen = () => {
         onRequestClose={() => setShowMemberOptions(null)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>
+          <View style={[styles.modalContent, { backgroundColor: theme.surfaceElevated, borderColor: theme.border, borderWidth: 1 }]}>
+            <Text style={[styles.modalTitle, { color: theme.textPrimary }]}>
               Manage {showMemberOptions?.username}
             </Text>
             
@@ -1069,8 +1087,8 @@ const GroupInfoScreen = () => {
                   setShowMemberOptions(null);
                 }}
               >
-                <Ionicons name="shield-checkmark" size={20} color="#00ff88" />
-                <Text style={styles.modalOptionText}>Make Admin</Text>
+                <Ionicons name="shield-checkmark" size={20} color={theme.success} />
+                <Text style={[styles.modalOptionText, { color: theme.textPrimary }]}>Make Admin</Text>
               </TouchableOpacity>
             ) : (
               <TouchableOpacity
@@ -1080,8 +1098,8 @@ const GroupInfoScreen = () => {
                   setShowMemberOptions(null);
                 }}
               >
-                <Ionicons name="shield" size={20} color="#ff6b6b" />
-                <Text style={styles.modalOptionText}>Remove Admin</Text>
+                <Ionicons name="shield" size={20} color={theme.error} />
+                <Text style={[styles.modalOptionText, { color: theme.textPrimary }]}>Remove Admin</Text>
               </TouchableOpacity>
             )}
             
@@ -1092,15 +1110,15 @@ const GroupInfoScreen = () => {
                 setShowMemberOptions(null);
               }}
             >
-              <Ionicons name="person-remove" size={20} color="#ff6b6b" />
-              <Text style={styles.modalOptionText}>Remove from Group</Text>
+              <Ionicons name="person-remove" size={20} color={theme.error} />
+              <Text style={[styles.modalOptionText, { color: theme.textPrimary }]}>Remove from Group</Text>
             </TouchableOpacity>
             
             <TouchableOpacity
               style={styles.modalCancelOption}
               onPress={() => setShowMemberOptions(null)}
             >
-              <Text style={styles.modalCancelText}>Cancel</Text>
+              <Text style={[styles.modalCancelText, { color: theme.textSecondary }]}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </View>
