@@ -10,7 +10,7 @@ import { useTheme } from '../context/ThemeContext';
 const SettingsScreen = () => {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const { isDarkMode, toggleDarkMode } = useTheme();
+  const { isDarkMode, toggleDarkMode, theme } = useTheme();
   const [notifications, setNotifications] = useState(true);
   const [privateAccount, setPrivateAccount] = useState(false);
   const [autoplay, setAutoplay] = useState(true);
@@ -133,36 +133,36 @@ const SettingsScreen = () => {
   const renderSettingItem = (icon, title, description, value, onToggle) => (
     <View style={styles.settingItem}>
       <LinearGradient
-        colors={['rgba(255, 215, 0, 0.08)', 'rgba(255, 215, 0, 0.04)']} 
+        colors={[isDarkMode ? 'rgba(95, 115, 242, 0.08)' : 'rgba(79, 70, 229, 0.08)', isDarkMode ? 'rgba(95, 115, 242, 0.04)' : 'rgba(79, 70, 229, 0.04)']} 
         style={styles.settingItemGradient}
       >
         <View style={styles.settingIconContainer}>
           <LinearGradient
-            colors={['#ffd700', '#ffed4e']}
+            colors={[theme.primaryAccent, theme.secondaryAccent]}
             style={styles.iconGradient}
           >
-            <Ionicons name={icon} size={20} color="#000" />
+            <Ionicons name={icon} size={20} color="#fff" />
           </LinearGradient>
         </View>
         <View style={styles.settingContent}>
-          <Text style={styles.settingTitle}>{title}</Text>
-          <Text style={styles.settingDescription}>{description}</Text>
+          <Text style={[styles.settingTitle, { color: theme.textPrimary }]}>{title}</Text>
+          <Text style={[styles.settingDescription, { color: theme.textSecondary }]}>{description}</Text>
         </View>
         <Switch
           value={value}
           onValueChange={onToggle}
-          trackColor={{ false: '#444', true: 'rgba(255, 215, 0, 0.3)' }}
-          thumbColor={value ? '#ffd700' : '#888'}
-          ios_backgroundColor="#444"
+          trackColor={{ false: isDarkMode ? '#444' : '#d1d5db', true: isDarkMode ? 'rgba(95, 115, 242, 0.3)' : 'rgba(79, 70, 229, 0.3)' }}
+          thumbColor={value ? theme.primaryAccent : (isDarkMode ? '#888' : '#f3f4f6')}
+          ios_backgroundColor={isDarkMode ? '#444' : '#d1d5db'}
         />
       </LinearGradient>
     </View>
   );
 
   return (
-    <LinearGradient colors={['#0f0f23', '#1a1a2e', '#16213e']} style={styles.container}>
+    <LinearGradient colors={theme.backgrounds} style={styles.container}>
       <LinearGradient
-        colors={['rgba(255, 215, 0, 0.2)', 'rgba(255, 215, 0, 0.1)', 'transparent']}
+        colors={[isDarkMode ? 'rgba(95, 115, 242, 0.15)' : 'rgba(79, 70, 229, 0.1)', isDarkMode ? 'rgba(95, 115, 242, 0.05)' : 'rgba(79, 70, 229, 0.03)', 'transparent']}
         style={[styles.header, { paddingTop: insets.top > 0 ? insets.top : 50 }]}
       >
         <TouchableOpacity 
@@ -170,21 +170,21 @@ const SettingsScreen = () => {
           style={styles.backButton}
         >
           <LinearGradient
-            colors={['#ffd700', '#ffed4e']}
+            colors={[theme.primaryAccent, theme.secondaryAccent]}
             style={styles.backButtonGradient}
           >
-            <Ionicons name="arrow-back" size={24} color="#000" />
+            <Ionicons name="arrow-back" size={24} color="#fff" />
           </LinearGradient>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Settings</Text>
+        <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>Settings</Text>
         {isVerified && (
           <View style={styles.headerVerifiedBadge}>
             <LinearGradient
-              colors={['#ffd700', '#ffed4e']}
+              colors={[theme.primaryAccent, theme.secondaryAccent]}
               style={styles.headerVerifiedGradient}
             >
-              <Ionicons name="checkmark-circle" size={12} color="#000" />
-              <Text style={styles.headerVerifiedText}>VERIFIED</Text>
+              <Ionicons name="checkmark-circle" size={12} color="#fff" />
+              <Text style={[styles.headerVerifiedText, { color: '#fff' }]}>VERIFIED</Text>
             </LinearGradient>
           </View>
         )}
@@ -196,10 +196,10 @@ const SettingsScreen = () => {
       >
         <View style={styles.section}>
           <LinearGradient
-            colors={['rgba(255, 215, 0, 0.15)', 'rgba(255, 215, 0, 0.08)']}
+            colors={[isDarkMode ? 'rgba(95, 115, 242, 0.15)' : 'rgba(79, 70, 229, 0.12)', isDarkMode ? 'rgba(95, 115, 242, 0.05)' : 'rgba(79, 70, 229, 0.04)']}
             style={styles.sectionHeader}
           >
-            <Text style={styles.sectionTitle}>✨ Appearance</Text>
+            <Text style={[styles.sectionTitle, { color: theme.primaryAccent }]}>✨ Appearance</Text>
           </LinearGradient>
           {renderSettingItem(
             'moon',
@@ -212,10 +212,10 @@ const SettingsScreen = () => {
 
         <View style={styles.section}>
           <LinearGradient
-            colors={['rgba(255, 215, 0, 0.15)', 'rgba(255, 215, 0, 0.08)']}
+            colors={[isDarkMode ? 'rgba(95, 115, 242, 0.15)' : 'rgba(79, 70, 229, 0.12)', isDarkMode ? 'rgba(95, 115, 242, 0.05)' : 'rgba(79, 70, 229, 0.04)']}
             style={styles.sectionHeader}
           >
-            <Text style={styles.sectionTitle}>🔒 Privacy</Text>
+            <Text style={[styles.sectionTitle, { color: theme.primaryAccent }]}>🔒 Privacy</Text>
           </LinearGradient>
           {renderSettingItem(
             'lock-closed',
@@ -228,10 +228,10 @@ const SettingsScreen = () => {
 
         <View style={styles.section}>
           <LinearGradient
-            colors={['rgba(255, 215, 0, 0.15)', 'rgba(255, 215, 0, 0.08)']}
+            colors={[isDarkMode ? 'rgba(95, 115, 242, 0.15)' : 'rgba(79, 70, 229, 0.12)', isDarkMode ? 'rgba(95, 115, 242, 0.05)' : 'rgba(79, 70, 229, 0.04)']}
             style={styles.sectionHeader}
           >
-            <Text style={styles.sectionTitle}>🔔 Notifications</Text>
+            <Text style={[styles.sectionTitle, { color: theme.primaryAccent }]}>🔔 Notifications</Text>
           </LinearGradient>
           {renderSettingItem(
             'notifications',
@@ -244,10 +244,10 @@ const SettingsScreen = () => {
 
         <View style={styles.section}>
           <LinearGradient
-            colors={['rgba(255, 215, 0, 0.15)', 'rgba(255, 215, 0, 0.08)']}
+            colors={[isDarkMode ? 'rgba(95, 115, 242, 0.15)' : 'rgba(79, 70, 229, 0.12)', isDarkMode ? 'rgba(95, 115, 242, 0.05)' : 'rgba(79, 70, 229, 0.04)']}
             style={styles.sectionHeader}
           >
-            <Text style={styles.sectionTitle}>🎬 Content</Text>
+            <Text style={[styles.sectionTitle, { color: theme.primaryAccent }]}>🎬 Content</Text>
           </LinearGradient>
           {renderSettingItem(
             'play-circle',
@@ -260,10 +260,10 @@ const SettingsScreen = () => {
 
         <View style={styles.section}>
           <LinearGradient
-            colors={['rgba(255, 215, 0, 0.15)', 'rgba(255, 215, 0, 0.08)']}
+            colors={[isDarkMode ? 'rgba(95, 115, 242, 0.15)' : 'rgba(79, 70, 229, 0.12)', isDarkMode ? 'rgba(95, 115, 242, 0.05)' : 'rgba(79, 70, 229, 0.04)']}
             style={styles.sectionHeader}
           >
-            <Text style={styles.sectionTitle}>👤 Account</Text>
+            <Text style={[styles.sectionTitle, { color: theme.primaryAccent }]}>👤 Account</Text>
           </LinearGradient>
           
           {/* Verification Status */}
@@ -278,54 +278,54 @@ const SettingsScreen = () => {
             }}
           >
             <LinearGradient
-              colors={['rgba(255, 215, 0, 0.08)', 'rgba(255, 215, 0, 0.04)']} 
+              colors={[isDarkMode ? 'rgba(95, 115, 242, 0.08)' : 'rgba(79, 70, 229, 0.08)', isDarkMode ? 'rgba(95, 115, 242, 0.04)' : 'rgba(79, 70, 229, 0.04)']} 
               style={styles.linkItemGradient}
             >
               <View style={styles.settingIconContainer}>
                 <LinearGradient
-                  colors={isVerified ? ['#ff4757', '#ff3838'] : ['#ffd700', '#ffed4e']}
+                  colors={isVerified ? ['#ff4757', '#ff3838'] : [theme.primaryAccent, theme.secondaryAccent]}
                   style={styles.iconGradient}
                 >
-                  <Ionicons name="checkmark-circle" size={20} color={isVerified ? "#fff" : "#000"} />
+                  <Ionicons name="checkmark-circle" size={20} color="#fff" />
                 </LinearGradient>
               </View>
               <View style={styles.settingContent}>
                 <View style={styles.verificationTitleContainer}>
-                  <Text style={styles.settingTitle}>Verify Account</Text>
+                  <Text style={[styles.settingTitle, { color: theme.textPrimary }]}>Verify Account</Text>
                   {isVerified && (
                     <View style={styles.verifiedBadge}>
                       <Text style={styles.verifiedText}>Verified</Text>
                     </View>
                   )}
                 </View>
-                <Text style={styles.settingDescription}>
+                <Text style={[styles.settingDescription, { color: theme.textSecondary }]}>
                   {isVerified 
                     ? 'Your account is verified with a red badge' 
                     : 'Get a red verification badge (₹70/month)'}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#ffd700" />
+              <Ionicons name="chevron-forward" size={20} color={theme.primaryAccent} />
             </LinearGradient>
           </TouchableOpacity>
           
           <TouchableOpacity style={styles.linkItem}>
             <LinearGradient
-              colors={['rgba(255, 215, 0, 0.08)', 'rgba(255, 215, 0, 0.04)']} 
+              colors={[isDarkMode ? 'rgba(95, 115, 242, 0.08)' : 'rgba(79, 70, 229, 0.08)', isDarkMode ? 'rgba(95, 115, 242, 0.04)' : 'rgba(79, 70, 229, 0.04)']} 
               style={styles.linkItemGradient}
             >
               <View style={styles.settingIconContainer}>
                 <LinearGradient
-                  colors={['#ffd700', '#ffed4e']}
+                  colors={[theme.primaryAccent, theme.secondaryAccent]}
                   style={styles.iconGradient}
                 >
-                  <Ionicons name="shield" size={20} color="#000" />
+                  <Ionicons name="shield" size={20} color="#fff" />
                 </LinearGradient>
               </View>
               <View style={styles.settingContent}>
-                <Text style={styles.settingTitle}>Privacy Policy</Text>
-                <Text style={styles.settingDescription}>Read our privacy policy</Text>
+                <Text style={[styles.settingTitle, { color: theme.textPrimary }]}>Privacy Policy</Text>
+                <Text style={[styles.settingDescription, { color: theme.textSecondary }]}>Read our privacy policy</Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#ffd700" />
+              <Ionicons name="chevron-forward" size={20} color={theme.primaryAccent} />
             </LinearGradient>
           </TouchableOpacity>
           <TouchableOpacity 
@@ -333,22 +333,22 @@ const SettingsScreen = () => {
             onPress={() => navigation.navigate('BlockedUsers')}
           >
             <LinearGradient
-              colors={['rgba(255, 215, 0, 0.08)', 'rgba(255, 215, 0, 0.04)']} 
+              colors={[isDarkMode ? 'rgba(95, 115, 242, 0.08)' : 'rgba(79, 70, 229, 0.08)', isDarkMode ? 'rgba(95, 115, 242, 0.04)' : 'rgba(79, 70, 229, 0.04)']} 
               style={styles.linkItemGradient}
             >
               <View style={styles.settingIconContainer}>
                 <LinearGradient
-                  colors={['#ffd700', '#ffed4e']}
+                  colors={[theme.primaryAccent, theme.secondaryAccent]}
                   style={styles.iconGradient}
                 >
-                  <Ionicons name="shield-outline" size={20} color="#000" />
+                  <Ionicons name="shield-outline" size={20} color="#fff" />
                 </LinearGradient>
               </View>
               <View style={styles.settingContent}>
-                <Text style={styles.settingTitle}>Blocked Users</Text>
-                <Text style={styles.settingDescription}>View and manage blocked users</Text>
+                <Text style={[styles.settingTitle, { color: theme.textPrimary }]}>Blocked Users</Text>
+                <Text style={[styles.settingDescription, { color: theme.textSecondary }]}>View and manage blocked users</Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#ffd700" />
+              <Ionicons name="chevron-forward" size={20} color={theme.primaryAccent} />
             </LinearGradient>
           </TouchableOpacity>
 
@@ -357,43 +357,43 @@ const SettingsScreen = () => {
             onPress={() => navigation.navigate('ChangePassword')}
           >
             <LinearGradient
-              colors={['rgba(255, 215, 0, 0.08)', 'rgba(255, 215, 0, 0.04)']} 
+              colors={[isDarkMode ? 'rgba(95, 115, 242, 0.08)' : 'rgba(79, 70, 229, 0.08)', isDarkMode ? 'rgba(95, 115, 242, 0.04)' : 'rgba(79, 70, 229, 0.04)']} 
               style={styles.linkItemGradient}
             >
               <View style={styles.settingIconContainer}>
                 <LinearGradient
-                  colors={['#ffd700', '#ffed4e']}
+                  colors={[theme.primaryAccent, theme.secondaryAccent]}
                   style={styles.iconGradient}
                 >
-                  <Ionicons name="key-outline" size={20} color="#000" />
+                  <Ionicons name="key-outline" size={20} color="#fff" />
                 </LinearGradient>
               </View>
               <View style={styles.settingContent}>
-                <Text style={styles.settingTitle}>Change Password</Text>
-                <Text style={styles.settingDescription}>Update your account password</Text>
+                <Text style={[styles.settingTitle, { color: theme.textPrimary }]}>Change Password</Text>
+                <Text style={[styles.settingDescription, { color: theme.textSecondary }]}>Update your account password</Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#ffd700" />
+              <Ionicons name="chevron-forward" size={20} color={theme.primaryAccent} />
             </LinearGradient>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.linkItem}>
             <LinearGradient
-              colors={['rgba(255, 215, 0, 0.08)', 'rgba(255, 215, 0, 0.04)']} 
+              colors={[isDarkMode ? 'rgba(95, 115, 242, 0.08)' : 'rgba(79, 70, 229, 0.08)', isDarkMode ? 'rgba(95, 115, 242, 0.04)' : 'rgba(79, 70, 229, 0.04)']} 
               style={styles.linkItemGradient}
             >
               <View style={styles.settingIconContainer}>
                 <LinearGradient
-                  colors={['#ffd700', '#ffed4e']}
+                  colors={[theme.primaryAccent, theme.secondaryAccent]}
                   style={styles.iconGradient}
                 >
-                  <Ionicons name="document-text" size={20} color="#000" />
+                  <Ionicons name="document-text" size={20} color="#fff" />
                 </LinearGradient>
               </View>
               <View style={styles.settingContent}>
-                <Text style={styles.settingTitle}>Terms of Service</Text>
-                <Text style={styles.settingDescription}>Read our terms of service</Text>
+                <Text style={[styles.settingTitle, { color: theme.textPrimary }]}>Terms of Service</Text>
+                <Text style={[styles.settingDescription, { color: theme.textSecondary }]}>Read our terms of service</Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#ffd700" />
+              <Ionicons name="chevron-forward" size={20} color={theme.primaryAccent} />
             </LinearGradient>
           </TouchableOpacity>
 
@@ -430,7 +430,7 @@ const SettingsScreen = () => {
               </View>
               <View style={styles.settingContent}>
                 <Text style={[styles.settingTitle, { color: '#ff4757' }]}>Delete Account</Text>
-                <Text style={styles.settingDescription}>Permanently delete your account and data</Text>
+                <Text style={[styles.settingDescription, { color: theme.textSecondary }]}>Permanently delete your account and data</Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color="#ff4757" />
             </LinearGradient>

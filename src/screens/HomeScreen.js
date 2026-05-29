@@ -27,7 +27,7 @@ const isSmallScreen = screenWidth < 380;
 const HomeScreen = () => {
   const navigation = useNavigation();
   const { unreadCount: notificationUnreadCount } = useNotifications();
-  const { isDarkMode } = useTheme();
+  const { isDarkMode, theme } = useTheme();
   const [stories, setStories] = useState([]);
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -603,7 +603,7 @@ const HomeScreen = () => {
               onPress={() => navigation.navigate('Trending')}
               activeOpacity={0.7}
             >
-              <MaterialIcons name="whatshot" size={24} color={isDarkMode ? "rgba(255, 255, 255, 0.9)" : "#333333"} />
+              <MaterialIcons name="whatshot" size={24} color={theme.textPrimary} />
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -611,7 +611,7 @@ const HomeScreen = () => {
               onPress={() => setShowTermsModal(true)}
               activeOpacity={0.7}
             >
-              <MaterialIcons name="duo" size={24} color={isDarkMode ? "rgba(255, 255, 255, 0.9)" : "#333333"} />
+              <MaterialIcons name="duo" size={24} color={theme.textPrimary} />
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -619,7 +619,7 @@ const HomeScreen = () => {
               onPress={() => navigation.navigate('Notifications')}
               activeOpacity={0.7}
             >
-              <Ionicons name="notifications-outline" size={24} color={isDarkMode ? "rgba(255, 255, 255, 0.9)" : "#333333"} />
+              <Ionicons name="notifications-outline" size={24} color={theme.textPrimary} />
               {notificationUnreadCount > 0 && (
                 <View style={styles.notificationBadge}>
                   <Text style={styles.notificationBadgeText}>{notificationUnreadCount}</Text>
@@ -632,7 +632,7 @@ const HomeScreen = () => {
               onPress={() => navigation.navigate('Search')}
               activeOpacity={0.7}
             >
-              <MaterialIcons name="search" size={24} color={isDarkMode ? "rgba(255, 255, 255, 0.9)" : "#333333"} />
+              <MaterialIcons name="search" size={24} color={theme.textPrimary} />
             </TouchableOpacity>
           </View>
         </View>
@@ -764,10 +764,10 @@ const HomeScreen = () => {
                   <LinearGradient
                     colors={isDarkMode ? 
                       (item.has_unviewed ? 
-                        ['#1E90FF', '#4169E1', '#1E90FF'] : 
+                        [theme.primaryAccent, theme.secondaryAccent, theme.primaryAccent] : 
                         ['rgba(255, 255, 255, 0.15)', 'rgba(255, 255, 255, 0.1)', 'rgba(255, 255, 255, 0.05)']) :
                       (item.has_unviewed ? 
-                        ['#1E90FF', '#4169E1', '#1E90FF'] : 
+                        [theme.primaryAccent, theme.secondaryAccent, theme.primaryAccent] : 
                         ['#d0d0d0', '#e0e0e0', '#d0d0d0'])}
                     start={{x: 0, y: 0}}
                     end={{x: 1, y: 1}}
@@ -792,9 +792,9 @@ const HomeScreen = () => {
   return (
     <>
       <StatusBar style={isDarkMode ? "light" : "dark"} />
-      <SafeAreaView style={[styles.safeArea, { backgroundColor: isDarkMode ? '#1a1d2e' : '#f5f7fa' }]} edges={['top', 'left', 'right']}>
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.backgroundSolid }]} edges={['top', 'left', 'right']}>
         <View
-          style={[styles.container, { backgroundColor: isDarkMode ? '#1a1d2e' : '#f5f7fa' }]}
+          style={[styles.container, { backgroundColor: theme.backgroundSolid }]}
         >
           <FlatList
             data={posts}
@@ -821,7 +821,7 @@ const HomeScreen = () => {
             ListEmptyComponent={() => (
               loading ? (
                 <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="large" color="#ff00ff" />
+                  <ActivityIndicator size="large" color={theme.primaryAccent} />
                 </View>
               ) : (
                 <View style={styles.emptyContainer}>
@@ -838,8 +838,8 @@ const HomeScreen = () => {
                   setHasMorePosts(true);
                   loadDataWithCache(true); // Force refresh
                 }}
-                colors={['#ff00ff', '#00ffff']}
-                tintColor="#ff00ff"
+                colors={[theme.primaryAccent, theme.secondaryAccent]}
+                tintColor={theme.primaryAccent}
               />
             }
             onEndReached={loadMorePosts}
@@ -847,7 +847,7 @@ const HomeScreen = () => {
             ListFooterComponent={() => (
               loadingMore ? (
                 <View style={styles.loadingMoreContainer}>
-                  <ActivityIndicator size="small" color="#ff00ff" />
+                  <ActivityIndicator size="small" color={theme.primaryAccent} />
                   <Text style={styles.loadingMoreText}>Loading more posts...</Text>
                 </View>
               ) : !hasMorePosts && posts.length > 0 ? (

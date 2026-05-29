@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getTheme } from '../config/theme';
 
 const ThemeContext = createContext();
 
@@ -135,10 +136,13 @@ export const ThemeProvider = ({ children }) => {
     }
   };
 
+  const theme = getTheme(isDarkMode);
+
   const value = {
     isDarkMode,
     toggleDarkMode,
-    loading
+    loading,
+    theme
   };
 
   // Don't render children until theme is loaded from cache (prevents flash)

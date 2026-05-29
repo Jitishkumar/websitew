@@ -4,9 +4,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme } from '../context/ThemeContext';
 
 const LoginScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
+  const { isDarkMode, theme } = useTheme();
   const [identifier, setIdentifier] = useState(''); // email or username
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -92,28 +94,28 @@ const LoginScreen = ({ navigation }) => {
 
   return (
     <LinearGradient
-      colors={['#1a1a2e', '#16213e', '#0f3460']}
+      colors={theme.backgrounds}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
     >
       <View style={styles.logoContainer}>
         <LinearGradient
-          colors={['#ffd700', '#ffb300', '#ff8f00']}
-          style={styles.logoGradient}
+          colors={[theme.primaryAccent, theme.secondaryAccent]}
+          style={[styles.logoGradient, { shadowColor: theme.primaryAccent }]}
         >
           <Text style={styles.logo}>✨ Flexx</Text>
         </LinearGradient>
-        <Text style={styles.subtitle}>Premium Social Experience</Text>
+        <Text style={[styles.subtitle, { color: theme.textSecondary }]}>Premium Social Experience</Text>
       </View>
 
       <View style={styles.formContainer}>
-        <View style={styles.inputContainer}>
-          <Ionicons name="person-outline" size={20} color="#ffd700" style={styles.inputIcon} />
+        <View style={[styles.inputContainer, { borderColor: theme.border, backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)' }]}>
+          <Ionicons name="person-outline" size={20} color={theme.primaryAccent} style={styles.inputIcon} />
           <TextInput
-            style={styles.input}
+            style={[styles.input, { color: theme.textPrimary }]}
             placeholder="Email or Username"
-            placeholderTextColor="rgba(255,255,255,0.5)"
+            placeholderTextColor={isDarkMode ? 'rgba(226, 232, 240, 0.4)' : 'rgba(15, 23, 42, 0.4)'}
             value={identifier}
             onChangeText={setIdentifier}
             autoCapitalize="none"
@@ -121,12 +123,12 @@ const LoginScreen = ({ navigation }) => {
           />
         </View>
 
-        <View style={styles.inputContainer}>
-          <Ionicons name="lock-closed-outline" size={20} color="#ffd700" style={styles.inputIcon} />
+        <View style={[styles.inputContainer, { borderColor: theme.border, backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)' }]}>
+          <Ionicons name="lock-closed-outline" size={20} color={theme.primaryAccent} style={styles.inputIcon} />
           <TextInput
-            style={styles.input}
+            style={[styles.input, { color: theme.textPrimary }]}
             placeholder="Password"
-            placeholderTextColor="rgba(255,255,255,0.5)"
+            placeholderTextColor={isDarkMode ? 'rgba(226, 232, 240, 0.4)' : 'rgba(15, 23, 42, 0.4)'}
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -135,24 +137,24 @@ const LoginScreen = ({ navigation }) => {
         </View>
 
         <TouchableOpacity
-          style={[styles.button, loading && { opacity: 0.7 }]}
+          style={[styles.button, { shadowColor: theme.primaryAccent }, loading && { opacity: 0.7 }]}
           onPress={handleLogin}
           disabled={loading}
         >
           <LinearGradient
-            colors={['#ffd700', '#ffb300', '#ff8f00']}
+            colors={[theme.primaryAccent, theme.secondaryAccent]}
             style={styles.buttonGradient}
           >
             <Text style={styles.buttonText}>
               {loading ? 'Logging in...' : 'Login'}
             </Text>
-            {!loading && <Ionicons name="arrow-forward" size={20} color="#1a1a2e" style={styles.buttonIcon} />}
+            {!loading && <Ionicons name="arrow-forward" size={20} color="#ffffff" style={styles.buttonIcon} />}
           </LinearGradient>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.signupButton} onPress={() => navigation.navigate('Signup')}>
-          <Text style={styles.signupText}>Don't have an account? </Text>
-          <Text style={styles.signupTextBold}>Sign up</Text>
+          <Text style={[styles.signupText, { color: theme.textSecondary }]}>Don't have an account? </Text>
+          <Text style={[styles.signupTextBold, { color: theme.primaryAccent }]}>Sign up</Text>
         </TouchableOpacity>
       </View>
     </LinearGradient>

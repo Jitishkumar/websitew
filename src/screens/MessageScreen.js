@@ -111,7 +111,7 @@ const MessageAudioPlayer = ({ audioUrl, duration }) => {
 
 const MessageScreen = () => {
   const insets = useSafeAreaInsets();
-  const { isDarkMode } = useTheme();
+  const { isDarkMode, theme } = useTheme();
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false); // Start false for instant cache display
@@ -1784,9 +1784,9 @@ const MessageScreen = () => {
 
   // Memoized message item component to prevent unnecessary re-renders
   const MessageItem = React.memo(({ item, onLongPress, onMediaPress, recipientReadReceipts }) => {
-    // Define colors based on dark mode - SWAPPED: red for sent, white for received
-    const myMessageColors = isDarkMode ? ['#333', '#222'] : ['#6F2746', '#6F2746'];
-    const theirMessageColors = isDarkMode ? ['#ff00ff', '#9900ff'] : ['#FFFFFF', '#F5F5F5'];
+    // Define colors based on dark mode
+    const myMessageColors = [theme.primaryAccent, theme.primaryAccent];
+    const theirMessageColors = isDarkMode ? [theme.surface, theme.surfaceElevated] : ['#FFFFFF', '#F1F5F9'];
     
     return (
       <View style={[
@@ -1966,7 +1966,7 @@ const MessageScreen = () => {
               ) : (
                 <Text style={[
                   styles.messageText,
-                  !isDarkMode && item.sender !== 'me' && { color: '#333' }
+                  { color: item.sender === 'me' ? '#ffffff' : theme.textPrimary }
                 ]}>{item.text}</Text>
               )}
             </TouchableOpacity>
@@ -2163,13 +2163,13 @@ const MessageScreen = () => {
           ) : null}
           
           <View style={styles.messageFooter}>
-            <Text style={styles.timestamp}>{item.timestamp}</Text>
+            <Text style={[styles.timestamp, { color: item.sender === 'me' ? 'rgba(255,255,255,0.7)' : theme.textSecondary }]}>{item.timestamp}</Text>
             {item.sender === 'me' && currentUserReadReceipts && (
               <View style={styles.readStatus}>
                 <Ionicons 
                   name={item.read && recipientReadReceipts ? "checkmark-done" : "checkmark"} 
                   size={14} 
-                  color={item.read && recipientReadReceipts ? "#34aadc" : "rgba(255, 255, 255, 0.5)"} 
+                  color={item.read && recipientReadReceipts ? theme.secondaryAccent : "rgba(255, 255, 255, 0.6)"} 
                 />
               </View>
             )}
@@ -2386,7 +2386,7 @@ const MessageScreen = () => {
               onPress={sendMediaMessage}
             >
               <LinearGradient
-                colors={['#ff00ff', '#9900ff']}
+                colors={[theme.primaryAccent, theme.secondaryAccent]}
                 style={styles.mediaPreviewSendGradient}
               >
                 <Ionicons name="send" size={24} color="#fff" />
@@ -2472,7 +2472,7 @@ const MessageScreen = () => {
         />
       ) : (
         <LinearGradient 
-          colors={isDarkMode ? ['#0a0a2a', '#1a1a3a'] : ['#CDDAEF', '#CDDAEF']} 
+          colors={theme.backgrounds} 
           style={styles.backgroundGradient}
         />
       )}
@@ -2480,20 +2480,17 @@ const MessageScreen = () => {
         <KeyboardAvoidingView 
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={{ flex: 1 }}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
         >
-          <View style={styles.container}>
-            <StatusBar style="light" />
-            
             <LinearGradient
-              colors={isDarkMode ? ['#1a1a1a', '#000'] : ['#CDDAEF', '#CDDAEF']}
+              colors={[theme.surface, theme.surfaceElevated]}
               style={[styles.header, { paddingTop: insets.top }]}
             >
               <TouchableOpacity 
                 style={styles.backButton} 
                 onPress={() => navigation.goBack()}
               >
-                <Ionicons name="arrow-back" size={24} color={isDarkMode ? "#fff" : "#333"} />
+                <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
               </TouchableOpacity>
               
               <View style={styles.profileInfo}>
@@ -2503,19 +2500,18 @@ const MessageScreen = () => {
                 />
                 <TouchableOpacity onPress={() => navigation.navigate('MessageSettings', { recipientId, recipientName })}>
                 <View>
-                  <Text style={[styles.headerTitle, !isDarkMode && { color: '#333' }]} numberOfLines={1} ellipsizeMode="tail">{getDisplayName()}</Text>
+                  <Text style={[styles.headerTitle, { color: theme.textPrimary }]} numberOfLines={1} ellipsizeMode="tail">{getDisplayName()}</Text>
                   {recipientOnlineStatus ? (
-                    <Text style={[styles.onlineStatusText, !isDarkMode && { color: '#666' }]}>
+                    <Text style={[styles.onlineStatusText, { color: theme.textSecondary }]}>
                       {formatLastActive(recipientOnlineStatus)}
                     </Text>
                   ) : (
-                    <Text style={[styles.onlineStatusText, !isDarkMode && { color: '#666' }]}>Flexx</Text>
+                    <Text style={[styles.onlineStatusText, { color: theme.textSecondary }]}>Flexx</Text>
                   )}
                 </View>
               </TouchableOpacity>
               </View>
-              
-              <View style={styles.headerActions}>
+                <View style={styles.headerActions}>
                 <TouchableOpacity 
                   style={styles.headerButton}
                   onPress={() => {
@@ -2535,13 +2531,13 @@ const MessageScreen = () => {
                     Alert.alert('Chat Background', 'Choose an option', options);
                   }}
                 >
-                  <Ionicons name="image-outline" size={22} color={isDarkMode ? "#fff" : "#6F2746"} />
+                  <Ionicons name="image-outline" size={22} color={theme.textPrimary} />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.headerButton}>
-                  <Ionicons name="call-outline" size={22} color={isDarkMode ? "#fff" : "#6F2746"} />
+                  <Ionicons name="call-outline" size={22} color={theme.textPrimary} />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.headerButton}>
-                  <Ionicons name="videocam-outline" size={22} color={isDarkMode ? "#fff" : "#6F2746"} />
+                  <Ionicons name="videocam-outline" size={22} color={theme.textPrimary} />
                 </TouchableOpacity>
               </View>
             </LinearGradient>
@@ -2620,7 +2616,7 @@ const MessageScreen = () => {
             />
 
             <LinearGradient
-              colors={isDarkMode ? ['#1a1a3a', '#0d0d2a'] : ['#6F2746', '#6F2746']}
+              colors={[theme.surface, theme.surfaceElevated]}
               start={{x: 0, y: 0}}
               end={{x: 1, y: 1}}
               style={[styles.inputContainer, { paddingBottom: insets.bottom > 0 ? insets.bottom : 10 }]}
@@ -2632,7 +2628,7 @@ const MessageScreen = () => {
                     <Ionicons 
                       name={isPlayingPreview ? 'pause-circle' : 'play-circle'} 
                       size={32} 
-                      color="#ff00ff" 
+                      color={theme.primaryAccent} 
                     />
                   </TouchableOpacity>
                   <View style={styles.audioPreviewInfo}>
@@ -2671,7 +2667,7 @@ const MessageScreen = () => {
                   <Ionicons 
                     name={isRecording ? 'stop' : 'mic'} 
                     size={24} 
-                    color={isRecording ? '#ff4444' : (inputText.trim() ? '#666' : '#ff00ff')} 
+                    color={isRecording ? '#ff4444' : (inputText.trim() ? theme.textSecondary : theme.primaryAccent)} 
                   />
                 </TouchableOpacity>
                 
@@ -2690,7 +2686,7 @@ const MessageScreen = () => {
                   disabled={(!inputText.trim() && !audioUri) || isRecording}
                 >
                   <LinearGradient
-                    colors={(inputText.trim() || audioUri) ? ['#ff00ff', '#9900ff'] : ['#666', '#444']}
+                    colors={(inputText.trim() || audioUri) ? [theme.primaryAccent, theme.secondaryAccent] : (isDarkMode ? ['#444', '#333'] : ['#e5e7eb', '#d1d5db'])}
                     style={styles.sendButton}
                   >
                     <Ionicons name="send" size={24} color="#fff" />

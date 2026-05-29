@@ -19,7 +19,7 @@ const SearchScreen = () => {
   const [loading, setLoading] = useState(false);
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const { isDarkMode } = useTheme();
+  const { isDarkMode, theme } = useTheme();
   const { setActiveVideo } = useVideo();
 
   // Search for users when query changes
@@ -283,7 +283,7 @@ const SearchScreen = () => {
   const renderUserItem = ({ item }) => (
     <View>
       <TouchableOpacity 
-        style={[styles.userItem, !isDarkMode && styles.userItemLight]}
+        style={[styles.userItem, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}
         onPress={() => handleUserPress(item.id)}
         activeOpacity={0.8}
       >
@@ -291,7 +291,7 @@ const SearchScreen = () => {
         
         <View style={styles.avatarContainer}>
           <LinearGradient
-            colors={['#ff00ff', '#ff6b9d', '#00ffff']}
+            colors={[theme.primaryAccent, theme.secondaryAccent]}
             style={styles.avatarBorder}
           >
             <Image 
@@ -303,7 +303,7 @@ const SearchScreen = () => {
           {item.isVerified && (
             <View style={styles.verifiedBadgeContainer}>
               <LinearGradient
-                colors={['#ff00ff', '#00ffff']}
+                colors={[theme.primaryAccent, theme.secondaryAccent]}
                 style={styles.verifiedBadgeGradient}
               >
                 <Ionicons name="checkmark" size={12} color="#fff" />
@@ -314,19 +314,19 @@ const SearchScreen = () => {
         
         <View style={styles.userInfo}>
           <View style={styles.usernameContainer}>
-            <Text style={[styles.username, !isDarkMode && styles.usernameLight]}>{item.username}</Text>
+            <Text style={[styles.username, { color: theme.textPrimary }]}>{item.username}</Text>
           </View>
-          <Text style={[styles.fullName, !isDarkMode && styles.fullNameLight]}>{item.full_name || ''}</Text>
+          <Text style={[styles.fullName, { color: theme.textSecondary }]}>{item.full_name || ''}</Text>
         </View>
       </TouchableOpacity>
     </View>
   );
 
   return (
-    <View style={[styles.container, !isDarkMode && styles.containerLight]}>
+    <View style={[styles.container, { backgroundColor: theme.backgroundSolid }]}>
       <View>
         <LinearGradient
-          colors={isDarkMode ? ['#1a1a2e', '#16213e', '#0f3460'] : ['#f0f0f5', '#e6e6f0', '#d9d9e6']}
+          colors={theme.backgrounds}
           start={{x: 0, y: 0}}
           end={{x: 1, y: 1}}
           style={[styles.header, { paddingTop: insets.top > 0 ? insets.top : 50 }]}
@@ -334,10 +334,10 @@ const SearchScreen = () => {
           <View style={styles.headerGlow} />
           
           <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={24} color={isDarkMode ? "#ff00ff" : "#6200ee"} />
+            <Ionicons name="arrow-back" size={24} color={theme.primaryAccent} />
           </TouchableOpacity>
           
-          <Text style={[styles.headerTitle, !isDarkMode && styles.headerTitleLight]}>Search</Text>
+          <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>Search</Text>
         </LinearGradient>
       </View>
       
@@ -345,17 +345,15 @@ const SearchScreen = () => {
         <View style={styles.searchGlow} />
         
         <LinearGradient
-          colors={isDarkMode ? 
-            ['rgba(26, 26, 46, 0.9)', 'rgba(22, 33, 62, 0.8)'] : 
-            ['rgba(240, 240, 245, 0.9)', 'rgba(230, 230, 240, 0.8)']}
+          colors={[theme.surface, theme.surfaceElevated]}
           style={styles.searchInputContainer}
         >
-          <Ionicons name="search" size={20} color={isDarkMode ? "#ff00ff" : "#6200ee"} style={styles.searchIcon} />
+          <Ionicons name="search" size={20} color={theme.primaryAccent} style={styles.searchIcon} />
           
           <TextInput
-            style={[styles.searchInput, !isDarkMode && styles.searchInputLight]}
+            style={[styles.searchInput, { color: theme.textPrimary }]}
             placeholder={activeTab === 'users' ? "Search for users..." : "Search for media..."}
-            placeholderTextColor={isDarkMode ? "#999" : "#666"}
+            placeholderTextColor={isDarkMode ? 'rgba(226, 232, 240, 0.4)' : 'rgba(15, 23, 42, 0.4)'}
             value={searchQuery}
             onChangeText={setSearchQuery}
             autoCapitalize="none"
@@ -363,7 +361,7 @@ const SearchScreen = () => {
           
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={20} color={isDarkMode ? "#ff00ff" : "#6200ee"} />
+              <Ionicons name="close-circle" size={20} color={theme.primaryAccent} />
             </TouchableOpacity>
           )}
         </LinearGradient>
@@ -371,29 +369,27 @@ const SearchScreen = () => {
 
       <View style={styles.tabContainer}>
         <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'users' && (isDarkMode ? styles.activeTabButton : styles.activeTabButtonLight)]}
+          style={[styles.tabButton, { backgroundColor: theme.surface }, activeTab === 'users' && { backgroundColor: theme.primaryAccent }]}
           onPress={() => setActiveTab('users')}
         >
-          <Text style={[styles.tabButtonText, activeTab === 'users' && styles.activeTabButtonText]}>Users</Text>
+          <Text style={[styles.tabButtonText, { color: theme.textSecondary }, activeTab === 'users' && { color: '#ffffff' }]}>Users</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'media' && (isDarkMode ? styles.activeTabButton : styles.activeTabButtonLight)]}
+          style={[styles.tabButton, { backgroundColor: theme.surface }, activeTab === 'media' && { backgroundColor: theme.primaryAccent }]}
           onPress={() => setActiveTab('media')}
         >
-          <Text style={[styles.tabButtonText, activeTab === 'media' && styles.activeTabButtonText]}>Media</Text>
+          <Text style={[styles.tabButtonText, { color: theme.textSecondary }, activeTab === 'media' && { color: '#ffffff' }]}>Media</Text>
         </TouchableOpacity>
       </View>
 
       {loading ? (
         <View style={styles.loadingContainer}>
           <LinearGradient
-            colors={isDarkMode ? 
-              ['rgba(255, 0, 255, 0.2)', 'rgba(0, 255, 255, 0.1)'] : 
-              ['rgba(98, 0, 238, 0.2)', 'rgba(0, 150, 255, 0.1)']}
+            colors={[theme.surface, theme.surfaceElevated]}
             style={styles.loadingGradient}
           >
-            <ActivityIndicator size="large" color={isDarkMode ? "#ff00ff" : "#6200ee"} />
-            <Text style={[styles.loadingText, !isDarkMode && styles.loadingTextLight]}>Searching...</Text>
+            <ActivityIndicator size="large" color={theme.primaryAccent} />
+            <Text style={[styles.loadingText, { color: theme.textPrimary }]}>Searching...</Text>
           </LinearGradient>
         </View>
       ) : (
@@ -409,14 +405,12 @@ const SearchScreen = () => {
               searchQuery.length > 0 ? (
                 <View style={styles.emptyContainer}>
                   <LinearGradient
-                    colors={isDarkMode ? 
-                      ['rgba(255, 0, 255, 0.1)', 'rgba(0, 255, 255, 0.05)'] : 
-                      ['rgba(98, 0, 238, 0.1)', 'rgba(0, 150, 255, 0.05)']}
+                    colors={[theme.surface, theme.surfaceElevated]}
                     style={styles.emptyGradient}
                   >
-                    <Ionicons name="search" size={60} color={isDarkMode ? "#ff00ff" : "#6200ee"} />
-                    <Text style={[styles.emptyText, !isDarkMode && styles.emptyTextLight]}>{activeTab === 'users' ? 'No users found' : 'No media found'}</Text>
-                    <Text style={[styles.emptySubtext, !isDarkMode && styles.emptySubtextLight]}>Try searching with different keywords</Text>
+                    <Ionicons name="search" size={60} color={theme.primaryAccent} />
+                    <Text style={[styles.emptyText, { color: theme.textPrimary }]}>{activeTab === 'users' ? 'No users found' : 'No media found'}</Text>
+                    <Text style={[styles.emptySubtext, { color: theme.textSecondary }]}>Try searching with different keywords</Text>
                   </LinearGradient>
                 </View>
               ) : null

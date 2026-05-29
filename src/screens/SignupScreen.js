@@ -5,10 +5,12 @@ import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTheme } from '../context/ThemeContext';
 
 const SignupScreen = () => {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const { isDarkMode, theme } = useTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
@@ -59,7 +61,7 @@ const SignupScreen = () => {
 
   return (
     <LinearGradient
-      colors={['#1a1a2e', '#16213e', '#0f3460']}
+      colors={theme.backgrounds}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.container}
@@ -67,45 +69,45 @@ const SignupScreen = () => {
       <View style={[styles.header, { paddingTop: insets.top > 0 ? insets.top + 10 : 50 }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <LinearGradient
-            colors={['rgba(255, 215, 0, 0.1)', 'rgba(255, 215, 0, 0.05)']}
+            colors={[isDarkMode ? 'rgba(95, 115, 242, 0.15)' : 'rgba(79, 70, 229, 0.1)', isDarkMode ? 'rgba(95, 115, 242, 0.05)' : 'rgba(79, 70, 229, 0.05)']}
             style={styles.backButtonGradient}
           >
-            <Ionicons name="arrow-back" size={24} color="#ffd700" />
+            <Ionicons name="arrow-back" size={24} color={theme.primaryAccent} />
           </LinearGradient>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Create Account</Text>
+        <Text style={[styles.headerTitle, { color: theme.primaryAccent }]}>Create Account</Text>
       </View>
 
       <View style={styles.content}>
         <View style={styles.logoContainer}>
           <LinearGradient
-            colors={['#ffd700', '#ffb300', '#ff8f00']}
-            style={styles.logoGradient}
+            colors={[theme.primaryAccent, theme.secondaryAccent]}
+            style={[styles.logoGradient, { shadowColor: theme.primaryAccent }]}
           >
             <Text style={styles.logo}>✨ Join Flexx</Text>
           </LinearGradient>
-          <Text style={styles.subtitle}>Premium Social Experience Awaits</Text>
+          <Text style={[styles.subtitle, { color: theme.textSecondary }]}>Premium Social Experience Awaits</Text>
         </View>
 
         <View style={styles.formContainer}>
-          <View style={styles.inputContainer}>
-            <Ionicons name="person-outline" size={20} color="#ffd700" style={styles.inputIcon} />
+          <View style={[styles.inputContainer, { borderColor: theme.border, backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)' }]}>
+            <Ionicons name="person-outline" size={20} color={theme.primaryAccent} style={styles.inputIcon} />
             <TextInput 
-              style={styles.input}
+              style={[styles.input, { color: theme.textPrimary }]}
               placeholder="Username"
-              placeholderTextColor="rgba(255,255,255,0.5)"
+              placeholderTextColor={isDarkMode ? 'rgba(226, 232, 240, 0.4)' : 'rgba(15, 23, 42, 0.4)'}
               value={username}
               onChangeText={setUsername}
               autoCapitalize="none"
             />
           </View>
 
-          <View style={styles.inputContainer}>
-            <Ionicons name="mail-outline" size={20} color="#ffd700" style={styles.inputIcon} />
+          <View style={[styles.inputContainer, { borderColor: theme.border, backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)' }]}>
+            <Ionicons name="mail-outline" size={20} color={theme.primaryAccent} style={styles.inputIcon} />
             <TextInput 
-              style={styles.input}
+              style={[styles.input, { color: theme.textPrimary }]}
               placeholder="Email (Gmail or Hotmail only)"
-              placeholderTextColor="rgba(255,255,255,0.5)"
+              placeholderTextColor={isDarkMode ? 'rgba(226, 232, 240, 0.4)' : 'rgba(15, 23, 42, 0.4)'}
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
@@ -113,12 +115,12 @@ const SignupScreen = () => {
             />
           </View>
 
-          <View style={styles.inputContainer}>
-            <Ionicons name="lock-closed-outline" size={20} color="#ffd700" style={styles.inputIcon} />
+          <View style={[styles.inputContainer, { borderColor: theme.border, backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)' }]}>
+            <Ionicons name="lock-closed-outline" size={20} color={theme.primaryAccent} style={styles.inputIcon} />
             <TextInput 
-              style={styles.input}
+              style={[styles.input, { color: theme.textPrimary }]}
               placeholder="Password"
-              placeholderTextColor="rgba(255,255,255,0.5)"
+              placeholderTextColor={isDarkMode ? 'rgba(226, 232, 240, 0.4)' : 'rgba(15, 23, 42, 0.4)'}
               value={password}
               onChangeText={setPassword}
               secureTextEntry
@@ -127,18 +129,18 @@ const SignupScreen = () => {
           </View>
 
           <TouchableOpacity 
-            style={[styles.signupButton, loading && styles.buttonDisabled]}
+            style={[styles.signupButton, { shadowColor: theme.primaryAccent }, loading && styles.buttonDisabled]}
             onPress={handleSignup}
             disabled={loading}
           >
             <LinearGradient
-              colors={['#ffd700', '#ffb300', '#ff8f00']}
+              colors={[theme.primaryAccent, theme.secondaryAccent]}
               style={styles.buttonGradient}
             >
               <Text style={styles.signupButtonText}>
                 {loading ? 'Creating Account...' : 'Sign Up'}
               </Text>
-              {!loading && <Ionicons name="sparkles" size={20} color="#1a1a2e" style={styles.buttonIcon} />}
+              {!loading && <Ionicons name="sparkles" size={20} color="#ffffff" style={styles.buttonIcon} />}
             </LinearGradient>
           </TouchableOpacity>
         </View>

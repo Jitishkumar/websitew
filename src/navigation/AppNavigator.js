@@ -7,6 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNotifications } from '../context/NotificationContext';
 import { useMessages } from '../context/MessageContext';
+import { useTheme } from '../context/ThemeContext';
 import HomeScreen from '../screens/HomeScreen';
 import LoginScreen from '../screens/LoginScreen';
 import SignupScreen from '../screens/SignupScreen';
@@ -60,6 +61,11 @@ const Tab = createBottomTabNavigator();
 const OptimizedTabBar = ({ state, descriptors, navigation }) => {
   const insets = useSafeAreaInsets();
   const { unreadCount: messageUnreadCount, fetchUnreadCount } = useMessages();
+  const { isDarkMode, theme } = useTheme();
+
+  const activeColor = theme.primaryAccent;
+  const inactiveColor = isDarkMode ? '#94A3B8' : '#64748B';
+  const activeBg = isDarkMode ? 'rgba(95, 115, 242, 0.15)' : 'rgba(79, 70, 229, 0.1)';
   
   // Hide tab bar on ReelsScreen
   const currentRoute = state.routes[state.index];
@@ -104,9 +110,9 @@ const OptimizedTabBar = ({ state, descriptors, navigation }) => {
       right: 0,
       height: 80 + (insets.bottom > 0 ? insets.bottom : 10),
       paddingBottom: insets.bottom > 0 ? insets.bottom : 10,
-      backgroundColor: '#1a1a1a',
+      backgroundColor: theme.surface,
       borderTopWidth: 1,
-      borderTopColor: 'rgba(255, 255, 255, 0.1)',
+      borderTopColor: theme.border,
     }}>
       
       {/* Tab buttons container */}
@@ -156,7 +162,7 @@ const OptimizedTabBar = ({ state, descriptors, navigation }) => {
                   borderRadius: 20,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  backgroundColor: isFocused ? 'rgba(0, 122, 255, 0.15)' : 'transparent',
+                  backgroundColor: isFocused ? activeBg : 'transparent',
                   overflow: 'visible',
                 }}>
                   
@@ -176,7 +182,7 @@ const OptimizedTabBar = ({ state, descriptors, navigation }) => {
                         alignItems: 'center',
                         paddingHorizontal: 4,
                         borderWidth: 2,
-                        borderColor: '#1a1a1a',
+                        borderColor: theme.surface,
                       }}
                     >
                       <Text style={{
@@ -190,16 +196,16 @@ const OptimizedTabBar = ({ state, descriptors, navigation }) => {
                   )}
                   
                   <Ionicons
-                    name={getTabIcon(route.name, isFocused, isFocused ? '#007AFF' : '#666')}
+                    name={getTabIcon(route.name, isFocused)}
                     size={24}
-                    color={isFocused ? '#007AFF' : '#666'}
+                    color={isFocused ? activeColor : inactiveColor}
                   />
                 </View>
                 
                 {/* Label */}
                 <Text
                   style={{
-                    color: isFocused ? '#007AFF' : '#888',
+                    color: isFocused ? activeColor : inactiveColor,
                     fontSize: 11,
                     fontWeight: isFocused ? '600' : 'normal',
                     marginTop: 4,

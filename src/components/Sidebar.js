@@ -9,8 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { donate } from '../lib/donate';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
-
-
+import { useTheme } from '../context/ThemeContext';
 
 const Sidebar = ({ isVisible, onClose }) => {
   const navigation = useNavigation();
@@ -20,6 +19,7 @@ const Sidebar = ({ isVisible, onClose }) => {
   const [suggestedFriends, setSuggestedFriends] = useState([]);
   const [isFemaleProfle, setIsFemaleProfle] = useState(false);
   const insets = useSafeAreaInsets();
+  const { isDarkMode, theme } = useTheme();
 
   useEffect(() => {
     if (isVisible) {
@@ -237,7 +237,7 @@ const Sidebar = ({ isVisible, onClose }) => {
       >
       <View style={styles.container}>
         <LinearGradient
-          colors={['#1a1a2e', '#16213e', '#0f3460']}
+          colors={theme.backgrounds}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={[
@@ -251,8 +251,8 @@ const Sidebar = ({ isVisible, onClose }) => {
           ]}
         >
           <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-            <View style={styles.closeButtonContainer}>
-              <Ionicons name="close" size={24} color="#ffd700" />
+            <View style={[styles.closeButtonContainer, { backgroundColor: isDarkMode ? 'rgba(95, 115, 242, 0.1)' : 'rgba(79, 70, 229, 0.05)', borderColor: theme.border }]}>
+              <Ionicons name="close" size={24} color={theme.primaryAccent} />
             </View>
           </TouchableOpacity>
 
@@ -263,12 +263,12 @@ const Sidebar = ({ isVisible, onClose }) => {
             }}
           >
             <LinearGradient
-              colors={['rgba(255, 215, 0, 0.1)', 'rgba(255, 215, 0, 0.05)']}
+              colors={isDarkMode ? ['rgba(95, 115, 242, 0.12)', 'rgba(95, 115, 242, 0.06)'] : ['rgba(79, 70, 229, 0.08)', 'rgba(79, 70, 229, 0.04)']}
               style={styles.menuItemGradient}
             >
-              <Ionicons name="heart" size={24} color="#ffd700" />
-              <Text style={styles.menuText}>Confessions</Text>
-              <Ionicons name="chevron-forward" size={16} color="rgba(255, 215, 0, 0.6)" />
+              <Ionicons name="heart" size={24} color={theme.primaryAccent} />
+              <Text style={[styles.menuText, { color: theme.textPrimary }]}>Confessions</Text>
+              <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} />
             </LinearGradient>
           </TouchableOpacity>
 
@@ -278,12 +278,12 @@ const Sidebar = ({ isVisible, onClose }) => {
               onPress={() => setShowVisitsModal(true)}
             >
               <LinearGradient
-                colors={['rgba(156, 136, 255, 0.1)', 'rgba(156, 136, 255, 0.05)']}
+                colors={['rgba(156, 136, 255, 0.12)', 'rgba(156, 136, 255, 0.06)']}
                 style={styles.menuItemGradient}
               >
                 <Ionicons name="eye" size={24} color="#9c88ff" />
-                <Text style={styles.menuText}>Profile Visits</Text>
-                <Ionicons name="chevron-forward" size={16} color="rgba(156, 136, 255, 0.6)" />
+                <Text style={[styles.menuText, { color: theme.textPrimary }]}>Profile Visits</Text>
+                <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} />
               </LinearGradient>
             </TouchableOpacity>
           )}
@@ -296,23 +296,23 @@ const Sidebar = ({ isVisible, onClose }) => {
             }}
           >
             <LinearGradient
-              colors={['rgba(102, 126, 234, 0.1)', 'rgba(102, 126, 234, 0.05)']}
+              colors={isDarkMode ? ['rgba(95, 115, 242, 0.12)', 'rgba(95, 115, 242, 0.06)'] : ['rgba(79, 70, 229, 0.08)', 'rgba(79, 70, 229, 0.04)']}
               style={styles.menuItemGradient}
             >
-              <Ionicons name="settings" size={24} color="#667eea" />
-              <Text style={styles.menuText}>Settings</Text>
-              <Ionicons name="chevron-forward" size={16} color="rgba(102, 126, 234, 0.6)" />
+              <Ionicons name="settings" size={24} color={theme.primaryAccent} />
+              <Text style={[styles.menuText, { color: theme.textPrimary }]}>Settings</Text>
+              <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} />
             </LinearGradient>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.menuItem} onPress={handleAddAccount}>
             <LinearGradient
-              colors={['rgba(255, 107, 107, 0.1)', 'rgba(255, 107, 107, 0.05)']}
+              colors={['rgba(255, 107, 107, 0.12)', 'rgba(255, 107, 107, 0.06)']}
               style={styles.menuItemGradient}
             >
               <Ionicons name="person-add" size={24} color="#ff6b6b" />
-              <Text style={styles.menuText}>Add Account</Text>
-              <Ionicons name="chevron-forward" size={16} color="rgba(255, 107, 107, 0.6)" />
+              <Text style={[styles.menuText, { color: theme.textPrimary }]}>Add Account</Text>
+              <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} />
             </LinearGradient>
           </TouchableOpacity>
 
@@ -325,12 +325,12 @@ const Sidebar = ({ isVisible, onClose }) => {
              }}
            >
              <LinearGradient
-               colors={['rgba(255, 215, 0, 0.15)', 'rgba(255, 215, 0, 0.08)']}
+               colors={isDarkMode ? ['rgba(56, 189, 248, 0.12)', 'rgba(56, 189, 248, 0.06)'] : ['rgba(2, 132, 199, 0.08)', 'rgba(2, 132, 199, 0.04)']}
                style={styles.menuItemGradient}
              >
-               <Ionicons name="diamond" size={24} color="#ffd700" />
-               <Text style={styles.menuText}>Donate to Founder</Text>
-               <Ionicons name="chevron-forward" size={16} color="rgba(255, 215, 0, 0.6)" />
+               <Ionicons name="diamond" size={24} color={theme.secondaryAccent} />
+               <Text style={[styles.menuText, { color: theme.textPrimary }]}>Donate to Founder</Text>
+               <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} />
              </LinearGradient>
            </TouchableOpacity>
 
@@ -343,12 +343,12 @@ const Sidebar = ({ isVisible, onClose }) => {
              }}
            >
              <LinearGradient
-               colors={['rgba(255, 193, 7, 0.15)', 'rgba(255, 193, 7, 0.08)']}
+               colors={isDarkMode ? ['rgba(245, 158, 11, 0.12)', 'rgba(245, 158, 11, 0.06)'] : ['rgba(217, 119, 6, 0.08)', 'rgba(217, 119, 6, 0.04)']}
                style={styles.menuItemGradient}
              >
-               <Ionicons name="trophy" size={24} color="#ffc107" />
-               <Text style={styles.menuText}>Wealthiest Donors</Text>
-               <Ionicons name="chevron-forward" size={16} color="rgba(255, 193, 7, 0.6)" />
+               <Ionicons name="trophy" size={24} color={theme.warning} />
+               <Text style={[styles.menuText, { color: theme.textPrimary }]}>Wealthiest Donors</Text>
+               <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} />
              </LinearGradient>
            </TouchableOpacity>
 
@@ -359,12 +359,12 @@ const Sidebar = ({ isVisible, onClose }) => {
             onPress={() => navigation.navigate('NearbyPeople')}
           >
             <LinearGradient
-              colors={['rgba(76, 175, 80, 0.1)', 'rgba(76, 175, 80, 0.05)']}
+              colors={['rgba(76, 175, 80, 0.12)', 'rgba(76, 175, 80, 0.06)']}
               style={styles.menuItemGradient}
             >
-              <Ionicons name="location" size={24} color="#4CAF50" />
-              <Text style={styles.menuText}>Nearby People</Text>
-              <Ionicons name="chevron-forward" size={16} color="rgba(76, 175, 80, 0.6)" />
+              <Ionicons name="location" size={24} color={theme.success} />
+              <Text style={[styles.menuText, { color: theme.textPrimary }]}>Nearby People</Text>
+              <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} />
             </LinearGradient>
           </TouchableOpacity>
           
@@ -374,24 +374,24 @@ const Sidebar = ({ isVisible, onClose }) => {
             onPress={() => setShowSuggestedFriendsModal(true)}
           >
             <LinearGradient
-              colors={['rgba(33, 150, 243, 0.1)', 'rgba(33, 150, 243, 0.05)']}
+              colors={isDarkMode ? ['rgba(56, 189, 248, 0.12)', 'rgba(56, 189, 248, 0.06)'] : ['rgba(2, 132, 199, 0.08)', 'rgba(2, 132, 199, 0.04)']}
               style={styles.menuItemGradient}
             >
-              <Ionicons name="people" size={24} color="#2196F3" />
-              <Text style={styles.menuText}>Suggested Friends</Text>
-              <Ionicons name="chevron-forward" size={16} color="rgba(33, 150, 243, 0.6)" />
+              <Ionicons name="people" size={24} color={theme.secondaryAccent} />
+              <Text style={[styles.menuText, { color: theme.textPrimary }]}>Suggested Friends</Text>
+              <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} />
             </LinearGradient>
           </TouchableOpacity>
 
           {/* Logout */}
            <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
             <LinearGradient
-              colors={['rgba(255, 82, 82, 0.1)', 'rgba(255, 82, 82, 0.05)']}
+              colors={['rgba(255, 82, 82, 0.12)', 'rgba(255, 82, 82, 0.06)']}
               style={styles.menuItemGradient}
             >
-              <Ionicons name="log-out" size={24} color="#ff5252" />
-              <Text style={styles.menuText}>Logout</Text>
-              <Ionicons name="chevron-forward" size={16} color="rgba(255, 82, 82, 0.6)" />
+              <Ionicons name="log-out" size={24} color={theme.error} />
+              <Text style={[styles.menuText, { color: theme.textPrimary }]}>Logout</Text>
+              <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} />
             </LinearGradient>
           </TouchableOpacity>
         </LinearGradient>
@@ -412,10 +412,10 @@ const Sidebar = ({ isVisible, onClose }) => {
       >
         <View style={styles.modalOverlay}>
           <LinearGradient
-            colors={['#1a1a2e', '#16213e', '#0f3460']}
-            style={styles.modalContent}
+            colors={theme.backgrounds}
+            style={[styles.modalContent, { borderColor: theme.border, borderWidth: 1 }]}
           >
-            <Text style={styles.modalTitle}>Suggested Friends</Text>
+            <Text style={[styles.modalTitle, { color: theme.textPrimary }]}>Suggested Friends</Text>
             
             {suggestedFriends.length > 0 ? (
               <FlatList
@@ -423,7 +423,7 @@ const Sidebar = ({ isVisible, onClose }) => {
                 keyExtractor={(item) => item.id}
                 renderItem={({ item }) => (
                   <TouchableOpacity 
-                    style={styles.friendItem}
+                    style={[styles.friendItem, { borderBottomColor: theme.border }]}
                     onPress={() => {
                       setShowSuggestedFriendsModal(false);
                       onClose();
@@ -432,11 +432,11 @@ const Sidebar = ({ isVisible, onClose }) => {
                   >
                     <Image 
                       source={item.avatar_url ? { uri: item.avatar_url } : require('../../assets/defaultavatar.png')} 
-                      style={styles.avatar} 
+                      style={[styles.avatar, { borderColor: theme.secondaryAccent }]} 
                     />
                     <View style={styles.friendInfo}>
-                      <Text style={styles.friendName}>{item.full_name || item.username}</Text>
-                      <Text style={styles.friendUsername}>@{item.username}</Text>
+                      <Text style={[styles.friendName, { color: theme.textPrimary }]}>{item.full_name || item.username}</Text>
+                      <Text style={[styles.friendUsername, { color: theme.textSecondary }]}>@{item.username}</Text>
                     </View>
                     <TouchableOpacity 
                       style={styles.followButton}
@@ -447,7 +447,7 @@ const Sidebar = ({ isVisible, onClose }) => {
                       }}
                     >
                       <LinearGradient
-                        colors={['#2196F3', '#1976D2']}
+                        colors={[theme.primaryAccent, theme.secondaryAccent]}
                         style={styles.followButtonGradient}
                       >
                         <Text style={styles.followButtonText}>Follow</Text>
@@ -459,9 +459,9 @@ const Sidebar = ({ isVisible, onClose }) => {
               />
             ) : (
               <View style={styles.emptyState}>
-                <Ionicons name="people-outline" size={48} color="#2196F3" />
-                <Text style={styles.emptyStateText}>No suggestions available</Text>
-                <Text style={styles.emptyStateSubtext}>We'll show you people you might want to follow here</Text>
+                <Ionicons name="people-outline" size={48} color={theme.secondaryAccent} />
+                <Text style={[styles.emptyStateText, { color: theme.textPrimary }]}>No suggestions available</Text>
+                <Text style={[styles.emptyStateSubtext, { color: theme.textSecondary }]}>We'll show you people you might want to follow here</Text>
               </View>
             )}
             
@@ -470,10 +470,10 @@ const Sidebar = ({ isVisible, onClose }) => {
               onPress={() => setShowSuggestedFriendsModal(false)}
             >
               <LinearGradient
-                colors={['rgba(255, 255, 255, 0.1)', 'rgba(255, 255, 255, 0.05)']}
+                colors={isDarkMode ? ['rgba(255, 255, 255, 0.1)', 'rgba(255, 255, 255, 0.05)'] : ['rgba(0, 0, 0, 0.05)', 'rgba(0, 0, 0, 0.02)']}
                 style={styles.buttonGradient}
               >
-                <Text style={styles.modalButtonText}>Close</Text>
+                <Text style={[styles.modalButtonText, { color: theme.textPrimary }]}>Close</Text>
               </LinearGradient>
             </TouchableOpacity>
           </LinearGradient>
@@ -489,32 +489,31 @@ const Sidebar = ({ isVisible, onClose }) => {
       >
         <View style={styles.modalOverlay}>
           <LinearGradient
-            colors={['#1a1a2e', '#16213e', '#0f3460']}
-            style={styles.modalContent}
+            colors={theme.backgrounds}
+            style={[styles.modalContent, { borderColor: theme.border, borderWidth: 1 }]}
           >
             <ScrollView>
-              <Text style={styles.modalTitle}>How to Use Confessions</Text>
-              <Text style={styles.modalText}>
+              <Text style={[styles.modalTitle, { color: theme.textPrimary }]}>How to Use Confessions</Text>
+              <Text style={[styles.modalText, { color: theme.textPrimary }]}>
                 In the Confession feature, you can write about any person, office, building, or place by their name.
               </Text>
-              <Text style={styles.modalText}>
+              <Text style={[styles.modalText, { color: theme.textSecondary }]}>
                 • Search for a person, place, or building by typing their name
               </Text>
-              <Text style={styles.modalText}>
+              <Text style={[styles.modalText, { color: theme.textSecondary }]}>
                 • Select from the suggestions that appear
               </Text>
-              <Text style={styles.modalText}>
+              <Text style={[styles.modalText, { color: theme.textSecondary }]}>
                 • If what you're looking for isn't in the suggestions, you can create a new entry
               </Text>
-              <Text style={styles.modalText}>
+              <Text style={[styles.modalText, { color: theme.textSecondary }]}>
                 • Write your confession and optionally add media
               </Text>
-              <Text style={styles.modalText}>
+              <Text style={[styles.modalText, { color: theme.textSecondary }]}>
                 • Choose whether to remain anonymous
               </Text>
-              <Text style={styles.modalText}>
+              <Text style={[styles.modalText, { color: theme.textPrimary }]}>
                 Share your thoughts, experiences, or feelings about places and people.
-                
               </Text>
             </ScrollView>
             <View style={styles.modalButtonContainer}>
@@ -527,7 +526,7 @@ const Sidebar = ({ isVisible, onClose }) => {
                 }}
               >
                 <LinearGradient
-                  colors={['#ffd700', '#ffb300']}
+                  colors={[theme.primaryAccent, theme.secondaryAccent]}
                   style={styles.buttonGradient}
                 >
                   <Text style={styles.modalButtonText}>Continue to Confessions</Text>
@@ -538,17 +537,16 @@ const Sidebar = ({ isVisible, onClose }) => {
                 onPress={() => setShowConfessionInfoModal(false)}
               >
                 <LinearGradient
-                  colors={['rgba(255, 255, 255, 0.1)', 'rgba(255, 255, 255, 0.05)']}
+                  colors={isDarkMode ? ['rgba(255, 255, 255, 0.1)', 'rgba(255, 255, 255, 0.05)'] : ['rgba(0, 0, 0, 0.05)', 'rgba(0, 0, 0, 0.02)']}
                   style={styles.buttonGradient}
                 >
-                  <Text style={styles.modalButtonText}>Close</Text>
+                  <Text style={[styles.modalButtonText, { color: theme.textPrimary }]}>Close</Text>
                 </LinearGradient>
               </TouchableOpacity>
             </View>
           </LinearGradient>
         </View>
       </Modal>
-
     </>
   );
 };

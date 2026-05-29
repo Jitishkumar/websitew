@@ -7,6 +7,7 @@ import { supabase } from '../lib/supabase';
 import { useNotifications } from '../context/NotificationContext';
 import { useMessages } from '../context/MessageContext';
 import { useAccount } from '../context/AccountContext';
+import { useTheme } from '../context/ThemeContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -14,6 +15,7 @@ const MessagesScreen = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const { fetchUnreadCount, markConversationAsRead } = useMessages();
+  const { isDarkMode, theme } = useTheme();
   const route = useRoute();
   const [conversations, setConversations] = useState([]);
   const [groups, setGroups] = useState([]);
@@ -1026,12 +1028,12 @@ const MessagesScreen = () => {
   );
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: '#1a1a1a' }]}>
+    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: theme.backgroundSolid }]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#fff" />
+          <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Messages</Text>
+        <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>Messages</Text>
         <TouchableOpacity 
           style={styles.refreshButton}
           onPress={handleRefresh}
@@ -1040,19 +1042,19 @@ const MessagesScreen = () => {
           <Ionicons 
             name={refreshing ? "refresh" : "refresh-outline"} 
             size={24} 
-            color="#007AFF" 
+            color={theme.primaryAccent} 
           />
         </TouchableOpacity>
       </View>
 
       {/* Search Container */}
       <View style={styles.searchContainer}>
-        <View style={styles.searchInputContainer}>
-          <Ionicons name="search" size={20} color="#007AFF" style={styles.searchIcon} />
+        <View style={[styles.searchInputContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <Ionicons name="search" size={20} color={theme.primaryAccent} style={styles.searchIcon} />
           <TextInput
-            style={styles.searchInput}
+            style={[styles.searchInput, { color: theme.textPrimary }]}
             placeholder={activeTab === 'communities' ? "Search groups..." : "Search conversations..."}
-            placeholderTextColor="rgba(255,255,255,0.5)"
+            placeholderTextColor={isDarkMode ? 'rgba(226, 232, 240, 0.4)' : 'rgba(15, 23, 42, 0.4)'}
             value={searchQuery}
             onChangeText={(text) => {
               setSearchQuery(text);
@@ -1062,7 +1064,7 @@ const MessagesScreen = () => {
             }}
           />
           {searchLoading && (
-            <ActivityIndicator size="small" color="#007AFF" style={styles.searchLoader} />
+            <ActivityIndicator size="small" color={theme.primaryAccent} style={styles.searchLoader} />
           )}
         </View>
       </View>
@@ -1073,24 +1075,24 @@ const MessagesScreen = () => {
             style={[styles.tab, activeTab === 'inbox' && styles.activeTab]}
             onPress={() => setActiveTab('inbox')}
           >
-            <View style={[styles.tabButton, activeTab === 'inbox' && styles.activeTabButton]}>
-              <Text style={[styles.tabText, activeTab === 'inbox' && styles.activeTabText]}>Inbox</Text>
+            <View style={[styles.tabButton, { backgroundColor: theme.surface }, activeTab === 'inbox' && { backgroundColor: theme.primaryAccent }]}>
+              <Text style={[styles.tabText, { color: theme.textSecondary }, activeTab === 'inbox' && { color: '#ffffff' }]}>Inbox</Text>
             </View>
           </TouchableOpacity>
           <TouchableOpacity 
             style={[styles.tab, activeTab === 'communities' && styles.activeTab]}
             onPress={() => setActiveTab('communities')}
           >
-            <View style={[styles.tabButton, activeTab === 'communities' && styles.activeTabButton]}>
-              <Text style={[styles.tabText, activeTab === 'communities' && styles.activeTabText]}>Communities</Text>
+            <View style={[styles.tabButton, { backgroundColor: theme.surface }, activeTab === 'communities' && { backgroundColor: theme.primaryAccent }]}>
+              <Text style={[styles.tabText, { color: theme.textSecondary }, activeTab === 'communities' && { color: '#ffffff' }]}>Communities</Text>
             </View>
           </TouchableOpacity>
         </View>
 
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#667eea" />
-            <Text style={styles.loadingText}>Loading conversations...</Text>
+            <ActivityIndicator size="large" color={theme.primaryAccent} />
+            <Text style={[styles.loadingText, { color: theme.textPrimary }]}>Loading conversations...</Text>
           </View>
         ) : activeTab === 'inbox' ? (
           <FlatList
@@ -1122,8 +1124,8 @@ const MessagesScreen = () => {
               >
                 <LinearGradient
                   colors={conversation.unread > 0 ? 
-                    ['rgba(102, 126, 234, 0.2)', 'rgba(156, 136, 255, 0.1)'] : 
-                    ['rgba(255, 255, 255, 0.05)', 'rgba(255, 255, 255, 0.02)']}
+                    (isDarkMode ? ['rgba(95, 115, 242, 0.2)', 'rgba(56, 189, 248, 0.1)'] : ['rgba(79, 70, 229, 0.12)', 'rgba(2, 132, 199, 0.06)']) : 
+                    (isDarkMode ? ['rgba(255, 255, 255, 0.05)', 'rgba(255, 255, 255, 0.02)'] : ['rgba(0, 0, 0, 0.02)', 'rgba(0, 0, 0, 0.01)'])}
                   style={styles.messageItemGradient}
                 >
                 <View style={styles.avatarContainer}>
@@ -1132,22 +1134,22 @@ const MessagesScreen = () => {
                     style={styles.avatar}
                   />
                   {onlineStatus[conversation.otherUserId]?.is_online && (
-                    <View style={styles.onlineIndicator} />
+                    <View style={[styles.onlineIndicator, { borderColor: theme.surface }]} />
                   )}
                 </View>
                 <View style={styles.messageContent}>
                   <View style={styles.messageHeader}>
-                    <Text style={[styles.name, conversation.unread > 0 && styles.unreadName]}>
+                    <Text style={[styles.name, { color: theme.textPrimary }, conversation.unread > 0 && { color: theme.primaryAccent, fontWeight: 'bold' }]}>
                       {conversation.name || 'User'}
                     </Text>
-                    <Text style={styles.time}>{formatRelativeTime(conversation.timestamp)}</Text>
+                    <Text style={[styles.time, { color: theme.textSecondary }]}>{formatRelativeTime(conversation.timestamp)}</Text>
                   </View>
                   <View style={styles.lastMessageContainer}>
                     {conversation.hasMedia && (
-                      <Ionicons name="image" size={16} color="rgba(255,255,255,0.5)" style={styles.mediaIcon} />
+                      <Ionicons name="image" size={16} color={theme.textSecondary} style={styles.mediaIcon} />
                     )}
                     <Text 
-                      style={[styles.messageText, conversation.unread > 0 && styles.unreadMessageText]} 
+                      style={[styles.messageText, { color: theme.textSecondary }, conversation.unread > 0 && { color: theme.textPrimary }]} 
                       numberOfLines={1}
                     >
                       {conversation.lastMessage || 'No message'}
@@ -1171,8 +1173,8 @@ const MessagesScreen = () => {
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={handleRefresh}
-                colors={['#667eea']}
-                tintColor="#667eea"
+                colors={[theme.primaryAccent]}
+                tintColor={theme.primaryAccent}
               />
             }
             ListEmptyComponent={() => {
@@ -1246,7 +1248,7 @@ const MessagesScreen = () => {
                   style={styles.messageItem}
                 >
                   <LinearGradient
-                    colors={['rgba(255, 255, 255, 0.08)', 'rgba(255, 255, 255, 0.04)']}
+                    colors={isDarkMode ? ['rgba(255, 255, 255, 0.05)', 'rgba(255, 255, 255, 0.02)'] : ['rgba(0, 0, 0, 0.02)', 'rgba(0, 0, 0, 0.01)']}
                     style={styles.messageItemGradient}
                   >
                     <View style={styles.avatarContainer}>
@@ -1285,18 +1287,19 @@ const MessagesScreen = () => {
                     </View>
                     <View style={styles.messageContent}>
                       <View style={styles.messageHeader}>
-                        <Text style={styles.groupName}>
+                        <Text style={[styles.groupName, { color: theme.textPrimary }]}>
                           {group.name}
                         </Text>
-                        <Text style={styles.time}>{formatRelativeTime(group.timestamp)}</Text>
+                        <Text style={[styles.time, { color: theme.textSecondary }]}>{formatRelativeTime(group.timestamp)}</Text>
                       </View>
                       <View style={styles.lastMessageContainer}>
-                        <Text style={styles.memberCount}>
+                        <Text style={[styles.memberCount, { color: theme.primaryAccent }]}>
                           {group.memberCount} members
                         </Text>
                         <Text 
                           style={[
                             styles.messageText,
+                            { color: theme.textSecondary },
                             group.isPublicGroup && styles.publicGroupMessage
                           ]} 
                           numberOfLines={1}
@@ -1346,8 +1349,8 @@ const MessagesScreen = () => {
         >
           <LinearGradient
             colors={activeTab === 'communities' ? 
-              ['rgba(255, 107, 107, 0.9)', 'rgba(255, 82, 82, 0.8)'] :
-              ['rgba(102, 126, 234, 0.9)', 'rgba(156, 136, 255, 0.8)']}
+              [theme.secondaryAccent, theme.secondaryAccent] :
+              [theme.primaryAccent, theme.primaryAccent]}
             style={styles.gradientButton}
           >
             <Ionicons name={activeTab === 'communities' ? 'add' : 'create'} size={24} color="#fff" />
@@ -1364,13 +1367,13 @@ const MessagesScreen = () => {
       >
         <View style={styles.modalContainer}>
           <LinearGradient
-            colors={['#1a1a2e', '#16213e', '#0f3460']}
+            colors={theme.backgrounds}
             style={styles.modalContent}
           >
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Create Group</Text>
+              <Text style={[styles.modalTitle, { color: theme.textPrimary }]}>Create Group</Text>
               <TouchableOpacity onPress={() => setShowCreateGroupModal(false)}>
-                <Ionicons name="close" size={24} color="#fff" />
+                <Ionicons name="close" size={24} color={theme.textPrimary} />
               </TouchableOpacity>
             </View>
 

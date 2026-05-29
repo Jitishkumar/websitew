@@ -9,6 +9,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { useAccounts } from '../context/AccountContext';
 import PostItem from '../components/PostItem';
+import { useTheme } from '../context/ThemeContext';
 
 // AccountSwitcherModal component
 const AccountSwitcherModal = ({ visible, onClose, loadUserProfile }) => {
@@ -16,6 +17,7 @@ const AccountSwitcherModal = ({ visible, onClose, loadUserProfile }) => {
   const navigation = useNavigation();
   const [currentUser, setCurrentUser] = useState(null);
   const [refreshedAccounts, setRefreshedAccounts] = useState([]);
+  const { isDarkMode, theme } = useTheme();
 
   useEffect(() => {
     if (visible) {
@@ -87,14 +89,15 @@ const AccountSwitcherModal = ({ visible, onClose, loadUserProfile }) => {
       onRequestClose={onClose}
     >
       <View style={styles.modalContainer}>
-        <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>Switch Account</Text>
+        <View style={[styles.modalContent, { backgroundColor: theme.surfaceElevated }]}>
+          <Text style={[styles.modalTitle, { color: theme.primaryAccent }]}>Switch Account</Text>
           {displayAccounts.map((account, index) => (
             <TouchableOpacity 
               key={index}
               style={[
                 styles.accountItem, 
-                currentUser === account.id && styles.currentAccountItem
+                currentUser === account.id && styles.currentAccountItem,
+                { borderBottomColor: theme.border }
               ]}
               onPress={async () => {
                 try {
@@ -151,10 +154,10 @@ const AccountSwitcherModal = ({ visible, onClose, loadUserProfile }) => {
                 source={{ uri: account.avatar_url || 'https://via.placeholder.com/150' }}
                 style={styles.accountAvatar}
               />
-              <Text style={styles.accountUsername}>{account.username}</Text>
+              <Text style={[styles.accountUsername, { color: theme.textPrimary }]}>{account.username}</Text>
               {currentUser === account.id && (
                 <View style={styles.currentAccountBadge}>
-                  <Ionicons name="checkmark-circle" size={20} color="#ff00ff" />
+                  <Ionicons name="checkmark-circle" size={20} color={theme.primaryAccent} />
                 </View>
               )}
             </TouchableOpacity>
@@ -166,14 +169,14 @@ const AccountSwitcherModal = ({ visible, onClose, loadUserProfile }) => {
               navigation.navigate('Login');
             }}
           >
-            <Ionicons name="add-circle-outline" size={24} color="#ff00ff" />
-            <Text style={styles.addAccountText}>Add Account</Text>
+            <Ionicons name="add-circle-outline" size={24} color={theme.primaryAccent} />
+            <Text style={[styles.addAccountText, { color: theme.primaryAccent }]}>Add Account</Text>
           </TouchableOpacity>
           <TouchableOpacity 
             style={styles.closeButton}
             onPress={onClose}
           >
-            <Text style={styles.closeText}>Close</Text>
+            <Text style={[styles.closeText, { color: theme.textSecondary }]}>Close</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -184,6 +187,7 @@ const AccountSwitcherModal = ({ visible, onClose, loadUserProfile }) => {
 // Main ProfileScreen component
 const ProfileScreen = () => {
   const { accounts, addAccount } = useAccounts();
+  const { isDarkMode, theme } = useTheme();
   const [isSidebarVisible, setSidebarVisible] = useState(false);
   const [isAccountSwitcherVisible, setAccountSwitcherVisible] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
@@ -340,7 +344,7 @@ const ProfileScreen = () => {
   const renderHeader = () => (
     <>
       <LinearGradient
-        colors={['#0f0f23', '#1a1a2e', '#16213e']}
+        colors={theme.backgrounds}
         style={styles.header}
       >
         <TouchableOpacity 
@@ -349,18 +353,18 @@ const ProfileScreen = () => {
           activeOpacity={0.8}
         >
           <LinearGradient
-            colors={['#ffd700', '#ffed4e']}
+            colors={[theme.primaryAccent, theme.secondaryAccent]}
             style={styles.headerIconContainer}
           >
-            <Ionicons name="menu" size={20} color="#000" />
+            <Ionicons name="menu" size={20} color="#fff" />
           </LinearGradient>
         </TouchableOpacity>
         
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Profile</Text>
+          <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>Profile</Text>
           <View style={styles.headerSubtitle}>
-            <MaterialIcons name="verified" size={16} color="#ffd700" />
-            <Text style={styles.headerSubtitleText}>Premium Account</Text>
+            <MaterialIcons name="verified" size={16} color={theme.primaryAccent} />
+            <Text style={[styles.headerSubtitleText, { color: theme.textSecondary }]}>Premium Account</Text>
           </View>
         </View>
         
@@ -370,10 +374,10 @@ const ProfileScreen = () => {
           activeOpacity={0.8}
         >
           <LinearGradient
-            colors={['#ffd700', '#ffed4e']}
+            colors={[theme.primaryAccent, theme.secondaryAccent]}
             style={styles.headerIconContainer}
           >
-            <Ionicons name="add-circle-outline" size={20} color="#000" />
+            <Ionicons name="add-circle-outline" size={20} color="#fff" />
           </LinearGradient>
         </TouchableOpacity>
       </LinearGradient>
@@ -381,7 +385,7 @@ const ProfileScreen = () => {
       <View style={styles.profileSection}>
         <View style={styles.coverPhotoContainer}>
           <LinearGradient
-            colors={['rgba(255,215,0,0.3)', 'rgba(255,0,255,0.2)', 'rgba(0,0,0,0.8)']}
+            colors={isDarkMode ? ['rgba(95, 115, 242, 0.3)', 'rgba(56, 189, 248, 0.2)', 'rgba(0, 0, 0, 0.8)'] : ['rgba(79, 70, 229, 0.15)', 'rgba(2, 132, 199, 0.1)', 'rgba(241, 245, 249, 0.8)']}
             style={styles.coverGradientOverlay}
           />
           {userProfile?.cover_is_video ? (
@@ -413,7 +417,7 @@ const ProfileScreen = () => {
           )}
           <View style={styles.coverStats}>
             <View style={styles.coverStatItem}>
-              <MaterialIcons name="visibility" size={16} color="#ffd700" />
+              <MaterialIcons name="visibility" size={16} color={theme.primaryAccent} />
               <Text style={styles.coverStatText}>{totalViews >= 1000 ? `${Math.round(totalViews / 1000)}K` : totalViews}</Text>
             </View>
             <View style={styles.coverStatItem}>
@@ -425,7 +429,7 @@ const ProfileScreen = () => {
         
         <View style={styles.profileImageContainer}>
           <LinearGradient
-            colors={['#ffd700', '#ff69b4', '#8a2be2']}
+            colors={[theme.primaryAccent, theme.secondaryAccent]}
             style={styles.profileImageGradient}
           >
             <Image
@@ -451,13 +455,13 @@ const ProfileScreen = () => {
         </View>
         
         <View style={styles.nameSection}>
-          <Text style={styles.name}>{userProfile?.full_name || 'No name set'}</Text>
+          <Text style={[styles.name, { color: theme.textPrimary }]}>{userProfile?.full_name || 'No name set'}</Text>
           <View style={styles.usernameContainer}>
-            <Text style={styles.username}>@{userProfile?.username || 'username'}</Text>
+            <Text style={[styles.username, { color: theme.textSecondary }]}>@{userProfile?.username || 'username'}</Text>
             {userProfile?.isVerified && (
               <View>
                 <LinearGradient
-                  colors={['#ffd700', '#ff69b4']}
+                  colors={[theme.primaryAccent, theme.secondaryAccent]}
                   style={styles.verifiedBadgeGradient}
                 >
                   <MaterialIcons name="verified" size={18} color="#fff" />
@@ -467,7 +471,7 @@ const ProfileScreen = () => {
           </View>
           <View style={styles.userTags}>
             <View style={styles.tag}>
-              <MaterialIcons name="star" size={12} color="#ffd700" />
+              <MaterialIcons name="star" size={12} color={theme.primaryAccent} />
               <Text style={styles.tagText}>Creator</Text>
             </View>
             <View style={styles.tag}>
@@ -478,13 +482,13 @@ const ProfileScreen = () => {
         </View>
         <View style={styles.achievementsSection}>
           <LinearGradient
-            colors={['#ffd700', '#ffed4e']}
+            colors={[theme.primaryAccent, theme.secondaryAccent]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.rankBadge}
           >
-            <MaterialIcons name="emoji-events" size={18} color="#000" />
-            <Text style={styles.rankNumber}>
+            <MaterialIcons name="emoji-events" size={18} color="#fff" />
+            <Text style={[styles.rankNumber, { color: '#fff' }]}>
               {userProfile?.rank 
                 ? `Rank #${userProfile.rank} ${userProfile.rank === 1 ? '(First Member!)' : ''}`
                 : 'Rank not assigned'}
@@ -511,7 +515,7 @@ const ProfileScreen = () => {
         </View>
         {userProfile?.bio && (
           <View style={styles.bioContainer}>
-            <Text style={styles.bioText}>
+            <Text style={[styles.bioText, { color: theme.textSecondary }]}>
               {userProfile.bio.length > 50 && !showFullBio
                 ? userProfile.bio.substring(0, 50) + '...'
                 : userProfile.bio}
@@ -532,13 +536,13 @@ const ProfileScreen = () => {
             activeOpacity={0.8}
           >
             <LinearGradient
-              colors={['#ffd700', '#ffed4e']}
+              colors={[theme.primaryAccent, theme.secondaryAccent]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.editButtonGradient}
             >
-              <MaterialIcons name="edit" size={18} color="#000" style={{ marginRight: 8 }} />
-              <Text style={[styles.editButtonText, { color: '#000' }]}>EDIT PROFILE</Text>
+              <MaterialIcons name="edit" size={18} color="#fff" style={{ marginRight: 8 }} />
+              <Text style={[styles.editButtonText, { color: '#fff' }]}>EDIT PROFILE</Text>
             </LinearGradient>
           </TouchableOpacity>
           
@@ -555,23 +559,23 @@ const ProfileScreen = () => {
         <View style={styles.statsContainer}>
           <TouchableOpacity style={styles.stat} activeOpacity={0.7}>
             <LinearGradient
-              colors={['rgba(255,215,0,0.1)', 'rgba(255,215,0,0.05)']}
+              colors={[isDarkMode ? 'rgba(95, 115, 242, 0.15)' : 'rgba(79, 70, 229, 0.1)', isDarkMode ? 'rgba(95, 115, 242, 0.05)' : 'rgba(79, 70, 229, 0.05)']}
               style={styles.statBackground}
             >
-              <MaterialIcons name="article" size={20} color="#ffd700" />
-              <Text style={styles.statNumber}>{postsCount}</Text>
-              <Text style={styles.statLabel}>Posts</Text>
+              <MaterialIcons name="article" size={20} color={theme.primaryAccent} />
+              <Text style={[styles.statNumber, { color: theme.textPrimary }]}>{postsCount}</Text>
+              <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Posts</Text>
             </LinearGradient>
           </TouchableOpacity>
           
           <TouchableOpacity style={styles.stat} activeOpacity={0.7}>
             <LinearGradient
-              colors={['rgba(255,105,180,0.1)', 'rgba(255,105,180,0.05)']}
+              colors={[isDarkMode ? 'rgba(56, 189, 248, 0.15)' : 'rgba(2, 132, 199, 0.1)', isDarkMode ? 'rgba(56, 189, 248, 0.05)' : 'rgba(2, 132, 199, 0.05)']}
               style={styles.statBackground}
             >
-              <MaterialIcons name="videocam" size={20} color="#ff69b4" />
-              <Text style={styles.statNumber}>{shortsCount}</Text>
-              <Text style={styles.statLabel}>Shorts</Text>
+              <MaterialIcons name="videocam" size={20} color={theme.secondaryAccent} />
+              <Text style={[styles.statNumber, { color: theme.textPrimary }]}>{shortsCount}</Text>
+              <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Shorts</Text>
             </LinearGradient>
           </TouchableOpacity>
           
@@ -581,12 +585,12 @@ const ProfileScreen = () => {
             activeOpacity={0.7}
           >
             <LinearGradient
-              colors={['rgba(0,255,136,0.1)', 'rgba(0,255,136,0.05)']}
+              colors={[isDarkMode ? 'rgba(16, 185, 129, 0.15)' : 'rgba(5, 150, 105, 0.1)', isDarkMode ? 'rgba(16, 185, 129, 0.05)' : 'rgba(5, 150, 105, 0.05)']}
               style={styles.statBackground}
             >
-              <MaterialIcons name="people" size={20} color="#00ff88" />
-              <Text style={styles.statNumber}>{followersCount}</Text>
-              <Text style={styles.statLabel}>Followers</Text>
+              <MaterialIcons name="people" size={20} color={theme.success} />
+              <Text style={[styles.statNumber, { color: theme.textPrimary }]}>{followersCount}</Text>
+              <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Followers</Text>
             </LinearGradient>
           </TouchableOpacity>
           
@@ -596,50 +600,50 @@ const ProfileScreen = () => {
             activeOpacity={0.7}
           >
             <LinearGradient
-              colors={['rgba(138,43,226,0.1)', 'rgba(138,43,226,0.05)']}
+              colors={[isDarkMode ? 'rgba(245, 158, 11, 0.15)' : 'rgba(217, 119, 6, 0.1)', isDarkMode ? 'rgba(245, 158, 11, 0.05)' : 'rgba(217, 119, 6, 0.05)']}
               style={styles.statBackground}
             >
-              <MaterialIcons name="person-add" size={20} color="#8a2be2" />
-              <Text style={styles.statNumber}>{followingCount}</Text>
-              <Text style={styles.statLabel}>Following</Text>
+              <MaterialIcons name="person-add" size={20} color={theme.warning} />
+              <Text style={[styles.statNumber, { color: theme.textPrimary }]}>{followingCount}</Text>
+              <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Following</Text>
             </LinearGradient>
           </TouchableOpacity>
         </View>
       </View>
 
-      <View style={styles.tabsContainer}>
+      <View style={[styles.tabsContainer, { borderBottomColor: theme.border }]}>
         <TouchableOpacity 
-          style={[styles.tabButton, activeTab === 'Post' && styles.activeTab]}
+          style={[styles.tabButton, activeTab === 'Post' && [styles.activeTab, { borderBottomColor: theme.primaryAccent }]]}
           onPress={() => {
             setActiveTab('Post');
             fetchUserContent();
           }}
         >
-          <Text style={[styles.tabButtonText, activeTab === 'Post' && styles.activeTabText]}>Posts</Text>
+          <Text style={[styles.tabButtonText, { color: theme.textSecondary }, activeTab === 'Post' && [styles.activeTabText, { color: theme.primaryAccent }]]}>Posts</Text>
         </TouchableOpacity>
         <TouchableOpacity 
-          style={[styles.tabButton, activeTab === 'Tweets' && styles.activeTab]}
+          style={[styles.tabButton, activeTab === 'Tweets' && [styles.activeTab, { borderBottomColor: theme.primaryAccent }]]}
           onPress={() => {
             setActiveTab('Tweets');
             fetchUserContent();
           }}
         >
-          <Text style={[styles.tabButtonText, activeTab === 'Tweets' && styles.activeTabText, styles.italicText]}>Snips</Text>
+          <Text style={[styles.tabButtonText, { color: theme.textSecondary }, activeTab === 'Tweets' && [styles.activeTabText, { color: theme.primaryAccent }], styles.italicText]}>Snips</Text>
         </TouchableOpacity>
         <TouchableOpacity 
-          style={[styles.tabButton, activeTab === 'Short' && styles.activeTab]}
+          style={[styles.tabButton, activeTab === 'Short' && [styles.activeTab, { borderBottomColor: theme.primaryAccent }]]}
           onPress={() => {
             setActiveTab('Short');
             fetchUserContent();
           }}
         >
-          <Text style={[styles.tabButtonText, activeTab === 'Short' && styles.activeTabText]}>Shorts</Text>
+          <Text style={[styles.tabButtonText, { color: theme.textSecondary }, activeTab === 'Short' && [styles.activeTabText, { color: theme.primaryAccent }]]}>Shorts</Text>
         </TouchableOpacity>
         <TouchableOpacity 
-          style={[styles.tabButton, activeTab === 'Details' && styles.activeTab]}
+          style={[styles.tabButton, activeTab === 'Details' && [styles.activeTab, { borderBottomColor: theme.primaryAccent }]]}
           onPress={() => setActiveTab('Details')}
         >
-          <Text style={[styles.tabButtonText, activeTab === 'Details' && styles.activeTabText]}>Details</Text>
+          <Text style={[styles.tabButtonText, { color: theme.textSecondary }, activeTab === 'Details' && [styles.activeTabText, { color: theme.primaryAccent }]]}>Details</Text>
         </TouchableOpacity>
       </View>
     </>
@@ -1343,11 +1347,11 @@ const ProfileScreen = () => {
         onRequestClose={onClose}
       >
         <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>{title}</Text>
+          <View style={[styles.modalContent, { backgroundColor: theme.surfaceElevated }]}>
+            <Text style={[styles.modalTitle, { color: theme.primaryAccent }]}>{title}</Text>
             {isLoading ? (
               <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#ff00ff" />
+                <ActivityIndicator size="large" color={theme.primaryAccent} />
               </View>
             ) : connections.length > 0 ? (
               <FlatList
@@ -1355,7 +1359,7 @@ const ProfileScreen = () => {
                 keyExtractor={(item, index) => item.id ? item.id.toString() : index.toString()}
                 renderItem={({ item }) => (
                   <TouchableOpacity 
-                    style={styles.connectionItem}
+                    style={[styles.connectionItem, { borderBottomColor: theme.border }]}
                     onPress={() => {
                       onClose();
                       navigation.navigate('UserProfileScreen', { userId: item.id });
@@ -1366,8 +1370,8 @@ const ProfileScreen = () => {
                       style={styles.connectionAvatar}
                     />
                     <View style={styles.connectionInfo}>
-                      <Text style={styles.connectionName}>{item.full_name || 'No name'}</Text>
-                      <Text style={styles.connectionUsername}>@{item.username || 'username'}</Text>
+                      <Text style={[styles.connectionName, { color: theme.textPrimary }]}>{item.full_name || 'No name'}</Text>
+                      <Text style={[styles.connectionUsername, { color: theme.textSecondary }]}>@{item.username || 'username'}</Text>
                     </View>
                   </TouchableOpacity>
                 )}
@@ -1375,15 +1379,15 @@ const ProfileScreen = () => {
               />
             ) : (
               <View style={styles.emptyContainer}>
-                <Ionicons name="people-outline" size={50} color="#666" />
-                <Text style={styles.emptyText}>No {title.toLowerCase()} yet</Text>
+                <Ionicons name="people-outline" size={50} color={theme.textSecondary} />
+                <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No {title.toLowerCase()} yet</Text>
               </View>
             )}
             <TouchableOpacity 
               style={styles.closeButton}
               onPress={onClose}
             >
-              <Text style={styles.closeText}>Close</Text>
+              <Text style={[styles.closeText, { color: theme.textSecondary }]}>Close</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1392,7 +1396,7 @@ const ProfileScreen = () => {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.backgroundSolid }]}>
       <Sidebar 
         isVisible={isSidebarVisible} 
         onClose={() => setSidebarVisible(false)}

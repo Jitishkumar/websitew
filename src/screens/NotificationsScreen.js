@@ -6,6 +6,7 @@ import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNotifications } from '../context/NotificationContext';
+import { useTheme } from '../context/ThemeContext';
 
 const NotificationsScreen = () => {
   const navigation = useNavigation();
@@ -13,6 +14,7 @@ const NotificationsScreen = () => {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const { markAsRead: markNotificationAsRead } = useNotifications();
+  const { isDarkMode, theme } = useTheme();
 
   // Sample notifications data
   const sampleNotifications = [
@@ -569,16 +571,30 @@ const NotificationsScreen = () => {
     const isFollowRequest = item.type === 'follow_request';
     
     return (
-      <View style={[styles.notificationItem, !item.is_read && styles.unreadItem]}>
+      <View style={[
+        styles.notificationItem, 
+        { 
+          backgroundColor: theme.surface, 
+          borderColor: theme.border,
+          shadowColor: theme.primaryAccent
+        },
+        !item.is_read && [
+          styles.unreadItem, 
+          { 
+            backgroundColor: isDarkMode ? 'rgba(95, 115, 242, 0.1)' : 'rgba(79, 70, 229, 0.05)',
+            borderColor: theme.primaryAccent 
+          }
+        ]
+      ]}>
         <TouchableOpacity 
           style={styles.avatarContainer}
           onPress={() => handleNotificationPress(item)} // Use the new handler here
         >
           <Image 
             source={{ uri: item.sender.avatar_url }}
-            style={styles.avatar}
+            style={[styles.avatar, { borderColor: theme.surfaceElevated }]}
           />
-          <View style={styles.iconOverlay}>
+          <View style={[styles.iconOverlay, { backgroundColor: theme.surfaceElevated, borderColor: theme.surface }]}>
             {getNotificationIcon(item.type)}
           </View>
         </TouchableOpacity>
@@ -587,53 +603,53 @@ const NotificationsScreen = () => {
           <TouchableOpacity 
             onPress={() => handleNotificationPress(item)} // Use the new handler here
           >
-            <Text style={styles.username}>@{item.sender.username}</Text>
+            <Text style={[styles.username, { color: theme.primaryAccent }]}>@{item.sender.username}</Text>
           </TouchableOpacity>
-          <Text style={styles.content}>{item.content}</Text>
-          <Text style={styles.timestamp}>{formatTimeAgo(item.created_at)}</Text>
+          <Text style={[styles.content, { color: theme.textPrimary }]}>{item.content}</Text>
+          <Text style={[styles.timestamp, { color: theme.textSecondary }]}>{formatTimeAgo(item.created_at)}</Text>
           
           {isFollowRequest && (
             <View style={styles.actionButtonsContainer}>
               <TouchableOpacity 
-                style={styles.acceptButton}
+                style={[styles.acceptButton, { borderColor: theme.success }]}
                 onPress={() => handleAcceptFollowRequest(item.sender_id, item.id)}
               >
-                <Text style={styles.acceptButtonText}>Accept</Text>
+                <Text style={[styles.acceptButtonText, { color: theme.success }]}>Accept</Text>
               </TouchableOpacity>
               <TouchableOpacity 
-                style={styles.declineButton}
+                style={[styles.declineButton, { borderColor: theme.error }]}
                 onPress={() => handleDeclineFollowRequest(item.sender_id, item.id)}
               >
-                <Text style={styles.declineButtonText}>Decline</Text>
+                <Text style={[styles.declineButtonText, { color: theme.textSecondary }]}>Decline</Text>
               </TouchableOpacity>
             </View>
           )}
         </View>
         
-        {!item.is_read && <View style={styles.unreadDot} />}
+        {!item.is_read && <View style={[styles.unreadDot, { backgroundColor: theme.primaryAccent }]} />}
         {!isFollowRequest && (
-          <Ionicons name="chevron-forward" size={20} color="#666" style={styles.chevronIcon} />
+          <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} style={styles.chevronIcon} />
         )}
       </View>
     );
   };
 
   return (
-    <LinearGradient colors={['#0f0f23', '#1a1a2e', '#16213e']} style={styles.container}>
+    <LinearGradient colors={theme.backgrounds} style={styles.container}>
       {/* Header */}
       <LinearGradient
-        colors={['rgba(255, 215, 0, 0.2)', 'rgba(255, 215, 0, 0.1)', 'transparent']}
+        colors={isDarkMode ? ['rgba(95, 115, 242, 0.15)', 'rgba(95, 115, 242, 0.05)', 'transparent'] : ['rgba(79, 70, 229, 0.08)', 'rgba(79, 70, 229, 0.02)', 'transparent']}
         style={[styles.header, { paddingTop: insets.top > 0 ? insets.top : 50 }]}
       >
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <LinearGradient
-            colors={['#ffd700', '#ffed4e']}
+            colors={[theme.primaryAccent, theme.secondaryAccent]}
             style={styles.backButtonGradient}
           >
-            <Ionicons name="arrow-back" size={20} color="#000" />
+            <Ionicons name="arrow-back" size={20} color="#fff" />
           </LinearGradient>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>🔔 Notifications</Text>
+        <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>🔔 Notifications</Text>
       </LinearGradient>
 
       <FlatList
@@ -646,15 +662,15 @@ const NotificationsScreen = () => {
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Ionicons name="notifications-off-outline" size={60} color="#666" />
-            <Text style={styles.emptyText}>No notifications yet</Text>
+            <Ionicons name="notifications-off-outline" size={60} color={theme.textSecondary} />
+            <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No notifications yet</Text>
           </View>
         }
         ListFooterComponent={
           notifications.length > 0 ? (
             <View style={styles.footerContainer}>
-              <Text style={styles.footerText}>
-                <Ionicons name="time-outline" size={14} color="#999" /> Notifications are automatically deleted after one week
+              <Text style={[styles.footerText, { color: theme.textSecondary }]}>
+                <Ionicons name="time-outline" size={14} color={theme.textSecondary} /> Notifications are automatically deleted after one week
               </Text>
             </View>
           ) : null
